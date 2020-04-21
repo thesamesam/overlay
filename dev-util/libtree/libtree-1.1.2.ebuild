@@ -14,7 +14,9 @@ SLOT="0"
 
 # Upstream only support amd64 for now. This may change in future.
 KEYWORDS="-* ~amd64"
-IUSE=""
+IUSE="test"
+
+RESTRICT="!test? ( test )"
 
 # Both of these are header-only libs
 RDEPEND="
@@ -24,6 +26,7 @@ RDEPEND="
 DEPEND="${RDEPEND}
 	dev-cpp/elfio
 	dev-cpp/termcolor
+	test? ( dev-cpp/gtest )
 "
 
 src_configure() {

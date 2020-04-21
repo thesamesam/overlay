@@ -22,8 +22,8 @@ RDEPEND="
 	dev-libs/cxxopts
 "
 DEPEND="${RDEPEND}
-	dev-libs/elfio
-	dev-libs/termcolor
+	dev-cpp/elfio
+	dev-cpp/termcolor
 "
 
 src_configure() {

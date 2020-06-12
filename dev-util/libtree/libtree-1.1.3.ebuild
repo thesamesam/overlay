@@ -19,11 +19,11 @@ IUSE="test"
 RESTRICT="!test? ( test )"
 
 # Both of these are header-only libs
-RDEPEND="
+BDEPEND="
 	dev-libs/cppglob
 	dev-libs/cxxopts
 "
-DEPEND="${RDEPEND}
+DEPEND="${BDEPEND}
 	dev-cpp/elfio
 	dev-cpp/termcolor
 	test? ( dev-cpp/gtest )

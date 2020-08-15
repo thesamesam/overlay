@@ -5,13 +5,13 @@ EAPI=7
 
 inherit kernel-install
 
-MY_P=${P/-bin/}-1
+MY_P=${P/-bin/}-3
 DESCRIPTION="Pre-built Linux kernel with genpatches"
 HOMEPAGE="https://www.kernel.org/"
 SRC_URI+="
 	arm64? (
-		https://dev.gentoo.org/~sam/binpkg/arm64/kernel/sys-kernel/gentoo-kernel/${MY_P}.xpak.1
-			-> ${MY_P}.arm64.xpak.1
+		https://dev.gentoo.org/~sam/binpkg/arm64/kernel/sys-kernel/gentoo-kernel/${MY_P}.xpak
+			-> ${MY_P}.arm64.xpak
 	)
 "
 S=${WORKDIR}
@@ -35,7 +35,7 @@ pkg_pretend() {
 
 src_unpack() {
 	ebegin "Unpacking ${MY_P}.${ARCH}.xpak"
-	tar -x < <(xz -c -d --single-stream "${DISTDIR}/${MY_P}.${ARCH}.xpak.1")
+	tar -x < <(xz -c -d --single-stream "${DISTDIR}/${MY_P}.${ARCH}.xpak")
 	eend ${?} || die "Unpacking ${MY_P} failed"
 }
 

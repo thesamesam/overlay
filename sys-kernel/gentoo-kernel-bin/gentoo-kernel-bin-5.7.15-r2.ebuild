@@ -11,7 +11,7 @@ HOMEPAGE="https://www.kernel.org/"
 SRC_URI+="
 	arm64? (
 		https://dev.gentoo.org/~sam/binpkg/arm64/kernel/sys-kernel/gentoo-kernel/${MY_P}.xpak.1
-			-> ${MY_P}.arm64.xpak
+			-> ${MY_P}.arm64.xpak.1
 	)
 "
 S=${WORKDIR}
@@ -35,7 +35,7 @@ pkg_pretend() {
 
 src_unpack() {
 	ebegin "Unpacking ${MY_P}.${ARCH}.xpak"
-	tar -x < <(xz -c -d --single-stream "${DISTDIR}/${MY_P}.${ARCH}.xpak")
+	tar -x < <(xz -c -d --single-stream "${DISTDIR}/${MY_P}.${ARCH}.xpak.1")
 	eend ${?} || die "Unpacking ${MY_P} failed"
 }
 

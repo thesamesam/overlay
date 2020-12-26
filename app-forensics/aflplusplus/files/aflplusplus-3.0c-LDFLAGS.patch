@@ -1,0 +1,13 @@
+diff --git a/GNUmakefile.gcc_plugin b/GNUmakefile.gcc_plugin
+index ee211c2..a33eefd 100644
+--- a/GNUmakefile.gcc_plugin
++++ b/GNUmakefile.gcc_plugin
+@@ -129,7 +129,7 @@ afl-common.o: ./src/afl-common.c
+ 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@ $(LDFLAGS)
+ 
+ ./afl-gcc-pass.so: instrumentation/afl-gcc-pass.so.cc | test_deps
+-	$(CXX) $(CXXEFLAGS) $(PLUGIN_FLAGS) -shared $< -o $@
++	$(CXX) $(CXXEFLAGS) $(PLUGIN_FLAGS) -shared $< -o $@ $(LDFLAGS)
+ 	ln -sf afl-cc afl-gcc-fast
+ 	ln -sf afl-cc afl-g++-fast
+ 	ln -sf afl-cc.8 afl-gcc-fast.8

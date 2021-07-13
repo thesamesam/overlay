@@ -14,6 +14,10 @@ S="${WORKDIR}/${PN/realtek-/}-${MY_COMMIT}"
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="~amd64"
+IUSE="dist-kernel"
+
+RDEPEND="dist-kernel? ( virtual/dist-kernel:= )"
+DEPEND="${RDEPEND}"
 
 pkg_setup() {
 	if ! use kernel_linux ; then

@@ -7,18 +7,15 @@ inherit cmake
 
 DESCRIPTION="C++ port of Python's glob module"
 HOMEPAGE="https://github.com/Kogia-sima/cppglob"
-SRC_URI="https://github.com/Kogia-sima/${PN}/archive/v${PV}.tar.gz"
+SRC_URI="https://github.com/Kogia-sima/${PN}/archive/v${PV}.tar.gz -> ${P}.tar.gz"
 
 LICENSE="MIT"
 SLOT="0"
-
 KEYWORDS="~amd64"
 IUSE="test"
 RESTRICT="!test? ( test )"
 
-BDEPEND=""
 DEPEND="test? ( dev-cpp/gtest )"
-RDEPEND=""
 
 PATCHES=(
 	"${FILESDIR}/cppglob-1.1.0-cmake.patch"

@@ -52,8 +52,11 @@ RESTRICT="mirror"
 LICENSE="Apache-2.0 Apache-2.0 WITH LLVM-exception MIT"
 SLOT="0"
 KEYWORDS="~amd64"
+# TODO: hack for now
+IUSE="+systemd"
+REQUIRED_USE="systemd"
 
-RDEPEND="sys-apps/systemd"
+#RDEPEND="sys-apps/systemd"
 BDEPEND="${RDEPEND}
 	virtual/rust
 	virtual/pkgconfig"

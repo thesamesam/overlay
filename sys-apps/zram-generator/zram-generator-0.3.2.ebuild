@@ -3,8 +3,6 @@
 
 EAPI=7
 
-inherit cargo systemd
-
 CRATES="
 ahash-0.4.7
 anyhow-1.0.40
@@ -41,6 +39,8 @@ wasi-0.9.0+wasi-snapshot-preview1
 winapi-0.3.9
 winapi-i686-pc-windows-gnu-0.4.0
 winapi-x86_64-pc-windows-gnu-0.4.0"
+
+inherit cargo systemd
 
 DESCRIPTION="Systemd unit generator for zram swap devices"
 HOMEPAGE="https://github.com/systemd/zram-generator"

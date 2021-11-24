@@ -5,7 +5,7 @@ EAPI="7"
 
 inherit toolchain
 
-GIT_COMMIT="78225f05ce28321ddb8418174f4fe1e28ba08047"
+GIT_COMMIT="78421afafde5156d6d4c6c7073653e4b92f88e3d"
 SRC_URI="https://github.com/gcc-mirror/gcc/archive/${GIT_COMMIT}.tar.gz -> ${P}.tar.gz"
 S="${WORKDIR}/${PN}-${GIT_COMMIT}"
 

@@ -44,7 +44,7 @@ CRATES="
 	winapi-x86_64-pc-windows-gnu-0.4.0
 "
 
-inherit cargo systemd
+inherit cargo systemd toolchain-funcs
 
 DESCRIPTION="Systemd unit generator for zram swap devices"
 HOMEPAGE="https://github.com/systemd/zram-generator"
@@ -73,6 +73,8 @@ src_configure() {
 }
 
 src_compile() {
+	tc-export PKG_CONFIG
+
 	export SYSTEMD_UTIL_DIR="$(systemd_get_utildir)"
 	cargo_src_compile
 

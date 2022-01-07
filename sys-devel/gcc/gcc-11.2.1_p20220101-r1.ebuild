@@ -18,6 +18,8 @@ BDEPEND="${CATEGORY}/binutils"
 src_prepare() {
 	toolchain_src_prepare
 
+	eapply "${FILESDIR}"/${P}-pch-openjdk.patch
+
 	if tc-is-cross-compiler ; then
 		# bug #803371
 		eapply "${FILESDIR}"/gcc-11.2.0-cross-compile-include.patch

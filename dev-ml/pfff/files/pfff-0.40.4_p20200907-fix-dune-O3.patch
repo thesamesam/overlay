@@ -1,0 +1,19 @@
+https://github.com/returntocorp/pfff/commit/acf0893ef7da2e43ba17f2713dfdef2c14ba882d
+(rebased)
+
+From: pad <yoann.padioleau@gmail.com>
+Date: Thu, 22 Oct 2020 11:45:28 +0200
+Subject: [PATCH] * dune: fix dune file with dune --profile=release O3 is not
+ valid. Dunno where I found this original code anyway
+
+--- a/dune
++++ b/dune
+@@ -5,7 +5,6 @@
+   ; -9 is only for lang_cpp/parsing/parsing_hacks.ml
+   ; -58 is for dypgen
+   (flags (-w +a-4-6-7-29-41-44-45-48-52-67-9-58 -warn-error +a)))
+- (release
+-  (flags (:standard -O3))))
++ )
+ 
+ (dirs :standard \ external)

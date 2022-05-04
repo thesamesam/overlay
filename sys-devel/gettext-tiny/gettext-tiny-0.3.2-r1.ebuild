@@ -18,6 +18,7 @@ RDEPEND="!sys-devel/gettext"
 
 PATCHES=(
 	"${FILESDIR}"/${P}-respect-CFLAGS.patch
+	"${FILESDIR}"/${P}-xgettext-version-output.patch
 )
 
 src_compile() {

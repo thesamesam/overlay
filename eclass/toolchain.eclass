@@ -19,7 +19,7 @@ _TOOLCHAIN_ECLASS=1
 DESCRIPTION="The GNU Compiler Collection"
 HOMEPAGE="https://gcc.gnu.org/"
 
-inherit flag-o-matic gnuconfig libtool multilib pax-utils toolchain-funcs prefix
+inherit edo flag-o-matic gnuconfig libtool multilib pax-utils toolchain-funcs prefix
 
 tc_is_live() {
 	[[ ${PV} == *9999* ]]
@@ -493,6 +493,10 @@ toolchain_pkg_setup() {
 
 	# bug #265283
 	unset LANGUAGES
+
+	# See https://www.gnu.org/software/make/manual/html_node/Parallel-Output.html
+	# Avoid really confusing logs from subconfigure spam
+	MAKEOPTS+=" --output-sync=line"
 }
 
 #---->> src_unpack <<----
@@ -1316,7 +1320,7 @@ toolchain_src_configure() {
 	# killing the 32bit builds which want /usr/lib.
 	export ac_cv_have_x='have_x=yes ac_x_includes= ac_x_libraries='
 
-	confgcc+=( "$@" )
+	confgcc+=( "$@" ${EXTRA_ECONF} )
 
 	# Nothing wrong with a good dose of verbosity
 	echo
@@ -1328,6 +1332,8 @@ toolchain_src_configure() {
 	echo
 	einfo "Languages:       ${GCC_LANG}"
 	echo
+	einfo "Configuring GCC with: ${confgcc[@]//--/\n\t--}"
+	echo
 
 	# Build in a separate build tree
 	mkdir -p "${WORKDIR}"/build || die
@@ -1336,21 +1342,27 @@ toolchain_src_configure() {
 	# ...and now to do the actual configuration
 	addwrite /dev/zero
 
-	# Older gcc versions did not detect bash and re-exec itself, so force the
-	# use of bash. Newer ones will auto-detect, but this is not harmful.
-	ECONF_SOURCE="${S}" econf "${confgcc[@]}"
-
 	if is_jit ; then
 		einfo "Configuring JIT gcc"
 
 		mkdir -p "${WORKDIR}"/build-jit || die
 		pushd "${WORKDIR}"/build-jit > /dev/null || die
-		CONFIG_SHELL="${BROOT}"/bin/bash ECONF_SOURCE="${S}" econf \
+		CONFIG_SHELL="${BROOT}"/bin/bash edo "${S}"/configure \
+				"${confgcc[@]}" \
+				--disable-libada \
+				--disable-libsanitizer \
+				--disable-libvtv \
+				--disable-libgomp \
+				--disable-lto \
 				--disable-bootstrap \
 				--enable-host-shared \
-				--enable-languages=jit
+				--enable-languages=jit || die
 		popd > /dev/null || die
 	fi
+
+	# Older gcc versions did not detect bash and re-exec itself, so force the
+	# use of bash. Newer ones will auto-detect, but this is not harmful.
+	CONFIG_SHELL="${BROOT}/bin/bash" edo "${S}"/configure "${confgcc[@]}" || die "failed to run configure"
 
 	# Return to whatever directory we were in before
 	popd > /dev/null
@@ -1995,6 +2007,13 @@ gcc_movelibs() {
 	if tc_version_is_at_least 5 && is_crosscompile ; then
 		dodir "${HOSTLIBPATH#${EPREFIX}}"
 		mv "${ED}"/usr/$(get_libdir)/libcc1* "${D}${HOSTLIBPATH}" || die
+	fi
+
+	# libgccjit gets installed to /usr/lib, not /usr/$(get_libdir). Probably
+	# due to a bug in gcc build system.
+	if [[ ${PWD} == "${WORKDIR}"/build-jit ]] && is_jit ; then
+		dodir "${LIBPATH#${EPREFIX}}"
+		mv "${ED}"/usr/lib/libgccjit* "${D}${LIBPATH}" || die
 	fi
 
 	# For all the libs that are built for CTARGET, move them into the

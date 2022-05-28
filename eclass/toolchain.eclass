@@ -1353,6 +1353,8 @@ toolchain_src_configure() {
 				--disable-libsanitizer \
 				--disable-libvtv \
 				--disable-libgomp \
+				--disable-libquadmath \
+				--disable-libatomic \
 				--disable-lto \
 				--disable-bootstrap \
 				--enable-host-shared \

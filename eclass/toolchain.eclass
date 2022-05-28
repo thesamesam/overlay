@@ -1358,13 +1358,13 @@ toolchain_src_configure() {
 				--disable-lto \
 				--disable-bootstrap \
 				--enable-host-shared \
-				--enable-languages=jit || die
+				--enable-languages=jit
 		popd > /dev/null || die
 	fi
 
 	# Older gcc versions did not detect bash and re-exec itself, so force the
 	# use of bash. Newer ones will auto-detect, but this is not harmful.
-	CONFIG_SHELL="${BROOT}/bin/bash" edo "${S}"/configure "${confgcc[@]}" || die "failed to run configure"
+	CONFIG_SHELL="${BROOT}"/bin/bash edo "${S}"/configure "${confgcc[@]}"
 
 	# Return to whatever directory we were in before
 	popd > /dev/null

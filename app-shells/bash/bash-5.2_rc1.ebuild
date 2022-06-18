@@ -1,7 +1,7 @@
 # Copyright 1999-2022 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI=7
+EAPI=8
 
 # TODO on release:
 # - check READLINE_VER, obviously
@@ -57,34 +57,42 @@ elif is_release ; then
 	SRC_URI="mirror://gnu/bash/${MY_P}.tar.gz $(patches)"
 	SRC_URI+=" verify-sig? ( mirror://gnu/bash/${MY_P}.tar.gz.sig )"
 else
-	SRC_URI="ftp://ftp.cwru.edu/pub/bash/${MY_P}.tar.gz"
-	SRC_URI+=" verify-sig? ( ftp://ftp.cwru.edu/pub/bash/${MY_P}.tar.gz.sig )"
+	SRC_URI="mirror://gnu/${PN}/${MY_P}.tar.gz ftp://ftp.cwru.edu/pub/bash/${MY_P}.tar.gz"
+	SRC_URI+=" verify-sig? ( mirror://gnu/${PN}/${MY_P}.tar.gz.sig ftp://ftp.cwru.edu/pub/bash/${MY_P}.tar.gz.sig )"
 fi
 
 if [[ -n ${GENTOO_PATCH_VER} ]] ; then
 	SRC_URI+=" https://dev.gentoo.org/~${GENTOO_PATCH_DEV}/distfiles/${CATEGORY}/${PN}/${PN}-${GENTOO_PATCH_VER}-patches.tar.xz"
 fi
 
-LICENSE="GPL-3"
+LICENSE="GPL-3+"
 SLOT="0"
 if is_release ; then
 	KEYWORDS="~alpha ~amd64 ~arm ~arm64 ~hppa ~ia64 ~m68k ~mips ~ppc ~ppc64 ~riscv ~s390 ~sparc ~x86 ~x64-cygwin ~amd64-linux ~x86-linux ~ppc-macos ~x64-macos ~sparc-solaris ~sparc64-solaris ~x64-solaris ~x86-solaris"
 fi
-IUSE="afs bashlogger examples mem-scramble +net nls plugins +readline"
+IUSE="afs bashlogger examples mem-scramble +net nls plugins pgo +readline"
 
 DEPEND="
 	>=sys-libs/ncurses-5.2-r2:0=
 	nls? ( virtual/libintl )
-	readline? ( >=sys-libs/readline-${READLINE_VER}:0= )
 "
+if is_release ; then
+	DEPEND+=" readline? ( >=sys-libs/readline-${READLINE_VER}:= )"
+fi
 RDEPEND="
 	${DEPEND}
 "
 # We only need yacc when the .y files get patched (bash42-005, bash51-011)
 #BDEPEND="virtual/yacc"
-BDEPEND="verify-sig? ( sec-keys/openpgp-keys-chetramey )"
+BDEPEND="
+	pgo? ( dev-util/gperf )
+	verify-sig? ( sec-keys/openpgp-keys-chetramey )
+"
 
 S="${WORKDIR}/${MY_P}"
+
+# EAPI 8 tries to append it but it doesn't exist here
+QA_CONFIGURE_OPTIONS="--disable-static"
 
 PATCHES=(
 	#"${WORKDIR}"/${PN}-${GENTOO_PATCH_VER}/
@@ -181,16 +189,16 @@ src_configure() {
 	#use static && export LDFLAGS="${LDFLAGS} -static"
 	use nls || myconf+=( --disable-nls )
 
-	# Historically, we always used the builtin readline, but since
-	# our handling of SONAME upgrades has gotten much more stable
-	# in the PM (and the readline ebuild itself preserves the old
-	# libs during upgrades), linking against the system copy should
-	# be safe.
-	# Exact cached version here doesn't really matter as long as it
-	# is at least what's in the DEPEND up above.
-	export ac_cv_rl_version=${READLINE_VER%%_*}
-
 	if is_release ; then
+		# Historically, we always used the builtin readline, but since
+		# our handling of SONAME upgrades has gotten much more stable
+		# in the PM (and the readline ebuild itself preserves the old
+		# libs during upgrades), linking against the system copy should
+		# be safe.
+		# Exact cached version here doesn't really matter as long as it
+		# is at least what's in the DEPEND up above.
+		export ac_cv_rl_version=${READLINE_VER%%_*}
+
 		# Use system readline only with released versions.
 		myconf+=( --with-installed-readline=. )
 	fi
@@ -215,11 +223,32 @@ src_configure() {
 }
 
 src_compile() {
-	emake
+	if use pgo ; then
+		# Build Bash and run its tests to generate profiles.
+		emake CFLAGS="${CFLAGS} -fprofile-generate"
+
+		# Used in test suite.
+		unset A
+
+		emake CFLAGS="${CFLAGS} -fprofile-generate" -k check
+
+		# Rebuild Bash using the profiling data we just generated.
+		emake clean
+		emake CFLAGS="${CFLAGS} -fprofile-use"
+	else
+		emake
+	fi
 
 	if use plugins ; then
 		emake -C examples/loadables all others
 	fi
+}
+
+src_test() {
+	# Used in test suite.
+	unset A
+
+	default
 }
 
 src_install() {

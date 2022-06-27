@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=8
-inherit toolchain-funcs
+inherit autotools toolchain-funcs
 
 DESCRIPTION="Useful Apache tools - htdigest, htpasswd, ab, htdbm"
 HOMEPAGE="https://httpd.apache.org/"
@@ -51,6 +51,8 @@ src_prepare() {
 	exec ${PKG_CONFIG} libpcre "${flags[@]}"
 	EOF
 	chmod a+x "${T}"/pcre-config || die
+
+	eautoreconf
 }
 
 src_configure() {

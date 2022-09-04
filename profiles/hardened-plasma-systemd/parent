@@ -1,4 +1,4 @@
 gentoo:default/linux/amd64/17.1/hardened
-gentoo:default/linux/amd64/17.1/desktop/plasma/systemd/merged-usr
 gentoo:targets/desktop/plasma
 gentoo:targets/systemd
+gentoo:features/merged-usr

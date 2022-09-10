@@ -32,7 +32,7 @@ src_compile() {
 
 src_install() {
 	docinto html
-	dodoc -r .html/.
+	dodoc -r c.html/.
 
 	#local manual
 	#for manual in c c-* ; do

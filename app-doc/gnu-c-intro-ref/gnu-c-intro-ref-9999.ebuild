@@ -3,6 +3,8 @@
 
 EAPI=8
 
+inherit autotools
+
 DESCRIPTION="GNU C Language Intro and Reference Manual"
 HOMEPAGE="https://savannah.gnu.org/projects/c-intro-and-ref/"
 
@@ -26,34 +28,20 @@ BDEPEND="
 	)
 "
 
+PATCHES=(
+	"${FILESDIR}"/${PN}-9999-autotools.patch
+)
+
+src_prepare() {
+	default
+
+	eautoreconf
+}
+
 src_compile() {
-	emake c.info c.html $(usev pdf 'c.pdf')
+	emake info html $(usev pdf 'pdf')
 }
 
 src_install() {
-	docinto html
-	dodoc -r c.html/.
-
-	#local manual
-	#for manual in c c-* ; do
-	#	num=${manual/c-}
-	#
-	#	if [[ ${num} != c ]] ; then
-	#		mv ${manual} c.info-${num} || die
-	#		doinfo c.info-${num}
-	#	else
-	#		mv ${manual} ${manual}.info || die
-	#		doinfo ${manual}.info
-	#	fi
-	#done
-
-	local manual
-	for manual in c c-* ; do
-		doinfo ${manual}
-	done
-
-	if use pdf ; then
-		docinto pdf
-		dodoc c.pdf
-	fi
+	emake DESTDIR="${D}" install-info install-html $(usev pdf 'install-pdf')
 }

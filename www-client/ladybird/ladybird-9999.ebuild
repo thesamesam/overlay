@@ -55,4 +55,12 @@ src_install() {
 	cmake_src_install
 
 	dolib.so "${BUILD_DIR}"/_deps/lagom-build/*.so*
+
+	# TODO: improve?
+	insinto /usr/share
+	doins -r "${WORKDIR}"/serenity
+
+	newenvd - 10serenity <<-EOF
+		SERENITY_SOURCE_DIR="${EPREFIX}"/usr/share/serenity
+	EOF
 }

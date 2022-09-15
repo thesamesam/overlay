@@ -69,6 +69,11 @@ src_install() {
 }
 
 pkg_postinst() {
+	ewarn "This ebuild is very much a draft. Please submit improvements"
+	ewarn "to the overlay and report bugs (ideally with patches)."
+	ewarn
+	ewarn "There's a reason this ebuild is not (yet?) in ::gentoo!"
+
 	if [[ -z ${REPLACING_VERSIONS} ]] ; then
 		einfo "You must run 'env-update && . /etc/profile' before trying to launch ${PN}!"
 	fi

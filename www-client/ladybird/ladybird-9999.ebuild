@@ -3,6 +3,9 @@
 
 EAPI=8
 
+# Serenity is bundled right now
+# https://github.com/SerenityOS/ladybird/issues/55
+
 inherit cmake
 
 DESCRIPTION="Ladybird web browser using SerenityOS LibWeb engine with a Qt GUI"
@@ -37,7 +40,7 @@ src_unpack() {
 }
 
 src_configure() {
-	# TODO: fix RPATH
+	# TODO: Fix RPATH
 
 	local mycmakeargs=(
 		-DCCACHE_PROGRAM=OFF
@@ -56,11 +59,17 @@ src_install() {
 
 	dolib.so "${BUILD_DIR}"/_deps/lagom-build/*.so*
 
-	# TODO: improve?
+	# TODO: Refine the # of files we install
 	insinto /usr/share
 	doins -r "${WORKDIR}"/serenity
 
 	newenvd - 10serenity <<-EOF
 		SERENITY_SOURCE_DIR="${EPREFIX}"/usr/share/serenity
 	EOF
+}
+
+pkg_postinst() {
+	if [[ -z ${REPLACING_VERSIONS} ]] ; then
+		einfo "You must run 'env-update && . /etc/profile' before trying to launch ${PN}!"
+	fi
 }

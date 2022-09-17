@@ -1,0 +1,10 @@
+--- a/src/models/ppmd.cpp
++++ b/src/models/ppmd.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "ppmd.h"
+ #include <cstring>
++#include <cstdio>
+ 
+ namespace PPMD {
+ 

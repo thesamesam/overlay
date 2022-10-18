@@ -30,7 +30,7 @@ LICENSE="GPL-2 GPL-2+ GPL-3 BSD MIT || ( MPL-1.1 GPL-2 )
 		linux-fw-redistributable ( BSD-2 BSD BSD-4 ISC MIT no-source-code ) )
 	unknown-license? ( all-rights-reserved )"
 SLOT="0"
-IUSE="initramfs +redistributable savedconfig unknown-license"
+IUSE="compress initramfs +redistributable savedconfig unknown-license"
 REQUIRED_USE="initramfs? ( redistributable )"
 
 RESTRICT="binchecks strip test
@@ -310,7 +310,7 @@ src_install() {
 		done < <(find . -type l -print0)
 
 		find . -type f ! -path "./amd-ucode/*" -print0 | \
-			xargs -0 -P $(makeopts_jobs) -I'{}' xz -C crc32 '{}' || die
+			xargs -0 -P $(makeopts_jobs) -I'{}' xz -T1 -C crc32 '{}' || die
 	fi
 
 	popd &>/dev/null || die

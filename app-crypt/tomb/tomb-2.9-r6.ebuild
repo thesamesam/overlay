@@ -3,17 +3,13 @@
 
 EAPI=8
 
-MYP="${P^}"
-
 inherit desktop qmake-utils toolchain-funcs xdg
 
+MY_P="${P^}"
 DESCRIPTION="File encryption tool for GNU/Linux"
-HOMEPAGE="
-	https://www.dyne.org/software/tomb
-	https://github.com/dyne/Tomb
-"
+HOMEPAGE="https://www.dyne.org/software/tomb https://github.com/dyne/Tomb"
 SRC_URI="https://files.dyne.org/tomb/releases/Tomb-${PV}.tar.gz"
-S="${WORKDIR}/${MYP}"
+S="${WORKDIR}/${MY_P}"
 
 LICENSE="GPL-3 gui? ( GPL-3+ )"
 SLOT="0"
@@ -22,11 +18,6 @@ IUSE="gui test tray"
 
 # Test require sudo, can't be done non interactively
 RESTRICT="test"
-
-PATCHES=(
-	"${FILESDIR}/${P}-gtomb.patch"
-	"${FILESDIR}/${P}-respect-ldflags.patch"
-)
 
 DOCS=(
 	AUTHORS.txt
@@ -65,6 +56,11 @@ BDEPEND="
 	dev-python/pygments
 	sys-devel/gettext
 "
+
+PATCHES=(
+	"${FILESDIR}/${P}-gtomb.patch"
+	"${FILESDIR}/${P}-respect-ldflags.patch"
+)
 
 src_compile() {
 	export CC=$(tc-getCC)

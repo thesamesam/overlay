@@ -1,33 +1,33 @@
 # Copyright 1999-2021 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-EAPI="7"
+EAPI=8
 
 MYP="${P^}"
 
 inherit desktop qmake-utils toolchain-funcs xdg
 
-DESCRIPTION="Tomb :: File Encryption on GNU/Linux"
+DESCRIPTION="File encryption tool for GNU/Linux"
 HOMEPAGE="
 	https://www.dyne.org/software/tomb
 	https://github.com/dyne/Tomb
 "
 SRC_URI="https://files.dyne.org/tomb/releases/Tomb-${PV}.tar.gz"
 S="${WORKDIR}/${MYP}"
-LICENSE="
-	GPL-3
-	gui? ( GPL-3+ )
-"
+
+LICENSE="GPL-3 gui? ( GPL-3+ )"
 SLOT="0"
 KEYWORDS="~amd64"
 IUSE="gui test tray"
 
-#test require sudo, can't be done non interactively
+# Test require sudo, can't be done non interactively
 RESTRICT="test"
+
 PATCHES=(
 	"${FILESDIR}/${P}-gtomb.patch"
 	"${FILESDIR}/${P}-respect-ldflags.patch"
 )
+
 DOCS=(
 	AUTHORS.txt
 	ChangeLog.txt
@@ -43,7 +43,7 @@ DOCS=(
 	doc/tomb_manpage.pdf
 )
 
-CDEPEND="
+DEPEND="
 	dev-libs/libgcrypt
 	tray? (
 		dev-qt/qtcore:5
@@ -52,7 +52,7 @@ CDEPEND="
 	)
 "
 RDEPEND="
-	${CDEPEND}
+	${DEPEND}
 	app-admin/sudo
 	app-crypt/gnupg
 	app-crypt/pinentry
@@ -60,7 +60,6 @@ RDEPEND="
 	sys-fs/cryptsetup
 	gui? ( gnome-extra/zenity )
 "
-DEPEND="${CDEPEND}"
 BDEPEND="
 	dev-python/markdown
 	dev-python/pygments
@@ -72,9 +71,7 @@ src_compile() {
 	export PREFIX="${EPREFIX}/usr"
 	emake
 
-	pushd extras/kdf-keys || die
-	emake all
-	popd || die
+	emake -C extras/kdf-keys all
 
 	if use tray ; then
 		pushd extras/qt-tray || die
@@ -83,26 +80,23 @@ src_compile() {
 		popd || die
 	fi
 
-	#translations
-	pushd extras/translations || die
-	emake all
-	popd || die
+	emake -C extras/translations all
+	emake -C doc/literate
+}
 
-	#documentation
-	cd doc/literate || die
-	emake
+src_test() {
+	emake test
+	emake -C extras/kdf-keys test
 }
 
 src_install() {
 	default
 
-	#translations
 	export PREFIX="${ED}/usr"
-	pushd extras/translations || die
-	emake install
-	popd || die
 
-	#zenity gui
+	emake -C extras/translations install
+
+	# zenity gui
 	if use gui ; then
 		pushd extras/gtomb || die
 		dobin gtomb
@@ -110,7 +104,7 @@ src_install() {
 		popd || die
 	fi
 
-	#qt tray
+	# qt tray
 	if use tray ; then
 		pushd extras/qt-tray || die
 		dobin tomb-qt-tray
@@ -120,49 +114,41 @@ src_install() {
 		popd || die
 	fi
 
-	#kdf programs
-	pushd extras/kdf-keys || die
-	emake install
-	popd || die
+	# kdf programs
+	emake -C extras/kdf-keys install
 
-	#is there an eclass for this?
-	#pixmap
-	pushd extras/gtk-tray
+	# TODO: Is there an eclass for this?
+	# pixmap
+	pushd extras/gtk-tray || die
 	doicon monmort.xpm
 	newicon --context mimetypes --size 32 monmort.xpm monmort
 	newicon --size 32 monmort.xpm dyne-monmort
-	popd
-	pushd extras/desktop
-	#copied from install.zsh
-	#mime types
+	popd || die
+
+	pushd extras/desktop || die
+	# copied from install.zsh
+	# mime types
 	insinto /usr/share/mime/packages
 	doins dyne-tomb.xml
-	#desktop
+	# desktop
 	domenu tomb.desktop
-	#menu
+	# menu
 	insinto /etc/menu
 	doins tomb
-	#mime info
+	# mime info
 	insinto /usr/share/mime-info
 	doins tomb.mime
 	doins tomb.keys
 	insinto /usr/lib/mime/packages
 	newins tomb.mimepkg tomb
-	#application entry
+	# application entry
 	insinto /usr/share/application-registry
 	doins tomb.applications
-	popd
+	popd || die
 
-	#documentation
 	einstalldocs
+
 	cd doc/literate || die
-	insinto "/usr/share/doc/${PF}/html"
-	doins -r *.html *.css public
-}
-
-src_test() {
-	emake test
-
-	pushd extras/kdf-keys || die
-	emake test
+	docinto html
+	dodoc -r *.html *.css public
 }

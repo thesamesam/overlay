@@ -1,0 +1,34 @@
+From 520915dd989cc9c4c33c4efb4db0f3cabada1a64 Mon Sep 17 00:00:00 2001
+From: Sam James <sam@gentoo.org>
+Date: Tue, 6 Dec 2022 13:59:27 +0000
+Subject: [PATCH 2/3] Backport >= Zen 3 detection
+
+Doesn't include the newer Zen 3 specific paths as that
+feels like it falls beyond "trivial".
+--- a/configure.ac
++++ b/configure.ac
+@@ -1890,13 +1890,20 @@ case $host in
+ 	x86_have_mulx=yes
+ 	path_64="x86_64/zen x86_64"
+ 	;;
+-      zen2 | zen2noavx | zen3 | zen3noavx)
++      zen2 | zen2noavx)
+ 	gcc_cflags_cpu="-mtune=znver2 -mtune=znver1 -mtune=amdfam10 -mtune=k8"
+ 	gcc_cflags_arch="-march=znver2 -march=znver1 -march=amdfam10 -march=k8"
+ 	path="x86/k7/mmx x86/k7 x86/mmx x86"
+ 	x86_have_mulx=yes
+ 	path_64="x86_64/zen2 x86_64/zen x86_64"
+ 	;;
++      zen3 | zen3noavx)
++	gcc_cflags_cpu="-mtune=znver3 -mtune=znver2 -mtune=znver1 -mtune=amdfam10 -mtune=k8"
++	gcc_cflags_arch="-march=znver3 -march=znver2 -march=znver1 -march=amdfam10 -march=k8"
++	path="x86/k7/mmx x86/k7 x86/mmx x86"
++	x86_have_mulx=yes
++	path_64="x86_64/zen2 x86_64/zen x86_64"
++	;;
+       core2)
+ 	gcc_cflags_cpu="-mtune=core2 -mtune=k8"
+ 	gcc_cflags_arch="-march=core2 -march=core2~-mno-sse2 -march=k8 -march=k8~-mno-sse2"
+-- 
+2.38.1
+

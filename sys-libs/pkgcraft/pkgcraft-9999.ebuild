@@ -16,6 +16,8 @@ else
 	KEYWORDS="~amd64"
 fi
 
+S="${WORKDIR}"/${P}/crates/pkgcraft-c
+
 # TODO: fix LICENSE
 LICENSE="BSD-1"
 SLOT="0/${PV}"
@@ -50,6 +52,10 @@ src_compile() {
 }
 
 src_test() {
+	# It's interesting to test the whole thing rather than just
+	# pkgcraft-c.
+	cd "${WORKDIR}"/${P} || die
+
 	# Need nextest per README (separate processes required)
 	# Invocation from https://github.com/pkgcraft/pkgcraft/blob/main/.github/workflows/ci.yml#L56
 	edo cargo nextest run --color always --all-features

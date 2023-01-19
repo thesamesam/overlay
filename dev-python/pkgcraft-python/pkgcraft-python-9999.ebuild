@@ -31,6 +31,7 @@ DEPEND="${RDEPEND}"
 BDEPEND="
 	dev-python/cython
 	dev-python/setuptools_scm
+	virtual/pkgconfig
 "
 
 distutils_enable_tests pytest

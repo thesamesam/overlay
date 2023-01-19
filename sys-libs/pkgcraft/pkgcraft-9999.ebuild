@@ -12,6 +12,8 @@ if [[ ${PV} == 9999 ]] ; then
 	EGIT_REPO_URI="https://github.com/pkgcraft/pkgcraft"
 	inherit git-r3
 else
+	# TODO: switch to CRATES, this won't actually work for releases,
+	# but layout changed since 0.0.3 so can't skeleton this yet.
 	SRC_URI="https://github.com/pkgcraft/pkgcraft/archive/refs/tags/v${PV}.tar.gz -> ${P}.tar.gz"
 	KEYWORDS="~amd64"
 fi
@@ -24,6 +26,8 @@ SLOT="0/${PV}"
 IUSE="test"
 RESTRICT="!test? ( test )"
 
+# TODO: drop cargo-nextest, it's mostly used for testing the other crates, not
+# pkgcraft-c.
 BDEPEND="
 	dev-util/cargo-c
 	>=virtual/rust-1.65

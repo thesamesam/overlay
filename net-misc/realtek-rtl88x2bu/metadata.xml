@@ -5,4 +5,7 @@
     <email>sam@cmpct.info</email>
     <name>Sam James</name>
   </maintainer>
+  <upstream>
+    <remote-id type="github">cilynx/rtl88x2bu</remote-id>
+  </upstream>
 </pkgmetadata>

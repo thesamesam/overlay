@@ -11,6 +11,7 @@ app-emacs/emacs-daemon
 app-emacs/exec-path-from-shell
 app-emacs/flycheck-clang-tidy
 app-emacs/git-modes
+app-emacs/jinx
 app-emacs/lsp-mode
 app-emacs/magit
 app-emacs/meson-mode

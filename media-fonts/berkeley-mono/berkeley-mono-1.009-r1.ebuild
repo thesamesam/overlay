@@ -21,12 +21,12 @@ src_install() {
 	FONT_PN=BerkeleyMono \
 		FONT_S=berkeley-mono/OTF \
 		FONT_SUFFIX=otf \
-		FONTDIR="${EPREFIX}"/usr/share/fonts/BerkeleyMono
+		FONTDIR="${EPREFIX}"/usr/share/fonts/BerkeleyMono \
 		font_src_install
 
 	FONT_PN=BerkeleyMonoVariable \
 		FONT_S=berkeley-mono-variable/TTF \
 		FONT_SUFFIX=ttf \
-		FONTDIR="${EPREFIX}"/usr/share/fonts/BerkeleyMonoVariable
+		FONTDIR="${EPREFIX}"/usr/share/fonts/BerkeleyMonoVariable \
 		font_src_install
 }

@@ -28,10 +28,6 @@ BDEPEND="
 	)
 "
 
-PATCHES=(
-	"${FILESDIR}"/${PN}-9999-autotools.patch
-)
-
 src_prepare() {
 	default
 

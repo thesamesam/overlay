@@ -3,7 +3,7 @@
 
 EAPI=8
 
-inherit linux-mod
+inherit linux-mod-r1
 
 MY_COMMIT="549257e6f62e8d7931e15f963aa06bb3c622ec7e"
 DESCRIPTION="rtl88x2bu driver updated for current kernels"
@@ -14,19 +14,9 @@ S="${WORKDIR}/${PN/realtek-/}-${MY_COMMIT}"
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="~amd64"
-IUSE="dist-kernel"
 
-RDEPEND="dist-kernel? ( virtual/dist-kernel:= )"
-DEPEND="${RDEPEND}"
+src_compile() {
+	local modlist=( 88x2bu )
 
-pkg_setup() {
-	if ! use kernel_linux ; then
-		die "Unable to install"
-	fi
-
-	BUILD_TARGETS="clean modules"
-	MODULE_NAMES="88x2bu(misc:)"
-	BUILD_PARAMS="KV=${KV_FULL} KSRC=${KERNEL_DIR}"
-
-	linux-mod_pkg_setup
+	linux-mod-r1_src_compile
 }

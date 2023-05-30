@@ -17,6 +17,7 @@ KEYWORDS="~amd64"
 
 src_compile() {
 	local modlist=( 88x2bu )
+	local modargs=( KV=${KV_FULL} KSRC=${KERNEL_DIR} )
 
 	linux-mod-r1_src_compile
 }

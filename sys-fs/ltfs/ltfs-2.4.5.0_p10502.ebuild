@@ -46,4 +46,6 @@ src_configure() {
 	local myeconfargs=(
 		$(use_enable snmp)
 	)
+
+	econf "${myeconfargs[@]}"
 }

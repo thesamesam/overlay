@@ -1,13 +1,13 @@
 media-fonts/berkeley-mono
 media-fonts/cascadia-code
+media-fonts/fira-code
+media-fonts/fira-mono
+media-fonts/fira-sans
 media-fonts/hack
+media-fonts/liberation-fonts
 media-fonts/noto
 media-fonts/noto-emoji
 media-fonts/open-sans
 media-fonts/source-code-pro
 media-fonts/terminus-font
-media-fonts/liberation-fonts
-media-fonts/fira-code
 media-fonts/ubuntu-font-family
-media-fonts/fira-sans
-media-fonts/fira-mono

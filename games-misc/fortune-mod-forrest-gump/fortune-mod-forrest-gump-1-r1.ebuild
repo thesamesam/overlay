@@ -10,7 +10,7 @@ S="${WORKDIR}"/fortune-fgump
 
 LICENSE="public-domain"
 SLOT="0"
-KEYWORDS="~alpha ~amd64 ~arm ~arm64 ~hppa ~m68k ~mips ~ppc64 ~riscv ~x86 ~amd64-linux ~x86-linux ~ppc-macos ~x86-solaris"
+KEYWORDS="~amd64 ~arm ~arm64 ~hppa ~m68k ~mips ~ppc64 ~riscv ~sparc ~x86"
 
 RDEPEND="games-misc/fortune-mod"
 

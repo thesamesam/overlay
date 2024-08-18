@@ -1,4 +1,4 @@
-# Copyright 1999-2024 Gentoo Authors
+# Copyright 2024 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=8
@@ -25,7 +25,8 @@ IUSE="systemd test"
 
 # XXX: right now, we auto-adapt to whether multilibs are present:
 # should we force them to be? how?
-# binutils-libs will need an extra patch for what dtrace does with
+#
+# XXX: binutils-libs will need an extra patch for what dtrace does with
 # it in the absence of in-kernel CTF: it will be backported
 # to 2.42, but perhaps a patch would be a good idea before that?
 COMMON_DEPEND="
@@ -68,10 +69,7 @@ RDEPEND="
 "
 
 pkg_pretend() {
-	# XXX: Should we just drop a config fragment in place (???)
-	# We do have actual kernel patches we'd like to apply, after all.
-	#
-	# TODO: kernel patches
+	# TODO: optional kernel patches
 
 	# Basics for debugging information, BPF
 	local CONFIG_CHECK="~BPF ~DEBUG_INFO_BTF ~KALLSYMS_ALL ~CUSE"
@@ -147,23 +145,17 @@ src_install() {
 	# It's a binary (TODO: move it?)
 	docompress -x /usr/share/doc/${PF}/showUSDT
 
-	# In the absence of systemd, install the openrc init script.
-	# The unit will not be installed (it wouldn't work, since it uses
-	# Type=notify).
-	# dtprobed when not under systemd or foregrounded logs errors
-	# to syslog:
-	# XXX: shouldn't we ensure there *is* a logger, somehow?
-	if ! use systemd; then
-		doinitd "${FILESDIR}"/openrc/dtprobed
-	fi
+	doinitd "${FILESDIR}"/openrc/dtprobed
 }
 
 pkg_postinst() {
-	# We need a udev reload to pick up the CUSE device node rules;
-	# we need to start dtprobed, if not already running, and restart
-	# it on upgrade (it will carry across its own persistent state)
+	# We need a udev reload to pick up the CUSE device node rules.
 	udev_reload
 
+	# XXX: We need to start dtprobed, if not already running, and restart
+	# it on upgrade (it will carry across its own persistent state)
+	#
+	# XXX: What happens on uninstallation?
 	if [[ -n ${REPLACING_VERSIONS} ]]; then
 		if [ -x /etc/init.d/dtprobed ]; then
 			/etc/init.d/dtprobed stop || :
@@ -179,6 +171,4 @@ pkg_postinst() {
 			systemctl start dtprobed
 		fi
 	fi
-
-	# TODO: What happens on uninstallation?
 }

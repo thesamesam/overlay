@@ -128,7 +128,7 @@ src_configure() {
 }
 
 src_compile() {
-	emake verbose=1
+	emake verbose=1 $(usev !test TRIGGERS='')
 }
 
 src_test() {

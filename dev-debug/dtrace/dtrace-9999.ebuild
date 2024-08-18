@@ -42,7 +42,6 @@ COMMON_DEPEND="
 "
 BDEPEND="
 	${COMMON_DEPEND}
-	dev-debug/valgrind
 	dev-libs/libbpf
 	>=sys-devel/bpf-toolchain-14.1.0
 	sys-apps/gawk

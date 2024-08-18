@@ -49,6 +49,7 @@ BDEPEND="
 	sys-devel/flex
 "
 RDEPEND="
+	!dev-debug/systemtap
 	${COMMON_DEPEND}
 	net-analyzer/wireshark
 	test? (

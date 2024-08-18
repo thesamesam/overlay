@@ -3,7 +3,7 @@
 
 EAPI=8
 
-inherit edo flag-o-matic linux-info toolchain-funcs udev
+inherit edo flag-o-matic linux-info systemd toolchain-funcs udev
 
 DESCRIPTION="Dynamic systemwide tracing tool"
 HOMEPAGE="https://github.com/oracle/dtrace-utils"
@@ -21,7 +21,7 @@ fi
 
 LICENSE="UPL-1.0"
 SLOT="0"
-IUSE="systemd test"
+IUSE="install-tests systemd"
 
 # XXX: right now, we auto-adapt to whether multilibs are present:
 # should we force them to be? how?
@@ -29,31 +29,22 @@ IUSE="systemd test"
 # XXX: binutils-libs will need an extra patch for what dtrace does with
 # it in the absence of in-kernel CTF: it will be backported
 # to 2.42, but perhaps a patch would be a good idea before that?
-COMMON_DEPEND="
-	dev-build/make
+DEPEND="
 	dev-libs/elfutils
+	dev-libs/libbpf
 	dev-libs/libpfm:=
 	net-analyzer/wireshark[dumpcap]
 	net-libs/libpcap
-	sys-devel/gcc
 	>=sys-fs/fuse-3.2.0:3
 	>=sys-libs/binutils-libs-2.42:=
 	sys-libs/zlib
 	systemd? ( sys-apps/systemd )
 "
-BDEPEND="
-	${COMMON_DEPEND}
-	dev-libs/libbpf
-	>=sys-devel/bpf-toolchain-14.1.0
-	sys-apps/gawk
-	sys-devel/bison
-	sys-devel/flex
-"
 RDEPEND="
+	${DEPEND}
 	!dev-debug/systemtap
-	${COMMON_DEPEND}
 	net-analyzer/wireshark
-	test? (
+	install-tests? (
 		app-alternatives/bc
 		app-editors/vim-core
 		dev-build/make
@@ -66,6 +57,13 @@ RDEPEND="
 		virtual/jdk
 		virtual/perl-IO-Socket-IP
 	)
+"
+BDEPEND="
+	dev-build/make
+	>=sys-devel/bpf-toolchain-14.1.0
+	sys-apps/gawk
+	sys-devel/bison
+	sys-devel/flex
 "
 
 pkg_pretend() {
@@ -127,17 +125,16 @@ src_configure() {
 }
 
 src_compile() {
-	emake verbose=1 $(usev !test TRIGGERS='')
+	emake verbose=1 $(usev !install-tests TRIGGERS='')
 }
 
 src_test() {
-	# XXX: can't yet, needs root: make a testsuite package instead
-	# TODO: figure out policy/convention on installing tests
+	# Needs root and is also very time-consuming
 	:;
 }
 
 src_install() {
-	emake DESTDIR="${D}" install $(usev test install-test)
+	emake DESTDIR="${D}" install $(usev install-tests install-test)
 
 	# Stripping the BPF libs breaks them
 	dostrip -x "/usr/$(get_libdir)"
@@ -145,30 +142,35 @@ src_install() {
 	# It's a binary (TODO: move it?)
 	docompress -x /usr/share/doc/${PF}/showUSDT
 
-	doinitd "${FILESDIR}"/openrc/dtprobed
+	newinitd "${FILESDIR}"/dtprobed.init dtprobed
 }
 
 pkg_postinst() {
 	# We need a udev reload to pick up the CUSE device node rules.
 	udev_reload
 
-	# XXX: We need to start dtprobed, if not already running, and restart
-	# it on upgrade (it will carry across its own persistent state)
-	#
-	# XXX: What happens on uninstallation?
+	# TODO: Restart it on upgrade? (it will carry across its own persistent state)
 	if [[ -n ${REPLACING_VERSIONS} ]]; then
-		if [ -x /etc/init.d/dtprobed ]; then
-			/etc/init.d/dtprobed stop || :
-			/etc/init.d/dtprobed start
-		elif type systemctl &>/dev/null; then
-			systemctl restart dtprobed
+		# TODO: Make this more intelligent wrt comparison
+		if systemd_is_booted ; then
+			einfo "Restart the DTrace 'dtprobed' service after upgrades:"
+			einfo " systemctl try-restart dtprobed"
+		else
+			einfo "Restart the DTrace 'dtprobed' service with:"
+			einfo " /etc/init.d/dtprobed restart"
 		fi
 	else
-		if type rc_update &>/dev/null; then
-			rc_update add dtprobed || :
-		elif type systemctl &>/dev/null; then
-			systemctl enable dtprobed
-			systemctl start dtprobed
+		if systemd_is_booted ; then
+			einfo "Enable and start the DTrace 'dtprobed' service with:"
+			einfo " systemctl enable --now dtprobed"
+		else
+			einfo "Enable and start the DTrace 'dtprobed' service with:"
+			einfo " rc-update add dtprobed"
+			einfo " /etc/init.d/dtprobed start"
 		fi
 	fi
+}
+
+pkg_postrm() {
+	udev_reload
 }

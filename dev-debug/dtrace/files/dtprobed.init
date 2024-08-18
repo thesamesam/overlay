@@ -11,5 +11,5 @@ start() {
 }
 
 stop() {
-       start-stop-daemon --stop --exec /usr/sbin/dtprobed
+	start-stop-daemon --stop --exec /usr/sbin/dtprobed
 }

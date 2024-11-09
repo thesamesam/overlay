@@ -136,6 +136,10 @@ src_install() {
 }
 
 pkg_postinst() {
+	elog "To use the patched-in jobserver functionality, set the following:"
+	elog "NINJAOPTS=\"-j32 -l32 --jobserver\""
+	elog "NINJA_JOBSERVER=fifo"
+
 	if ! [[ -e "${EROOT}/usr/bin/ninja" ]]; then
 		ln -s ninja-reference "${EROOT}/usr/bin/ninja" || die
 	fi

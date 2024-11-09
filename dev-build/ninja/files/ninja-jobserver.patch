@@ -1,0 +1,3495 @@
+https://github.com/ninja-build/ninja/pull/2506
+
+From 3eaaadfb47479605afe1fe58ae9c2f00238e13ad Mon Sep 17 00:00:00 2001
+From: David 'Digit' Turner <digit+github@google.com>
+Date: Wed, 11 Sep 2024 18:32:23 +0200
+Subject: [PATCH 1/6] Add misc/jobserver_pool.py
+
+This implements a GNU jobserver token pool that will be used
+for testing the upcoming jobserver Ninja client implementation.
+
+Note that the implementation is basic and doesn't try to deal
+with broken protocol clients (which release more tokens than
+they acquired). Supporting them would require something vastly
+more complex that would monitor the state of the pipe/fifo
+at all times.
+---
+ misc/jobserver_pool.py      | 339 ++++++++++++++++++++++++++++++++++++
+ misc/jobserver_pool_test.py | 168 ++++++++++++++++++
+ 2 files changed, 507 insertions(+)
+ create mode 100755 misc/jobserver_pool.py
+ create mode 100755 misc/jobserver_pool_test.py
+
+diff --git a/misc/jobserver_pool.py b/misc/jobserver_pool.py
+new file mode 100755
+index 0000000000..4cebd10d39
+--- /dev/null
++++ b/misc/jobserver_pool.py
+@@ -0,0 +1,339 @@
++#!/usr/bin/env python3
++# Copyright 2024 Google Inc. All Rights Reserved.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++"""Setup a GNU Make Jobserver token pool then launch a command with it.
++
++On Windows, this only supports the semaphore-based scheme.
++On Posix, this uses a pipe by default, unless `--fifo=FIFO` is used.
++
++NOTE: This is a basic implementation that doesn't support broken
++      protocol clients that release more tokens than they acquired
++      to the pool. Using these in your build will result in extra job
++      slots being created, severely degrading overall performance
++      over time.
++
++See --help-usage for usage examples.
++"""
++import argparse
++import os
++import platform
++import subprocess
++import sys
++import typing as T
++
++# Technical note about the MAKEFLAGS values set by this script.
++#
++# All the MAKEFLAGS values created by this script begin
++# with " -j{count} ", i.e. an initial space, the "-j" characters
++# followed by a job slot count then another space.
++#
++# The initial space is only there to mimic what GNU Make 4.3
++# does. Other pool implementations do not use one and thus
++# clients should not expect it (even GNU Make doesn't seem
++# to care when used as a jobserver client).
++#
++# The {count} value is also not available in many pool
++# implementations, but is useful to better debug multi-builds
++# using this script (i.e. to verify that the pool has the
++# expected size). Protocol clients should not depend on it
++# though.
++
++_DEFAULT_NAME = "jobserver_tokens"
++_IS_WINDOWS = sys.platform in ("win32", "cygwin")
++
++if _IS_WINDOWS:
++
++    try:
++        # This requires pywin32 to be installed.
++        import pywintypes
++        import win32event
++        import win32api
++    except ModuleNotFoundError:
++        print(
++            "\nERROR: Could not import Win32 API, please install pywin32, e.g. `python -m pip install pywin32`.\n",
++            file=sys.stderr,
++        )
++        raise
++
++    # It seems impossible to import a proper mypy-compatible type definition for PyHANDLE
++    # 'from pywintypes import PyHANDLE' fails stating there is no such name.
++    # 'from pywintypes import HANDLE as PyHANDLE' fails because HANDLE is a function, not a type.
++    PyHandle: T.TypeAlias = T.Any
++
++    def create_sem(
++        sem_name: str, token_count: int
++    ) -> T.Tuple[PyHandle, T.Dict[str, str]]:
++        """Create and initialize Win32 semaphore."""
++        assert token_count > 0, f"Token count must be strictly positive"
++        # The win32event documentation states that the first argument to CreateSemaphore()
++        # can be None to indicate default security attributes, byut mypy only wants
++        # a PySECURITY_ATTRIBUTES for some reason.
++        handle = win32event.CreateSemaphore(
++            None,  # type: ignore
++            token_count - 1,
++            token_count - 1,
++            sem_name,
++        )
++        assert bool(handle), f"Error creating Win32 semaphore {win32api.GetLastError()}"
++        # See technical note above about MAKEFLAGS format.
++        env = dict(os.environ)
++        env["MAKEFLAGS"] = f" -j{token_count} --jobserver-auth=" + sem_name
++        return handle, env
++
++    def check_sem_count(handle: PyHandle, token_count: int) -> int:
++        if token_count <= 1:
++            # Nothing to check here.
++            return 0
++
++        expected_count = token_count - 1
++
++        read_count = win32event.ReleaseSemaphore(handle, 1)
++        if read_count < expected_count:
++            print(
++                f"ERROR: {expected_count - read_count} were missing from the token pool (got {read_count}, expected {expected_count})",
++                file=sys.stderr,
++            )
++            return 1
++        if read_count > expected_count:
++            print(
++                f"ERROR: {read_count - expected_count} extra tokens were released to the token pool (got {read_count}, expected {expected_count})",
++                file=sys.stderr,
++            )
++            return 1
++
++        return 0
++
++    def print_usage() -> int:
++        print(
++            """Example usage:
++
++# Start <command> after setting the server to provide as many tokens
++# as available CPUs (the default)
++python \\path\\to\\jobserver_pool.py <command>
++
++# Start <command> with a fixed number of job slots.
++python \\path\\to\\jobserver_pool.py -j10 <command>
++
++# Disable the feature with a non-positive count. This is equivalent
++# to running <command> directly.
++python \\path\\to\\jobserver_pool.py -j0 <command>
++
++# Use a specific semaphore name
++python \\path\\to\\jobserver_pool.py --name=my_build_jobs <command>
++
++# Setup jobserver then start new interactive PowerShell
++# session, print MAKEFLAGS value, build stuff, then exit.
++python \\path\\to\\jobserver_pool.py powershell.exe
++$env:MAKEFLAGS
++... build stuff ...
++exit
++"""
++        )
++        return 0
++
++else:  # !_IS_WINDOWS
++
++    def create_pipe(token_count: int) -> T.Tuple[int, int, T.Dict[str, str]]:
++        """Create and fill Posix PIPE."""
++        read_fd, write_fd = os.pipe()
++        os.set_inheritable(read_fd, True)
++        os.set_inheritable(write_fd, True)
++        assert token_count > 0, f"Token count must be strictly positive"
++        os.write(write_fd, (token_count - 1) * b"x")
++        # See technical note above about MAKEFLAGS format.
++        env = dict(os.environ)
++        env["MAKEFLAGS"] = (
++            f" -j{token_count} --jobserver-fds={read_fd},{write_fd} --jobserver-auth={read_fd},{write_fd}"
++        )
++        return read_fd, write_fd, env
++
++    def create_fifo(path: str, token_count: int) -> T.Tuple[int, int, T.Dict[str, str]]:
++        """Create and fill Posix FIFO."""
++        if os.path.exists(path):
++            os.remove(path)
++
++        # mypy complains that this does not exit on Windows.
++        os.mkfifo(path)  # type: ignore
++
++        read_fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
++        write_fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
++        assert token_count > 0, f"Token count must be strictly positive"
++        os.write(write_fd, (token_count - 1) * b"x")
++        # See technical note above about MAKEFLAGS format.
++        env = dict(os.environ)
++        env["MAKEFLAGS"] = f" -j{token_count} --jobserver-auth=fifo:" + path
++        return read_fd, write_fd, env
++
++    def print_usage() -> int:
++        print(
++            """Example usage:
++
++# Start <command> after setting the job pool to provide as many tokens
++# as available CPUs (the default)
++/path/to/jobserver_pool.py <command>
++
++# Start <command> with a fixed number of tokens
++/path/to/jobserver_pool.py -j10 <command>
++
++# Disable the feature with a non-positive count. This is equivalent
++# to running <command> directly.
++/path/to/jobserver_pool.py -j0 <command>
++
++# Use a specific FIFO path
++/path/to/jobserver_pool.py --fifo=/tmp/my_build_jobs <command>
++
++# Setup jobserver then start new interactive Bash shell
++# session, print MAKEFLAGS value, build stuff, then exit.
++/path/to/jobserver_pool.py bash -i
++echo "$MAKEFLAGS"
++... build stuff ...
++exit
++"""
++        )
++        return 0
++
++    def check_pipe_tokens(read_fd: int, token_count: int) -> int:
++        if token_count <= 1:  # Nothing to check
++            return 0
++
++        # Remove implicit token from the expected count.
++        expected_count = token_count - 1
++        os.set_blocking(read_fd, False)
++        read_count = 0
++        while True:
++            try:
++                token = os.read(read_fd, 1)
++                if len(token) == 0:  # End of pipe?
++                    break
++                read_count += 1
++            except BlockingIOError:
++                break
++
++        if read_count < expected_count:
++            print(
++                f"ERROR: {expected_count - read_count} were missing from the token pool (got {read_count}, expected {expected_count})",
++                file=sys.stderr,
++            )
++            return 1
++        if read_count > expected_count:
++            print(
++                f"ERROR: {read_count - expected_count} extra tokens were released to the token pool (got {read_count}, expected {expected_count})",
++                file=sys.stderr,
++            )
++            return 1
++
++        return 0
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser(
++        description=__doc__, formatter_class=argparse.RawTextHelpFormatter
++    )
++    if _IS_WINDOWS:
++        parser.add_argument(
++            "--name",
++            help=f"Specify semaphore name, default is {_DEFAULT_NAME}",
++            default=_DEFAULT_NAME,
++        )
++    else:
++        mutex_group = parser.add_mutually_exclusive_group()
++        mutex_group.add_argument(
++            "--pipe",
++            action="store_true",
++            help="Implement the pool with a Unix pipe (the default)",
++        )
++        mutex_group.add_argument(
++            "--fifo",
++            help=f"Implement the pool with a FIFO file path. E,g, ./{_DEFAULT_NAME}",
++        )
++
++    parser.add_argument(
++        "--check",
++        action="store_true",
++        help="Check that all job slots were returned to the pool on exit.",
++    )
++
++    parser.add_argument(
++        "--help-usage", action="store_true", help="Print usage examples."
++    )
++
++    parser.add_argument(
++        "-j",
++        "--jobs",
++        action="store",
++        metavar="COUNT",
++        dest="token_count",
++        type=int,
++        default=os.cpu_count(),
++        help="Set job slots ccount, default is available CPUs count",
++    )
++
++    parser.add_argument("command", nargs=argparse.REMAINDER, help="Command to run.")
++    args = parser.parse_args()
++
++    if args.help_usage:
++        return print_usage()
++
++    if not args.command:
++        parser.error("This script requires at least one command argument!")
++
++    token_count = args.token_count
++    if token_count <= 0:
++        # Disable the feature.
++        ret = subprocess.run(args.command)
++        exit_code = ret.returncode
++    elif _IS_WINDOWS:
++        # Run with a Window semaphore.
++        try:
++            handle, env = create_sem(args.name, token_count)
++            ret = subprocess.run(args.command, env=env)
++            exit_code = ret.returncode
++
++            if exit_code == 0 and args.check:
++                exit_code = check_sem_count(handle, token_count)
++
++        finally:
++            win32api.CloseHandle(handle)
++    else:
++        # Run with pipe descriptors by default, or a FIFO if --fifo is used.
++        exit_code = 0
++        fifo_path = ""
++        try:
++            if args.fifo:
++                fifo_path = os.path.abspath(args.fifo)
++                read_fd, write_fd, env = create_fifo(fifo_path, (args.token_count))
++                ret = subprocess.run(args.command, env=env)
++            else:
++                read_fd, write_fd, env = create_pipe(int(args.token_count))
++                ret = subprocess.run(
++                    args.command, env=env, pass_fds=(read_fd, write_fd)
++                )
++
++            exit_code = ret.returncode
++            if exit_code == 0 and args.check:
++                exit_code = check_pipe_tokens(read_fd, token_count)
++
++        finally:
++            os.close(read_fd)
++            os.close(write_fd)
++
++            if fifo_path:
++                os.remove(fifo_path)
++
++    return exit_code
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/misc/jobserver_pool_test.py b/misc/jobserver_pool_test.py
+new file mode 100755
+index 0000000000..a49e9baa5e
+--- /dev/null
++++ b/misc/jobserver_pool_test.py
+@@ -0,0 +1,168 @@
++#!/usr/bin/env python3
++
++"""Regression tests for the jobserver_pool.py script."""
++
++import os
++import re
++import platform
++import subprocess
++import sys
++import tempfile
++import unittest
++import typing as T
++
++_SCRIPT_DIR = os.path.dirname(__file__)
++_JOBSERVER_SCRIPT = os.path.join(_SCRIPT_DIR, "jobserver_pool.py")
++_JOBSERVER_CMD = [sys.executable, _JOBSERVER_SCRIPT]
++
++_IS_WINDOWS = sys.platform == "win32"
++
++# This is only here to avoid depending on the non-standard
++# scanf package which does the job properly :-)
++
++
++def _simple_scanf(pattern: str, input: str) -> T.Sequence[T.Any]:
++    """Extract values from input using a scanf-like pattern.
++
++    This is very basic and only used to avoid depending on the
++    non-standard scanf package which does the job properly.
++    Only supports %d, %s and %%, does not support any fancy
++    escaping.
++    """
++    re_pattern = ""
++    groups = ""
++    from_pos = 0
++
++    # Just in case.
++    assert "." not in pattern, f"Dots in pattern not supported."
++    assert "?" not in pattern, f"Question marks in pattern not supported."
++
++    while True:
++        next_percent = pattern.find("%", from_pos)
++        if next_percent < 0 or next_percent + 1 >= len(pattern):
++            re_pattern += pattern[from_pos:]
++            break
++
++        re_pattern += pattern[from_pos:next_percent]
++
++        from_pos = next_percent + 2
++        formatter = pattern[next_percent + 1]
++        if formatter == "%":
++            re_pattern += "%"
++        elif formatter == "d":
++            groups += formatter
++            re_pattern += "(\\d+)"
++        elif formatter == "s":
++            groups += formatter
++            re_pattern += "(\\S+)"
++        else:
++            assert False, f"Unsupported scanf formatter: %{formatter}"
++
++    m = re.match(re_pattern, input)
++    if not m:
++        return None
++
++    result = []
++    for group_index, formatter in enumerate(groups, start=1):
++        if formatter == "d":
++            result.append(int(m.group(group_index)))
++        elif formatter == "s":
++            result.append(m.group(group_index))
++        else:
++            assert False, f"Unsupported formatter {formatter}"
++
++    return result
++
++
++class JobserverPool(unittest.TestCase):
++    def _run_jobserver_echo_MAKEFLAGS(
++        self, cmd_args_prefix
++    ) -> "subprocess.CompletedProcess[str]":
++        if _IS_WINDOWS:
++            cmd_args = cmd_args_prefix + ["cmd.exe", "/c", "echo %MAKEFLAGS%"]
++        else:
++            cmd_args = cmd_args_prefix + ["sh", "-c", 'echo "$MAKEFLAGS"']
++
++        ret = subprocess.run(
++            cmd_args,
++            text=True,
++            stdout=subprocess.PIPE,
++            stderr=subprocess.PIPE,
++        )
++        ret.check_returncode()
++        return ret
++
++    def _test_echo_MAKEFLAGS(self, cmd_args_prefix, expected_core_count: int):
++        ret = self._run_jobserver_echo_MAKEFLAGS(cmd_args_prefix)
++        makeflags = ret.stdout.rstrip()
++
++        if expected_core_count == 0:
++            if _IS_WINDOWS:
++                # On Windows, echo %FOO% prints "%FOO%" if FOO is not defined!
++                self.assertEqual(makeflags.strip(), "%MAKEFLAGS%")
++            else:
++                self.assertEqual(makeflags.strip(), "")
++
++        else:  # expected_core_count > 0
++            if _IS_WINDOWS:
++                expected_format = " -j%d --jobserver-auth=%s"
++            else:
++                expected_format = " -j%d --jobserver-fds=%d,%d --jobserver-auth=%d,%d"
++
++            m = _simple_scanf(expected_format, makeflags)
++            self.assertTrue(
++                m,
++                f"Invalid MAKEFLAGS value, expected format [{expected_format}], got: [{makeflags}]",
++            )
++
++            if _IS_WINDOWS:
++                sem_name = m[1]
++            else:
++                _, read1, write1, read2, write2 = m
++                self.assertTrue(
++                    read1 == read2 and write1 == write2,
++                    f"Inconsistent file descriptors in MAKEFLAGS: {makeflags}",
++                )
++
++            core_count = m[0]
++            self.assertEqual(
++                core_count,
++                expected_core_count,
++                f"Invalid core count {core_count}, expected {expected_core_count}",
++            )
++
++    def test_MAKEFLAGS_default(self):
++        self._test_echo_MAKEFLAGS(_JOBSERVER_CMD, os.cpu_count())
++
++    def test_MAKEFLAGS_with_10_jobs(self):
++        self._test_echo_MAKEFLAGS(_JOBSERVER_CMD + ["-j10"], 10)
++        self._test_echo_MAKEFLAGS(_JOBSERVER_CMD + ["--jobs=10"], 10)
++        self._test_echo_MAKEFLAGS(_JOBSERVER_CMD + ["--jobs", "10"], 10)
++
++    def test_MAKEFLAGS_with_no_jobs(self):
++        self._test_echo_MAKEFLAGS(_JOBSERVER_CMD + ["-j0"], 0)
++        self._test_echo_MAKEFLAGS(_JOBSERVER_CMD + ["--jobs=0"], 0)
++        self._test_echo_MAKEFLAGS(_JOBSERVER_CMD + ["--jobs", "0"], 0)
++
++    @unittest.skipIf(_IS_WINDOWS, "--fifo is not supported on Windows")
++    def test_MAKEFLAGS_with_fifo(self):
++        fifo_name = "test_fifo"
++        fifo_path = os.path.abspath(fifo_name)
++        ret = self._run_jobserver_echo_MAKEFLAGS(
++            _JOBSERVER_CMD + ["-j10", "--fifo", fifo_name]
++        )
++        makeflags = ret.stdout.rstrip()
++        self.assertEqual(makeflags, " -j10 --jobserver-auth=fifo:" + fifo_path)
++
++    @unittest.skipIf(not _IS_WINDOWS, "--name is not supported on Posix")
++    def test_MAKEFLAGS_with_name(self):
++        sem_name = "test_semaphore"
++        ret = self._run_jobserver_echo_MAKEFLAGS(
++            _JOBSERVER_CMD + ["-j10", "--name", sem_name]
++        )
++        makeflags = ret.stdout.rstrip()
++        self.assertEqual(makeflags, " -j10 --jobserver-auth=" + sem_name)
++
++
++if __name__ == "__main__":
++    unittest.main()
+
+From 76fea09ee048c48584c2f7598d1ec78fca061b17 Mon Sep 17 00:00:00 2001
+From: David 'Digit' Turner <digit+github@google.com>
+Date: Fri, 13 Sep 2024 11:13:29 +0200
+Subject: [PATCH 2/6] Add Jobserver::Slot and Jobserver::Config classes
+
+This adds two new classes related to GNU jobserver support
+and related unit-tests:
+
+`Jobserver::Slot` models a single job slot, which includes both
+the "implicit" slot value assigned to each process spawned
+by Make (or the top-level pool implementation), as well as
+"explicit" values that come from the Posix pipe, or Win32
+semaphore decrements.
+
+`Jobserver::Config` models the Jobserver pool implementation
+to use based on the value of the `MAKEFLAGS` environment
+variable.
+---
+ CMakeLists.txt        |   2 +
+ configure.py          |   2 +
+ src/jobserver.cc      | 282 ++++++++++++++++++++++++++++++++++++++++++
+ src/jobserver.h       | 189 ++++++++++++++++++++++++++++
+ src/jobserver_test.cc | 227 ++++++++++++++++++++++++++++++++++
+ 5 files changed, 702 insertions(+)
+ create mode 100644 src/jobserver.cc
+ create mode 100644 src/jobserver.h
+ create mode 100644 src/jobserver_test.cc
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 47b1f9c117..c94457c7b4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -139,6 +139,7 @@ add_library(libninja OBJECT
+ 	src/eval_env.cc
+ 	src/graph.cc
+ 	src/graphviz.cc
++	src/jobserver.cc
+ 	src/json.cc
+ 	src/line_printer.cc
+ 	src/manifest_parser.cc
+@@ -269,6 +270,7 @@ if(BUILD_TESTING)
+     src/elide_middle_test.cc
+     src/explanations_test.cc
+     src/graph_test.cc
++    src/jobserver_test.cc
+     src/json_test.cc
+     src/lexer_test.cc
+     src/manifest_parser_test.cc
+diff --git a/configure.py b/configure.py
+index 7d3ecb6d38..1abc9a59f7 100755
+--- a/configure.py
++++ b/configure.py
+@@ -543,6 +543,7 @@ def has_re2c() -> bool:
+              'eval_env',
+              'graph',
+              'graphviz',
++             'jobserver',
+              'json',
+              'line_printer',
+              'manifest_parser',
+@@ -642,6 +643,7 @@ def has_re2c() -> bool:
+         'elide_middle_test',
+         'explanations_test',
+         'graph_test',
++        'jobserver_test',
+         'json_test',
+         'lexer_test',
+         'manifest_parser_test',
+diff --git a/src/jobserver.cc b/src/jobserver.cc
+new file mode 100644
+index 0000000000..1d2912d3a4
+--- /dev/null
++++ b/src/jobserver.cc
+@@ -0,0 +1,282 @@
++// Copyright 2024 Google Inc. All Rights Reserved.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#include "jobserver.h"
++
++#include <assert.h>
++#include <stdio.h>
++
++#include <vector>
++
++#include "string_piece.h"
++
++namespace {
++
++// If |input| starts with |prefix|, return true and sets |*value| to the rest
++// of the input. Otherwise return false.
++bool GetPrefixedValue(StringPiece input, StringPiece prefix,
++                      StringPiece* value) {
++  assert(prefix.len_ > 0);
++  if (input.len_ < prefix.len_ || memcmp(prefix.str_, input.str_, prefix.len_))
++    return false;
++
++  *value = StringPiece(input.str_ + prefix.len_, input.len_ - prefix.len_);
++  return true;
++}
++
++// Try to read a comma-separated pair of file descriptors from |input|.
++// On success return true and set |*config| accordingly. Otherwise return
++// false if the input doesn't follow the appropriate format.
++bool GetFileDescriptorPair(StringPiece input, Jobserver::Config* config) {
++  std::string pair = input.AsString();
++  if (sscanf(pair.c_str(), "%d,%d", &config->read_fd, &config->write_fd) != 2)
++    return false;
++
++  // From
++  // https://www.gnu.org/software/make/manual/html_node/POSIX-Jobserver.html Any
++  // negative descriptor means the feature is disabled.
++  if (config->read_fd < 0 || config->write_fd < 0)
++    config->mode = Jobserver::Config::kModeNone;
++  else
++    config->mode = Jobserver::Config::kModePipe;
++
++  return true;
++}
++
++enum SupportedSystem {
++  kSystemAll = 0,
++  kSystemPosix,
++  kSystemWin32,
++#ifdef _WIN32
++  kSystemCurrent = kSystemWin32,
++#else   // !_WIN32
++  kSystemCurrent = kSystemPosix,
++#endif  // !_WIN32
++};
++
++static const struct {
++  const char* mode_str;
++  Jobserver::Config::Mode mode_value;
++  SupportedSystem system;
++} kValidModes[] = {
++  { "none", Jobserver::Config::kModeNone, kSystemAll },
++  { "pipe", Jobserver::Config::kModePipe, kSystemPosix },
++  { "fifo", Jobserver::Config::kModePosixFifo, kSystemPosix },
++  { "sem", Jobserver::Config::kModeWin32Semaphore, kSystemWin32 },
++  { "0", Jobserver::Config::kModeNone, kSystemAll },
++  { "1", Jobserver::Config::kModeDefault, kSystemAll },
++};
++
++}  // namespace
++
++// static
++const int16_t Jobserver::Slot::kImplicitValue;
++
++uint8_t Jobserver::Slot::GetExplicitValue() const {
++  assert(IsExplicit());
++  return static_cast<uint8_t>(value_);
++}
++
++bool Jobserver::ParseMakeFlagsValue(const char* makeflags_env,
++                                    Jobserver::Config* config,
++                                    std::string* error) {
++  *config = Config();
++
++  if (!makeflags_env || !makeflags_env[0]) {
++    /// Return default Config instance with kModeNone if input is null or empty.
++    return true;
++  }
++
++  // Decompose input into vector of space or tab separated string pieces.
++  std::vector<StringPiece> args;
++  const char* p = makeflags_env;
++  while (*p) {
++    const char* next_space = strpbrk(p, " \t");
++    if (!next_space) {
++      args.emplace_back(p);
++      break;
++    }
++
++    if (next_space > p)
++      args.emplace_back(p, next_space - p);
++
++    p = next_space + 1;
++  }
++
++  // clang-format off
++  //
++  // From:
++  // https://www.gnu.org/software/make/manual/html_node/POSIX-Jobserver.html
++  //
++  // """
++  // Your tool may also examine the first word of the MAKEFLAGS variable and
++  // look for the character n. If this character is present then make was
++  // invoked with the ‘-n’ option and your tool may want to stop without
++  // performing any operations.
++  // """
++  //
++  // Where according to
++  // https://www.gnu.org/software/make/manual/html_node/Options_002fRecursion.html
++  // MAKEFLAGS begins with all "flag letters" passed to make.
++  //
++  // Experimentation shows that GNU Make 4.3, at least, will set MAKEFLAGS with
++  // an initial space if no letter flag are passed to its invocation (except -j),
++  // i.e.:
++  //
++  //    make -ks --> MAKEFLAGS="ks"
++  //    make -j  --> MAKEFLAGS=" -j"
++  //    make -ksj --> MAKEFLAGS="ks -j"
++  //    make -ks -j3  --> MAKEFLAGS="ks -j3 --jobserver-auth=3,4"
++  //    make -j3      --> MAKEFLAGS=" -j3 --jobserver-auth=3,4"
++  //
++  // However, other jobserver implementation will not, for example the one
++  // at https://github.com/rust-lang/jobserver-rs will set MAKEFLAGS to just
++  // "--jobserver-fds=R,W --jobserver-auth=R,W" instead, without an initial
++  // space.
++  //
++  // Another implementation is from Rust's Cargo itself which will set it to
++  // "-j --jobserver-fds=R,W --jobserver-auth=R,W".
++  //
++  // For the record --jobserver-fds=R,W is an old undocumented and deprecated
++  // version of --jobserver-auth=R,W that was implemented by GNU Make before 4.2
++  // was released, and some tooling may depend on it. Hence it makes sense to
++  // define both --jobserver-fds and --jobserver-auth at the same time, since
++  // the last recognized one should win in client code.
++  //
++  // The initial space will have been stripped by the loop above, but we can
++  // still support the requirement by ignoring the first arg if it begins with a
++  // dash (-).
++  //
++  // clang-format on
++  if (!args.empty() && args[0][0] != '-' &&
++      !!memchr(args[0].str_, 'n', args[0].len_)) {
++    return true;
++  }
++
++  // Loop over all arguments, the last one wins, except in case of errors.
++  for (const auto& arg : args) {
++    StringPiece value;
++
++    // Handle --jobserver-auth=... here.
++    if (GetPrefixedValue(arg, "--jobserver-auth=", &value)) {
++      if (GetFileDescriptorPair(value, config)) {
++        continue;
++      }
++      StringPiece fifo_path;
++      if (GetPrefixedValue(value, "fifo:", &fifo_path)) {
++        config->mode = Jobserver::Config::kModePosixFifo;
++        config->path = fifo_path.AsString();
++      } else {
++        config->mode = Jobserver::Config::kModeWin32Semaphore;
++        config->path = value.AsString();
++      }
++      continue;
++    }
++
++    // Handle --jobserver-fds which is an old undocumented variant of
++    // --jobserver-auth that only accepts a pair of file descriptor.
++    // This was replaced by --jobserver-auth=R,W in GNU Make 4.2.
++    if (GetPrefixedValue(arg, "--jobserver-fds=", &value)) {
++      if (!GetFileDescriptorPair(value, config)) {
++        *error = "Invalid file descriptor pair [" + value.AsString() + "]";
++        return false;
++      }
++      config->mode = Jobserver::Config::kModePipe;
++      continue;
++    }
++
++    // Ignore this argument. This assumes that MAKEFLAGS does not
++    // use spaces to separate the option from its argument, e.g.
++    // `--jobserver-auth <something>`, which has been confirmed with
++    // Make 4.3, even if it receives such a value in its own env.
++  }
++
++  return true;
++}
++
++bool Jobserver::ParseNativeMakeFlagsValue(const char* makeflags_env,
++                                          Jobserver::Config* config,
++                                          std::string* error) {
++  if (!ParseMakeFlagsValue(makeflags_env, config, error))
++    return false;
++
++#ifdef _WIN32
++  if (config->mode == Jobserver::Config::kModePosixFifo) {
++    *error = "FIFO mode is not available on Windows!";
++    return false;
++  }
++  if (config->mode == Jobserver::Config::kModePipe) {
++    *error =
++        "File-descriptor based authentication is not available on Windows!";
++    return false;
++  }
++#else   // !_WIN32
++  if (config->mode == Jobserver::Config::kModeWin32Semaphore) {
++    *error = "Semaphore mode is only available on Windows!";
++    return false;
++  }
++#endif  // !_WIN32
++  return true;
++}
++
++// static
++std::string Jobserver::Config::ModeToString(Jobserver::Config::Mode mode) {
++  std::string result;
++  for (const auto& valid : kValidModes) {
++    if (valid.mode_value == mode) {
++      result = valid.mode_str;
++      break;
++    }
++  }
++  return result;
++}
++
++std::pair<bool, Jobserver::Config::Mode> Jobserver::Config::ModeFromString(
++    const std::string& mode_str) {
++  std::pair<bool, Jobserver::Config::Mode> result = {
++    false, Jobserver::Config::kModeNone
++  };
++  for (const auto& valid : kValidModes) {
++    if (mode_str == valid.mode_str) {
++      result.first = true;
++      result.second = valid.mode_value;
++      break;
++    }
++  }
++  return result;
++}
++
++std::string Jobserver::Config::GetValidModesListAsString(
++    const char* separator) {
++  std::string result;
++  for (const auto& valid : kValidModes) {
++    if (!result.empty())
++      result += separator;
++    result += valid.mode_str;
++  }
++  return result;
++}
++
++std::string Jobserver::Config::GetValidNativeModesListAsString(
++    const char* separator) {
++  std::string result;
++  for (const auto& valid : kValidModes) {
++    if (valid.system != kSystemAll && valid.system != kSystemCurrent)
++      continue;
++    if (!result.empty())
++      result += separator;
++    result += valid.mode_str;
++  }
++  return result;
++}
+diff --git a/src/jobserver.h b/src/jobserver.h
+new file mode 100644
+index 0000000000..791291d9fe
+--- /dev/null
++++ b/src/jobserver.h
+@@ -0,0 +1,189 @@
++// Copyright 2024 Google Inc. All Rights Reserved.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#pragma once
++
++#include <stdint.h>
++
++#include <memory>
++#include <string>
++#include <utility>
++
++/// Jobserver provides types related to managing a pool of "job slots"
++/// using the GNU Make jobserver ptocol described at:
++///
++/// https://www.gnu.org/software/make/manual/html_node/Job-Slots.html
++///
++struct Jobserver {
++  /// A Jobserver::Slot models a single job slot that can be acquired from.
++  /// or released to a jobserver pool. This class is move-only, and can
++  /// wrap three types of values:
++  ///
++  /// - An "invalid" value (the default), used to indicate errors, e.g.
++  ///   that no slot could be acquired from the pool.
++  ///
++  /// - The "implicit" value, used to model the job slot that is implicitly
++  ///   assigned to a jobserver client by the parent process that spawned
++  ///   it.
++  ///
++  /// - The "explicit" values, which correspond to an actual byte read from
++  ///   the slot pool's pipe (for Posix), or a semaphore decrement operation
++  ///   (for Windows).
++  ///
++  /// Use IsValid(), IsImplicit(), HasValue() to test for categories.
++  ///
++  /// TECHNICAL NOTE: This design complies with the requirements laid out
++  /// on https://www.gnu.org/software/make/manual/html_node/POSIX-Jobserver.html
++  /// which requires clients to write back the exact token values they
++  /// received from a Posix pipe.
++  ///
++  /// Note that *currently* all pool implementations write the same token
++  /// values to the pipe ('+' for GNU Make, and '|' for the Rust jobserver),
++  /// and do not care about the values written back by clients.
++  ///
++  struct Slot {
++    /// Default constructor creates invalid instance.
++    Slot() = default;
++
++    /// Move operations are allowed.
++    Slot(Slot&& o) noexcept : value_(o.value_) { o.value_ = -1; }
++
++    Slot& operator=(Slot&& o) noexcept {
++      if (this != &o) {
++        this->value_ = o.value_;
++        o.value_ = -1;
++      }
++      return *this;
++    }
++
++    /// Copy operations are disallowed.
++    Slot(const Slot&) = delete;
++    Slot& operator=(const Slot&) = delete;
++
++    /// Return true if this instance is valid, i.e. that it is either
++    /// implicit or explicit job slot.
++    bool IsValid() const { return value_ >= 0; }
++
++    /// Return true if this instance represents an implicit job slot.
++    bool IsImplicit() const { return value_ == kImplicitValue; }
++
++    /// Return true if this instance represents an explicit job slot
++    bool IsExplicit() const { return IsValid() && !IsImplicit(); }
++
++    /// Return value of an explicit slot. It is a runtime error to call
++    /// this from an invalid instance.
++    uint8_t GetExplicitValue() const;
++
++    /// Create instance for explicit byte value.
++    static Slot CreateExplicit(uint8_t value) {
++      return Slot(static_cast<int16_t>(value));
++    }
++
++    /// Create instance for the implicit value.
++    static Slot CreateImplicit() { return Slot(kImplicitValue); }
++
++   private:
++    Slot(int16_t value) : value_(value) {}
++
++    static constexpr int16_t kImplicitValue = 256;
++
++    int16_t value_ = -1;
++  };
++
++  /// A Jobserver::Config models how to access or implement a GNU jobserver
++  /// implementation.
++  struct Config {
++    /// Different implementation modes for the slot pool.
++    ///
++    /// kModeNone means there is no pool.
++    ///
++    /// kModePipe means that `--jobserver-auth=R,W` is used to
++    ///    pass a pair of file descriptors to client processes. This also
++    ///    matches `--jobserver-fds=R,W` which is an old undocumented
++    ///    variant of the same scheme.
++    ///
++    /// kModePosixFifo means that `--jobserver-auth=fifo:PATH` is used to
++    ///    pass the path of a Posix FIFO to client processes. This is not
++    ///    supported on Windows. Implemented by GNU Make 4.4 and above
++    ///    when `--jobserver-style=fifo` is used.
++    ///
++    /// kModeWin32Semaphore means that `--jobserver-auth=SEMAPHORE_NAME` is
++    ///    used to pass the name of a Win32 semaphore to client processes.
++    ///    This is not supported on Posix.
++    ///
++    /// kModeDefault is the default mode to enable on the current platform.
++    ///    This is an alias for kModeWin32Semaphore on Windows ,and
++    ///    kModePipe on Posix, since FIFO mode was only introduced in
++    ///    GNU Make 4.4, and older clients may not support it.
++    enum Mode {
++      kModeNone = 0,
++      kModePipe,
++      kModePosixFifo,
++      kModeWin32Semaphore,
++#ifdef _WIN32
++      kModeDefault = kModeWin32Semaphore,
++#else   // _WIN32
++      kModeDefault = kModePipe,
++#endif  // _WIN32
++    };
++
++    /// Convert a mode value into an equivalent string value.
++    /// Useful for debugging and error messages.
++    static std::string ModeToString(Mode mode);
++
++    /// Convert a string into the equivalent Mode value.
++    /// On success, return (true, <mode>), on failure,
++    /// return (false, kModeNone). NOTE: As a special case,
++    /// this also accepts "0" for kModeNone. and "1" for kModeDefault
++    /// which is useful when reading the value from an environment
++    /// variable.
++    static std::pair<bool, Mode> ModeFromString(const std::string& str);
++
++    /// Return the list of valid modes as a space-separated string.
++    /// Allow using a custom separator. This includes "0" and "1" as
++    /// aliases for kModeNone and kModeDefault.
++    static std::string GetValidModesListAsString(const char* separator = " ");
++
++    /// Same as GetValidModesListAsString(), but only returns values
++    /// valid for the current system.
++    static std::string GetValidNativeModesListAsString(
++        const char* separator = " ");
++
++    /// Implementation mode for the pool.
++    Mode mode = kModeNone;
++
++    /// For kModeFifo, this is the path to the Unix FIFO to use.
++    /// For kModeSemaphore, this is the name of the Win32 semaphore to use.
++    std::string path;
++
++    /// For kModePipe, these are the file descriptor values
++    /// extracted from MAKEFLAGS.
++    int read_fd = -1;
++    int write_fd = -1;
++  };
++
++  /// Parse the value of a MAKEFLAGS environment variable. On success return
++  /// true and set |*config|. On failure, return false and set |*error| to
++  /// explain what's wrong. If |makeflags_env| is nullptr or an empty string,
++  /// this returns success and sets |config->mode| to Config::kModeNone.
++  static bool ParseMakeFlagsValue(const char* makeflags_env, Config* config,
++                                  std::string* error);
++
++  /// A variant of ParseMakeFlagsValue() that will return an error if the parsed
++  /// result is not compatible with the native system. For example
++  /// --jobserver-auth=R,W or --jobserver-auth=fifo:PATH only work on Posix,
++  /// while --jobserver-auth=NAME only work on Windows.
++  static bool ParseNativeMakeFlagsValue(const char* makeflags_env,
++                                        Config* config, std::string* error);
++};
+diff --git a/src/jobserver_test.cc b/src/jobserver_test.cc
+new file mode 100644
+index 0000000000..d80e63b35d
+--- /dev/null
++++ b/src/jobserver_test.cc
+@@ -0,0 +1,227 @@
++// Copyright 2024 Google Inc. All Rights Reserved.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#include "jobserver.h"
++
++#include "test.h"
++
++#ifndef _WIN32
++#include <fcntl.h>
++#include <unistd.h>
++#endif
++
++namespace {
++
++#ifndef _WIN32
++struct ScopedTestFd {
++  explicit ScopedTestFd(int fd) : fd_(fd) {}
++
++  ~ScopedTestFd() {
++    if (IsValid())
++      ::close(fd_);
++  }
++
++  bool IsValid() const { return fd_ >= 0; }
++
++  int fd_ = -1;
++};
++#endif  // !_WIN32
++
++}  // namespace
++
++TEST(Jobserver, ModeToString) {
++  static const struct {
++    Jobserver::Config::Mode mode;
++    const char* expected;
++  } kTestCases[] = {
++    { Jobserver::Config::kModeNone, "none" },
++    { Jobserver::Config::kModePipe, "pipe" },
++    { Jobserver::Config::kModePosixFifo, "fifo" },
++    { Jobserver::Config::kModeWin32Semaphore, "sem" },
++  };
++  for (const auto& test_case : kTestCases) {
++    EXPECT_EQ(Jobserver::Config::ModeToString(test_case.mode),
++              test_case.expected)
++        << test_case.mode;
++  }
++}
++
++TEST(Jobserver, ModeFromString) {
++  static const struct {
++    const char* input;
++    bool expected_first;
++    Jobserver::Config::Mode expected_second;
++  } kSuccessCases[] = {
++    { "none", true, Jobserver::Config::kModeNone },
++    { "pipe", true, Jobserver::Config::kModePipe },
++    { "fifo", true, Jobserver::Config::kModePosixFifo },
++    { "sem", true, Jobserver::Config::kModeWin32Semaphore },
++    { "0", true, Jobserver::Config::kModeNone },
++    { "1", true, Jobserver::Config::kModeDefault },
++    { "", false, Jobserver::Config::kModeNone },
++    { "unknown", false, Jobserver::Config::kModeNone },
++  };
++  for (const auto& test_case : kSuccessCases) {
++    auto ret = Jobserver::Config::ModeFromString(test_case.input);
++    EXPECT_EQ(ret.first, test_case.expected_first) << test_case.input;
++    EXPECT_EQ(ret.second, test_case.expected_second) << test_case.input;
++  }
++}
++
++TEST(Jobserver, GetValidModesListAsString) {
++  EXPECT_EQ("none pipe fifo sem 0 1",
++            Jobserver::Config::GetValidModesListAsString());
++  EXPECT_EQ("none, pipe, fifo, sem, 0, 1",
++            Jobserver::Config::GetValidModesListAsString(", "));
++}
++
++TEST(Jobserver, GetValidNativeModesListAsString) {
++#ifdef _WIN32
++  EXPECT_EQ("none sem 0 1",
++            Jobserver::Config::GetValidNativeModesListAsString());
++  EXPECT_EQ("none, sem, 0, 1",
++            Jobserver::Config::GetValidNativeModesListAsString(", "));
++#else   // !_WIN32
++  EXPECT_EQ("none pipe fifo 0 1",
++            Jobserver::Config::GetValidNativeModesListAsString());
++  EXPECT_EQ("none, pipe, fifo, 0, 1",
++            Jobserver::Config::GetValidNativeModesListAsString(", "));
++#endif  // !_WIN32
++}
++
++TEST(Jobserver, SlotTest) {
++  // Default construction.
++  Jobserver::Slot slot;
++  EXPECT_FALSE(slot.IsValid());
++
++  // Construct implicit slot
++  Jobserver::Slot slot0 = Jobserver::Slot::CreateImplicit();
++  EXPECT_TRUE(slot0.IsValid());
++  EXPECT_TRUE(slot0.IsImplicit());
++  EXPECT_FALSE(slot0.IsExplicit());
++
++  // Construct explicit slots
++  auto slot1 = Jobserver::Slot::CreateExplicit(10u);
++  EXPECT_TRUE(slot1.IsValid());
++  EXPECT_FALSE(slot1.IsImplicit());
++  EXPECT_TRUE(slot1.IsExplicit());
++  EXPECT_EQ(10u, slot1.GetExplicitValue());
++
++  auto slot2 = Jobserver::Slot::CreateExplicit(42u);
++  EXPECT_TRUE(slot2.IsValid());
++  EXPECT_FALSE(slot2.IsImplicit());
++  EXPECT_TRUE(slot2.IsExplicit());
++  EXPECT_EQ(42u, slot2.GetExplicitValue());
++
++  // Move operation.
++  slot2 = std::move(slot1);
++  EXPECT_FALSE(slot1.IsValid());
++  EXPECT_TRUE(slot2.IsValid());
++  EXPECT_TRUE(slot2.IsExplicit());
++  ASSERT_EQ(10u, slot2.GetExplicitValue());
++
++  slot1 = std::move(slot0);
++  EXPECT_FALSE(slot0.IsValid());
++  EXPECT_TRUE(slot1.IsValid());
++  EXPECT_TRUE(slot1.IsImplicit());
++  EXPECT_FALSE(slot1.IsExplicit());
++}
++
++TEST(Jobserver, ParseMakeFlagsValue) {
++  Jobserver::Config config;
++  std::string error;
++
++  // Passing nullptr does not crash.
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue(nullptr, &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModeNone, config.mode);
++
++  // Passing an empty string does not crash.
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue("", &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModeNone, config.mode);
++
++  // Passing a string that only contains whitespace does not crash.
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue("  \t", &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModeNone, config.mode);
++
++  // Passing an `n` in the first word reports no mode.
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue("kns --jobserver-auth=fifo:foo",
++                                             &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModeNone, config.mode);
++
++  // Passing "--jobserver-auth=fifo:<path>" works.
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue("--jobserver-auth=fifo:foo",
++                                             &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModePosixFifo, config.mode);
++  EXPECT_EQ("foo", config.path);
++
++  // Passing an `n` in the first word _after_ a dash works though, i.e.
++  // It is not interpreted as GNU Make dry-run flag.
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue(
++      "-one-flag --jobserver-auth=fifo:foo", &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModePosixFifo, config.mode);
++
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue("--jobserver-auth=semaphore_name",
++                                             &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModeWin32Semaphore, config.mode);
++  EXPECT_EQ("semaphore_name", config.path);
++
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue("--jobserver-auth=10,42", &config,
++                                             &error));
++  EXPECT_EQ(Jobserver::Config::kModePipe, config.mode);
++  EXPECT_EQ(10, config.read_fd);
++  EXPECT_EQ(42, config.write_fd);
++
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue("--jobserver-auth=-1,42", &config,
++                                             &error));
++  EXPECT_EQ(Jobserver::Config::kModeNone, config.mode);
++
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue("--jobserver-auth=10,-42", &config,
++                                             &error));
++  EXPECT_EQ(Jobserver::Config::kModeNone, config.mode);
++
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue(
++      "--jobserver-auth=10,42 --jobserver-fds=12,44 "
++      "--jobserver-auth=fifo:/tmp/fifo",
++      &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModePosixFifo, config.mode);
++  EXPECT_EQ("/tmp/fifo", config.path);
++
++  config = {};
++  error.clear();
++  ASSERT_FALSE(
++      Jobserver::ParseMakeFlagsValue("--jobserver-fds=10,", &config, &error));
++  EXPECT_EQ("Invalid file descriptor pair [10,]", error);
++}
+
+From d23a67481c7c50016e064bc755d69c127b42f5f5 Mon Sep 17 00:00:00 2001
+From: David 'Digit' Turner <digit+github@google.com>
+Date: Fri, 13 Sep 2024 13:03:09 +0200
+Subject: [PATCH 3/6] Add Jobserver::Client class
+
+This adds a new interface class for jobserver clients,
+providing a way to acquire and release job slots easily.
+
+Creating a concrete instance takes a Jobserver::Config as
+argument, which is used to pick the appropriate implementation
+and initialize it.
+
+This commit includes both Posix and Win32 implementations.
+---
+ CMakeLists.txt         |   6 +-
+ configure.py           |   5 +-
+ src/jobserver-posix.cc | 190 ++++++++++++++++++++++++++++++++++++++++
+ src/jobserver-win32.cc | 105 ++++++++++++++++++++++
+ src/jobserver.h        |  51 +++++++++++
+ src/jobserver_test.cc  | 192 +++++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 547 insertions(+), 2 deletions(-)
+ create mode 100644 src/jobserver-posix.cc
+ create mode 100644 src/jobserver-win32.cc
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c94457c7b4..4970ba52fd 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -156,6 +156,7 @@ if(WIN32)
+ 	target_sources(libninja PRIVATE
+ 		src/subprocess-win32.cc
+ 		src/includes_normalize-win32.cc
++		src/jobserver-win32.cc
+ 		src/msvc_helper-win32.cc
+ 		src/msvc_helper_main-win32.cc
+ 		src/getopt.c
+@@ -171,7 +172,10 @@ if(WIN32)
+ 	# errors by telling windows.h to not define those two.
+ 	add_compile_definitions(NOMINMAX)
+ else()
+-	target_sources(libninja PRIVATE src/subprocess-posix.cc)
++	target_sources(libninja PRIVATE
++		src/jobserver-posix.cc
++		src/subprocess-posix.cc
++	)
+ 	if(CMAKE_SYSTEM_NAME STREQUAL "OS400" OR CMAKE_SYSTEM_NAME STREQUAL "AIX")
+ 		target_sources(libninja PRIVATE src/getopt.c)
+ 		# Build getopt.c, which can be compiled as either C or C++, as C++
+diff --git a/configure.py b/configure.py
+index 1abc9a59f7..3d4ee355a1 100755
+--- a/configure.py
++++ b/configure.py
+@@ -559,6 +559,7 @@ def has_re2c() -> bool:
+ if platform.is_windows():
+     for name in ['subprocess-win32',
+                  'includes_normalize-win32',
++                 'jobserver-win32',
+                  'msvc_helper-win32',
+                  'msvc_helper_main-win32']:
+         objs += cxx(name, variables=cxxvariables)
+@@ -566,7 +567,9 @@ def has_re2c() -> bool:
+         objs += cxx('minidump-win32', variables=cxxvariables)
+     objs += cc('getopt')
+ else:
+-    objs += cxx('subprocess-posix')
++    for name in ['jobserver-posix',
++                 'subprocess-posix']:
++        objs += cxx(name, variables=cxxvariables)
+ if platform.is_aix():
+     objs += cc('getopt')
+ if platform.is_msvc():
+diff --git a/src/jobserver-posix.cc b/src/jobserver-posix.cc
+new file mode 100644
+index 0000000000..153284eb77
+--- /dev/null
++++ b/src/jobserver-posix.cc
+@@ -0,0 +1,190 @@
++// Copyright 2024 Google Inc. All Rights Reserved.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#include <assert.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#include <string>
++
++#include "jobserver.h"
++#include "util.h"
++
++namespace {
++
++// Return true if |fd| is a fifo or pipe descriptor.
++bool IsFifoDescriptor(int fd) {
++  struct stat info;
++  int ret = ::fstat(fd, &info);
++  return (ret == 0) && ((info.st_mode & S_IFMT) == S_IFIFO);
++}
++
++bool SetNonBlockingFd(int fd) {
++  int flags = fcntl(fd, F_GETFL, 0);
++  if (!(flags & O_NONBLOCK)) {
++    int ret = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
++    if (ret < 0)
++      return false;
++  }
++  return true;
++}
++
++bool SetCloseOnExecFd(int fd) {
++  int flags = fcntl(fd, F_GETFD, 0);
++  if (!(flags & FD_CLOEXEC)) {
++    int ret = fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
++    if (ret < 0)
++      return false;
++  }
++  return true;
++}
++
++// Duplicate the descriptor and make the result non-blocking and
++// close-on-exec.
++bool DuplicateDescriptor(int from_fd, int* to_fd) {
++  int new_fd = dup(from_fd);
++  if (new_fd < 0) {
++    return false;
++  }
++  if (!SetNonBlockingFd(new_fd) || !SetCloseOnExecFd(new_fd)) {
++    ::close(new_fd);
++    return false;
++  }
++  *to_fd = new_fd;
++  return true;
++}
++
++// Implementation of Jobserver::Client for Posix systems
++class PosixJobserverClient : public Jobserver::Client {
++ public:
++  virtual ~PosixJobserverClient() {
++    if (write_fd_ >= 0)
++      ::close(write_fd_);
++    if (read_fd_ >= 0)
++      ::close(read_fd_);
++  }
++
++  Jobserver::Slot TryAcquire() override {
++    if (has_implicit_slot_) {
++      has_implicit_slot_ = false;
++      return Jobserver::Slot::CreateImplicit();
++    }
++    uint8_t slot_char = '\0';
++    int ret;
++    do {
++      ret = ::read(read_fd_, &slot_char, 1);
++    } while (ret < 0 && errno == EINTR);
++    if (ret == 1) {
++      return Jobserver::Slot::CreateExplicit(slot_char);
++    }
++    return Jobserver::Slot();
++  }
++
++  void Release(Jobserver::Slot slot) override {
++    if (!slot.IsValid())
++      return;
++
++    if (slot.IsImplicit()) {
++      assert(!has_implicit_slot_ && "Implicit slot cannot be released twice!");
++      has_implicit_slot_ = true;
++      return;
++    }
++
++    uint8_t slot_char = slot.GetExplicitValue();
++    int ret;
++    do {
++      ret = ::write(write_fd_, &slot_char, 1);
++    } while (ret < 0 && errno == EINTR);
++    (void)ret;  // Nothing can be done in case of error here.
++  }
++
++  // Initialize instance with two explicit pipe file descriptors.
++  bool InitWithPipeFds(int read_fd, int write_fd, std::string* error) {
++    // Verify that the file descriptors belong to FIFOs.
++    if (!IsFifoDescriptor(read_fd) || !IsFifoDescriptor(write_fd)) {
++      *error = "Invalid file descriptors";
++      return false;
++    }
++    // Duplicate the file descriptors to make then non-blocking, and
++    // close-on-exec. This is important because the original descriptors
++    // might be inherited by sub-processes of this client.
++    if (!DuplicateDescriptor(read_fd, &read_fd_)) {
++      *error = "Could not duplicate read descriptor";
++      return false;
++    }
++    if (!DuplicateDescriptor(write_fd, &write_fd_)) {
++      *error = "Could not duplicate write descriptor";
++      // Let destructor close read_fd_.
++      return false;
++    }
++    return true;
++  }
++
++  // Initialize with FIFO file path.
++  bool InitWithFifo(const std::string& fifo_path, std::string* error) {
++    if (fifo_path.empty()) {
++      *error = "Empty fifo path";
++      return false;
++    }
++    read_fd_ = ::open(fifo_path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
++    if (read_fd_ < 0) {
++      *error =
++          std::string("Error opening fifo for reading: ") + strerror(errno);
++      return false;
++    }
++    if (!IsFifoDescriptor(read_fd_)) {
++      *error = "Not a fifo path: " + fifo_path;
++      // Let destructor close read_fd_.
++      return false;
++    }
++    write_fd_ = ::open(fifo_path.c_str(), O_WRONLY | O_NONBLOCK | O_CLOEXEC);
++    if (write_fd_ < 0) {
++      *error =
++          std::string("Error opening fifo for writing: ") + strerror(errno);
++      // Let destructor close read_fd_
++      return false;
++    }
++    return true;
++  }
++
++ private:
++  // Set to true if the implicit slot has not been acquired yet.
++  bool has_implicit_slot_ = true;
++
++  // read and write descriptors.
++  int read_fd_ = -1;
++  int write_fd_ = -1;
++};
++
++}  // namespace
++
++// static
++std::unique_ptr<Jobserver::Client> Jobserver::Client::Create(
++    const Jobserver::Config& config, std::string* error) {
++  bool success = false;
++  auto client = std::unique_ptr<PosixJobserverClient>(new PosixJobserverClient);
++  if (config.mode == Jobserver::Config::kModePipe) {
++    success = client->InitWithPipeFds(config.read_fd, config.write_fd, error);
++  } else if (config.mode == Jobserver::Config::kModePosixFifo) {
++    success = client->InitWithFifo(config.path, error);
++  } else {
++    *error = "Unsupported jobserver mode";
++  }
++  if (!success)
++    client.reset();
++  return client;
++}
+diff --git a/src/jobserver-win32.cc b/src/jobserver-win32.cc
+new file mode 100644
+index 0000000000..bc11d9af3f
+--- /dev/null
++++ b/src/jobserver-win32.cc
+@@ -0,0 +1,105 @@
++// Copyright 2024 Google Inc. All Rights Reserved.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#include <assert.h>
++#include <windows.h>
++
++#include "jobserver.h"
++#include "util.h"
++
++namespace {
++
++// Implementation of Jobserver::Client for Win32 systems.
++// At the moment, only the semaphore scheme is supported,
++// even when running under Cygwin which could support the
++// pipe version, in theory.
++class Win32JobserverClient : public Jobserver::Client {
++ public:
++  virtual ~Win32JobserverClient() {
++    // NOTE: OpenSemaphore() returns NULL on failure.
++    if (IsValid()) {
++      ::CloseHandle(handle_);
++    }
++  }
++
++  Jobserver::Slot TryAcquire() override {
++    if (IsValid()) {
++      if (has_implicit_slot_) {
++        has_implicit_slot_ = false;
++        return Jobserver::Slot::CreateImplicit();
++      }
++
++      DWORD ret = ::WaitForSingleObject(handle_, 0);
++      if (ret == WAIT_OBJECT_0) {
++        // Hard-code value 1 for the explicit slot value.
++        return Jobserver::Slot::CreateExplicit(1);
++      }
++    }
++    return Jobserver::Slot();
++  }
++
++  void Release(Jobserver::Slot slot) override {
++    if (!slot.IsValid())
++      return;
++
++    if (slot.IsImplicit()) {
++      assert(!has_implicit_slot_ && "Implicit slot cannot be released twice!");
++      has_implicit_slot_ = true;
++      return;
++    }
++
++    // Nothing can be done in case of error here.
++    (void)::ReleaseSemaphore(handle_, 1, NULL);
++  }
++
++  bool InitWithSemaphore(const std::string& name, std::string* error) {
++    handle_ = ::OpenSemaphoreA(SYNCHRONIZE | SEMAPHORE_MODIFY_STATE, FALSE,
++                               name.c_str());
++    if (handle_ == NULL) {
++      *error = "Error opening semaphore: " + GetLastErrorString();
++      return false;
++    }
++    return true;
++  }
++
++ protected:
++  bool IsValid() const {
++    // NOTE: OpenSemaphore() returns NULL on failure, not INVALID_HANDLE_VALUE.
++    return handle_ != NULL;
++  }
++
++  // Set to true if the implicit slot has not been acquired yet.
++  bool has_implicit_slot_ = true;
++
++  // Semaphore handle. NULL means not in use.
++  HANDLE handle_ = NULL;
++};
++
++}  // namespace
++
++// static
++std::unique_ptr<Jobserver::Client> Jobserver::Client::Create(
++    const Jobserver::Config& config, std::string* error) {
++  bool success = false;
++  auto client =
++      std::unique_ptr<Win32JobserverClient>(new Win32JobserverClient());
++  if (config.mode == Jobserver::Config::kModeWin32Semaphore) {
++    success = client->InitWithSemaphore(config.path, error);
++  } else {
++    *error = "Unsupported jobserver mode";
++  }
++  if (!success)
++    client.reset();
++  return client;
++}
+diff --git a/src/jobserver.h b/src/jobserver.h
+index 791291d9fe..8ba7707d4e 100644
+--- a/src/jobserver.h
++++ b/src/jobserver.h
+@@ -171,6 +171,10 @@ struct Jobserver {
+     /// extracted from MAKEFLAGS.
+     int read_fd = -1;
+     int write_fd = -1;
++
++    /// Return true if this instance matches an active implementation mode.
++    /// This does not try to validate configuration parameters though.
++    bool HasMode() { return mode != kModeNone; }
+   };
+ 
+   /// Parse the value of a MAKEFLAGS environment variable. On success return
+@@ -186,4 +190,51 @@ struct Jobserver {
+   /// while --jobserver-auth=NAME only work on Windows.
+   static bool ParseNativeMakeFlagsValue(const char* makeflags_env,
+                                         Config* config, std::string* error);
++
++  /// A Jobserver::Client instance models a client of an external GNU jobserver
++  /// pool, which can be implemented as a Unix FIFO, or a Windows named semaphore.
++  /// Usage is the following:
++  ///
++  ///  - Call Jobserver::Client::Create(), passing a Config value as argument,
++  ///    (e.g. one initialized with ParseNativeMakeFlagsValue()) to create
++  ///    a new instance.
++  ///
++  ///  - Call TryAcquire() to try to acquire a job slot from the pool.
++  ///    If the result is not an invalid slot, store it until the
++  ///    corresponding command completes, then call Release() to send it
++  ///    back to the pool.
++  ///
++  ///  - It is important that all acquired slots are released to the pool,
++  ///    even if Ninja terminates early (e.g. due to a build command failing).
++  ///
++  class Client {
++   public:
++    /// Destructor.
++    virtual ~Client() {}
++
++    /// Try to acquire a slot from the pool. On failure, i.e. if no slot
++    /// can be acquired, this returns an invalid Token instance.
++    ///
++    /// Note that this will always return the implicit slot value the first
++    /// time this is called, without reading anything from the pool, as
++    /// specified by the protocol. This implicit value *must* be released
++    /// just like any other one. In general, users of this class should not
++    /// care about this detail, except unit-tests.
++    virtual Slot TryAcquire() { return Slot(); }
++
++    /// Release a slot to the pool. Does nothing if slot is invalid,
++    /// or if writing to the pool fails (and if this is not the implicit slot).
++    /// If the pool is destroyed before Ninja, then only the implicit slot
++    /// can be acquired in the next calls (if it was released). This simply
++    /// enforces serialization of all commands, instead of blocking.
++    virtual void Release(Slot slot) {}
++
++    /// Create a new Client instance from a given configuration. On failure,
++    /// this returns null after setting |*error|. Note that it is an error to
++    /// call this function with |config.HasMode() == false|.
++    static std::unique_ptr<Client> Create(const Config&, std::string* error);
++
++   protected:
++    Client() = default;
++  };
+ };
+diff --git a/src/jobserver_test.cc b/src/jobserver_test.cc
+index d80e63b35d..ffdc422005 100644
+--- a/src/jobserver_test.cc
++++ b/src/jobserver_test.cc
+@@ -175,6 +175,22 @@ TEST(Jobserver, ParseMakeFlagsValue) {
+   EXPECT_EQ(Jobserver::Config::kModePosixFifo, config.mode);
+   EXPECT_EQ("foo", config.path);
+ 
++  // Passing an initial " -j" or " -j<count>" works.
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue(" -j --jobserver-auth=fifo:foo",
++                                             &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModePosixFifo, config.mode);
++  EXPECT_EQ("foo", config.path);
++
++  // Passing an initial " -j<count>" works.
++  config = {};
++  error.clear();
++  ASSERT_TRUE(Jobserver::ParseMakeFlagsValue(" -j10 --jobserver-auth=fifo:foo",
++                                             &config, &error));
++  EXPECT_EQ(Jobserver::Config::kModePosixFifo, config.mode);
++  EXPECT_EQ("foo", config.path);
++
+   // Passing an `n` in the first word _after_ a dash works though, i.e.
+   // It is not interpreted as GNU Make dry-run flag.
+   config = {};
+@@ -225,3 +241,179 @@ TEST(Jobserver, ParseMakeFlagsValue) {
+       Jobserver::ParseMakeFlagsValue("--jobserver-fds=10,", &config, &error));
+   EXPECT_EQ("Invalid file descriptor pair [10,]", error);
+ }
++
++TEST(Jobserver, NullJobserver) {
++  Jobserver::Config config;
++  ASSERT_EQ(Jobserver::Config::kModeNone, config.mode);
++
++  std::string error;
++  std::unique_ptr<Jobserver::Client> client =
++      Jobserver::Client::Create(config, &error);
++  EXPECT_FALSE(client.get());
++  EXPECT_EQ("Unsupported jobserver mode", error);
++}
++
++#ifdef _WIN32
++
++#include <windows.h>
++
++// Scoped HANDLE class for the semaphore.
++struct ScopedSemaphoreHandle {
++  ScopedSemaphoreHandle(HANDLE handle) : handle_(handle) {}
++  ~ScopedSemaphoreHandle() {
++    if (handle_)
++      ::CloseHandle(handle_);
++  }
++  HANDLE get() const { return handle_; }
++
++ private:
++  HANDLE handle_ = NULL;
++};
++
++TEST(Jobserver, Win32SemaphoreClient) {
++  // Create semaphore with initial token count.
++  const size_t kExplicitCount = 10;
++  const char kSemaphoreName[] = "ninja_test_jobserver_semaphore";
++  ScopedSemaphoreHandle handle(
++      ::CreateSemaphoreA(NULL, static_cast<DWORD>(kExplicitCount),
++                         static_cast<DWORD>(kExplicitCount), kSemaphoreName));
++  ASSERT_TRUE(handle.get()) << GetLastErrorString();
++
++  // Create new client instance.
++  Jobserver::Config config;
++  config.mode = Jobserver::Config::kModeWin32Semaphore;
++  config.path = kSemaphoreName;
++
++  std::string error;
++  std::unique_ptr<Jobserver::Client> client =
++      Jobserver::Client::Create(config, &error);
++  EXPECT_TRUE(client.get()) << error;
++  EXPECT_TRUE(error.empty()) << error;
++
++  Jobserver::Slot slot;
++  std::vector<Jobserver::Slot> slots;
++
++  // Read the implicit slot.
++  slot = client->TryAcquire();
++  EXPECT_TRUE(slot.IsValid());
++  EXPECT_TRUE(slot.IsImplicit());
++  slots.push_back(std::move(slot));
++
++  // Read the explicit slots.
++  for (size_t n = 0; n < kExplicitCount; ++n) {
++    slot = client->TryAcquire();
++    EXPECT_TRUE(slot.IsValid());
++    EXPECT_TRUE(slot.IsExplicit());
++    slots.push_back(std::move(slot));
++  }
++
++  // Pool should be empty now.
++  slot = client->TryAcquire();
++  EXPECT_FALSE(slot.IsValid());
++
++  // Release the slots again.
++  while (!slots.empty()) {
++    client->Release(std::move(slots.back()));
++    slots.pop_back();
++  }
++
++  slot = client->TryAcquire();
++  EXPECT_TRUE(slot.IsValid());
++  EXPECT_TRUE(slot.IsImplicit());
++  slots.push_back(std::move(slot));
++
++  for (size_t n = 0; n < kExplicitCount; ++n) {
++    slot = client->TryAcquire();
++    EXPECT_TRUE(slot.IsValid());
++    EXPECT_TRUE(slot.IsExplicit()) << n;
++    slots.push_back(std::move(slot));
++  }
++
++  // And the pool should be empty again.
++  slot = client->TryAcquire();
++  EXPECT_FALSE(slot.IsValid());
++}
++#else  // !_WIN32
++TEST(Jobserver, PosixFifoClient) {
++  ScopedTempDir temp_dir;
++  temp_dir.CreateAndEnter("ninja_test_jobserver_fifo");
++
++  // Create the Fifo, then write kSlotCount slots into it.
++  std::string fifo_path = temp_dir.temp_dir_name_ + "fifo";
++  int ret = mknod(fifo_path.c_str(), S_IFIFO | 0666, 0);
++  ASSERT_EQ(0, ret) << "Could not create FIFO at: " << fifo_path;
++
++  const size_t kSlotCount = 5;
++
++  ScopedTestFd write_fd(::open(fifo_path.c_str(), O_RDWR));
++  ASSERT_TRUE(write_fd.IsValid()) << "Cannot open FIFO at: " << strerror(errno);
++  for (size_t n = 0; n < kSlotCount; ++n) {
++    uint8_t slot_byte = static_cast<uint8_t>('0' + n);
++    ::write(write_fd.fd_, &slot_byte, 1);
++  }
++  // Keep the file descriptor opened to ensure the fifo's content
++  // persists in kernel memory.
++
++  // Create new client instance.
++  Jobserver::Config config;
++  config.mode = Jobserver::Config::kModePosixFifo;
++  config.path = fifo_path;
++
++  std::string error;
++  std::unique_ptr<Jobserver::Client> client =
++      Jobserver::Client::Create(config, &error);
++  EXPECT_TRUE(client.get());
++  EXPECT_TRUE(error.empty()) << error;
++
++  // Read slots from the pool, and store them
++  std::vector<Jobserver::Slot> slots;
++
++  // First slot is always implicit.
++  slots.push_back(client->TryAcquire());
++  ASSERT_TRUE(slots.back().IsValid());
++  EXPECT_TRUE(slots.back().IsImplicit());
++
++  // Then read kSlotCount slots from the pipe and verify their value.
++  for (size_t n = 0; n < kSlotCount; ++n) {
++    Jobserver::Slot slot = client->TryAcquire();
++    ASSERT_TRUE(slot.IsValid()) << "Slot #" << n + 1;
++    EXPECT_EQ(static_cast<uint8_t>('0' + n), slot.GetExplicitValue());
++    slots.push_back(std::move(slot));
++  }
++
++  // Pool should be empty now, so next TryAcquire() will fail.
++  Jobserver::Slot slot = client->TryAcquire();
++  EXPECT_FALSE(slot.IsValid());
++}
++
++TEST(Jobserver, PosixFifoClientWithWrongPath) {
++  ScopedTempDir temp_dir;
++  temp_dir.CreateAndEnter("ninja_test_jobserver_fifo");
++
++  // Create a regular file.
++  std::string file_path = temp_dir.temp_dir_name_ + "not_a_fifo";
++  int fd = ::open(file_path.c_str(), O_CREAT | O_RDWR, 0660);
++  ASSERT_GE(fd, 0) << "Could not create file: " << strerror(errno);
++  ::close(fd);
++
++  // Create new client instance, passing the file path for the fifo.
++  Jobserver::Config config;
++  config.mode = Jobserver::Config::kModePosixFifo;
++  config.path = file_path;
++
++  std::string error;
++  std::unique_ptr<Jobserver::Client> client =
++      Jobserver::Client::Create(config, &error);
++  EXPECT_FALSE(client.get());
++  EXPECT_FALSE(error.empty());
++  EXPECT_EQ("Not a fifo path: " + file_path, error);
++
++  // Do the same with an empty file path.
++  error.clear();
++  config.path.clear();
++  client = Jobserver::Client::Create(config, &error);
++  EXPECT_FALSE(client.get());
++  EXPECT_FALSE(error.empty());
++  EXPECT_EQ("Empty fifo path", error);
++}
++#endif  // !_WIN32
+
+From 762ea9e229583391981aeb5b09e50c61a47d99e9 Mon Sep 17 00:00:00 2001
+From: David 'Digit' Turner <digit+github@google.com>
+Date: Fri, 13 Sep 2024 13:39:47 +0200
+Subject: [PATCH 4/6] Support jobserver client mode automatically.
+
+Detect that the environment variable MAKEFLAGS specifies a
+jobserver pool to use, and automatically use it to control
+build parallelism when this is the case.
+
+This overrides the `-j` option, but not the `-l` option
+used to limit dispatch based on the overall load factor.
+
++ Add a new regression test suite that uses the
+  misc/jobserver_pool.py script that was introduced in
+  a previous commit, to verify that everything works
+  properly.
+---
+ .github/workflows/linux.yml   |   3 +
+ doc/manual.asciidoc           |  34 ++++-
+ misc/jobserver_test.py        | 241 ++++++++++++++++++++++++++++++++++
+ misc/jobserver_test_helper.py |  42 ++++++
+ src/build.cc                  |  38 +++++-
+ src/build.h                   |   8 ++
+ src/graph.h                   |   4 +
+ src/ninja.cc                  |  66 +++++++++-
+ 8 files changed, 430 insertions(+), 6 deletions(-)
+ create mode 100755 misc/jobserver_test.py
+ create mode 100755 misc/jobserver_test_helper.py
+
+diff --git a/.github/workflows/linux.yml b/.github/workflows/linux.yml
+index 9cbc8a79cd..e4f8c461d7 100644
+--- a/.github/workflows/linux.yml
++++ b/.github/workflows/linux.yml
+@@ -27,6 +27,7 @@ jobs:
+       run: |
+         ./ninja_test
+         ../../misc/output_test.py
++        ../../misc/jobserver_test.py
+     - name: Build release ninja
+       run: ninja -f build-Release.ninja
+       working-directory: build
+@@ -35,6 +36,7 @@ jobs:
+       run: |
+         ./ninja_test
+         ../../misc/output_test.py
++        ../../misc/jobserver_test.py
+ 
+   build:
+     runs-on: [ubuntu-latest]
+@@ -170,6 +172,7 @@ jobs:
+         ./ninja all
+         python3 misc/ninja_syntax_test.py
+         ./misc/output_test.py
++        ./misc/jobserver_test.py
+ 
+   build-aarch64:
+     name: Build Linux ARM64
+diff --git a/doc/manual.asciidoc b/doc/manual.asciidoc
+index 4f09674192..6ccdceb75f 100644
+--- a/doc/manual.asciidoc
++++ b/doc/manual.asciidoc
+@@ -187,10 +187,38 @@ Ninja defaults to running commands in parallel anyway, so typically
+ you don't need to pass `-j`.)
+ 
+ 
++GNU Jobserver support
++~~~~~~~~~~~~~~~~~~~~~
++
++Since version 1.13., Ninja builds can follow the
++https://https://www.gnu.org/software/make/manual/html_node/Job-Slots.html[GNU Make jobserver]
++client protocol. This is useful when Ninja is invoked as part of a larger
++build system controlled by a top-level GNU Make instance, as it allows better
++coordination between concurrent build tasks.
++
++This feature is automatically enabled under the following conditions:
++
++- Dry-run (i.e. `-n` or `--dry-run`) is not enabled.
++
++- `-j1` (no parallelism) is not used on the command line.
++  Note that `-j0` means "infinite" parallelism and does not
++  disable client mode.
++
++- The `MAKEFLAGS` environment variable is defined and
++  describes a valid jobserver mode using `--jobserver-auth` or
++  even `--jobserver-fds`.
++
++In this case, Ninja will use the jobserver pool of job slots
++to control parallelism, instead of its default implementation
++of `-j<count>`.
++
++Note that load-average limitations (i.e. when using `-l<count>`)
++are still being enforced in this mode.
++
+ Environment variables
+ ~~~~~~~~~~~~~~~~~~~~~
+ 
+-Ninja supports one environment variable to control its behavior:
++Ninja supports a few environment variables to control its behavior:
+ `NINJA_STATUS`, the progress status printed before the rule being run.
+ 
+ Several placeholders are available:
+@@ -215,6 +243,10 @@ The default progress status is `"[%f/%t] "` (note the trailing space
+ to separate from the build rule). Another example of possible progress status
+ could be `"[%u/%r/%f] "`.
+ 
++If `MAKEFLAGS` is defined in the environment, if may alter how
++Ninja dispatches parallel build commands. See the GNU Jobserver support
++section for details.
++
+ Extra tools
+ ~~~~~~~~~~~
+ 
+diff --git a/misc/jobserver_test.py b/misc/jobserver_test.py
+new file mode 100755
+index 0000000000..3bad98abde
+--- /dev/null
++++ b/misc/jobserver_test.py
+@@ -0,0 +1,241 @@
++#!/usr/bin/env python3
++# Copyright 2024 Google Inc. All Rights Reserved.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++from textwrap import dedent
++import os
++import platform
++import subprocess
++import tempfile
++import typing as T
++import sys
++import unittest
++
++_SCRIPT_DIR = os.path.realpath(os.path.dirname(__file__))
++_JOBSERVER_POOL_SCRIPT = os.path.join(_SCRIPT_DIR, "jobserver_pool.py")
++_JOBSERVER_TEST_HELPER_SCRIPT = os.path.join(_SCRIPT_DIR, "jobserver_test_helper.py")
++
++_PLATFORM_IS_WINDOWS = platform.system() == "Windows"
++
++default_env = dict(os.environ)
++default_env.pop("NINJA_STATUS", None)
++default_env.pop("MAKEFLAGS", None)
++default_env["TERM"] = "dumb"
++NINJA_PATH = os.path.abspath("./ninja")
++
++
++class BuildDir:
++    def __init__(self, build_ninja: str):
++        self.build_ninja = dedent(build_ninja)
++        self.d = None
++
++    def __enter__(self):
++        self.d = tempfile.TemporaryDirectory()
++        with open(os.path.join(self.d.name, "build.ninja"), "w") as f:
++            f.write(self.build_ninja)
++        return self
++
++    def __exit__(self, exc_type, exc_val, exc_tb):
++        self.d.cleanup()
++
++    @property
++    def path(self) -> str:
++        return self.d.name
++
++    def run(
++        self,
++        cmd_flags: T.Sequence[str] = [],
++        env: T.Dict[str, str] = default_env,
++    ) -> None:
++        """Run a command, raise exception on error. Do not capture outputs."""
++        ret = subprocess.run(cmd_flags, env=env)
++        ret.check_returncode()
++
++    def ninja_run(
++        self,
++        ninja_args: T.Sequence[str],
++        prefix_args: T.Sequence[str] = [],
++        extra_env: T.Dict[str, str] = {},
++    ) -> "subprocess.CompletedProcess[str]":
++        ret = self.ninja_spawn(
++            ninja_args,
++            prefix_args=prefix_args,
++            extra_env=extra_env,
++            capture_output=False,
++        )
++        ret.check_returncode()
++        return
++
++    def ninja_clean(self):
++        self.ninja_run(["-t", "clean"])
++
++    def ninja_spawn(
++        self,
++        ninja_args: T.Sequence[str],
++        prefix_args: T.Sequence[str] = [],
++        extra_env: T.Dict[str, str] = {},
++        capture_output: bool = True,
++    ) -> "subprocess.CompletedProcess[str]":
++        """Run Ninja command and capture outputs."""
++        return subprocess.run(
++            prefix_args + [NINJA_PATH, "-C", self.path] + ninja_args,
++            text=True,
++            capture_output=capture_output,
++            env={**default_env, **extra_env},
++        )
++
++
++def span_output_file(span_n: int):
++    return "out%02d" % span_n
++
++
++def generate_build_plan(command_count: int) -> str:
++    """Generate a Ninja build plan for |command_count| parallel tasks.
++
++    Each task calls the test helper script which waits for 50ms
++    then writes its own start and end time to its output file.
++    """
++    result = f"""
++rule span
++    command = {sys.executable} -S {_JOBSERVER_TEST_HELPER_SCRIPT} $out
++
++"""
++
++    for n in range(command_count):
++        result += "build %s: span\n" % span_output_file(n)
++
++    result += "build all: phony %s\n" % " ".join(
++        [span_output_file(n) for n in range(command_count)]
++    )
++    return result
++
++
++def compute_max_overlapped_spans(build_dir: str, command_count: int) -> int:
++    """Compute the maximum number of overlapped spanned tasks.
++
++    This reads the output files from |build_dir| and look at their start and end times
++    to compute the maximum number of tasks that were run in parallel.
++    """
++    # Read the output files.
++    if command_count < 2:
++        return 0
++
++    spans: T.List[T.Tuple[int, int]] = []
++    for n in range(command_count):
++        with open(os.path.join(build_dir, span_output_file(n)), "rb") as f:
++            content = f.read()
++        lines = content.splitlines()
++        assert len(lines) == 2, f"Unexpected output file content: [{content}]"
++        spans.append((int(lines[0]), int(lines[1])))
++
++    # Stupid but simple, for each span, count the number of other spans that overlap it.
++    max_overlaps = 1
++    for n in range(command_count):
++        cur_start, cur_end = spans[n]
++        cur_overlaps = 1
++        for m in range(command_count):
++            other_start, other_end = spans[m]
++            if n != m and other_end > cur_start and other_start < cur_end:
++                cur_overlaps += 1
++
++        if cur_overlaps > max_overlaps:
++            max_overlaps = cur_overlaps
++
++    return max_overlaps
++
++
++class JobserverTest(unittest.TestCase):
++
++    def test_no_jobserver_client(self):
++        task_count = 10
++        build_plan = generate_build_plan(task_count)
++        with BuildDir(build_plan) as b:
++            output = b.run([NINJA_PATH, "-C", b.path, "-j0", "all"])
++
++            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++            self.assertEqual(max_overlaps, task_count)
++
++    def _run_client_test(self, jobserver_args: T.Sequence[str]) -> None:
++        task_count = 10
++        build_plan = generate_build_plan(task_count)
++        with BuildDir(build_plan) as b:
++            # First, run the full 10 tasks with with 10 tokens, this should allow all
++            # tasks to run in parallel.
++            ret = b.ninja_run(
++                ninja_args=["-j0", "all"],
++                prefix_args=jobserver_args + [f"--jobs={task_count}"],
++            )
++            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++            self.assertEqual(max_overlaps, task_count)
++
++            # Second, use 4 tokens only, and verify that this was enforced by Ninja.
++            b.ninja_clean()
++            b.ninja_run(
++                ["-j0", "all"],
++                prefix_args=jobserver_args + ["--jobs=4"],
++            )
++            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++            self.assertEqual(max_overlaps, 4)
++
++            # Finally, verify that --jobs=1 serializes all tasks.
++            b.ninja_clean()
++            b.ninja_run(
++                ["-j0", "all"],
++                prefix_args=jobserver_args + ["--jobs=1"],
++            )
++            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++            self.assertEqual(max_overlaps, 1)
++
++    @unittest.skipIf(_PLATFORM_IS_WINDOWS, "These test methods do not work on Windows")
++    def test_jobserver_client_with_posix_pipe(self):
++        self._run_client_test(
++            [sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--check", "--pipe"]
++        )
++
++    @unittest.skipIf(_PLATFORM_IS_WINDOWS, "These test methods do not work on Windows")
++    def test_jobserver_client_with_posix_fifo(self):
++        self._run_client_test([sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--check"])
++
++    def _test_MAKEFLAGS_value(
++        self, ninja_args: T.Sequence[str] = [], prefix_args: T.Sequence[str] = []
++    ):
++        build_plan = r"""
++rule print
++    command = echo MAKEFLAGS="[$$MAKEFLAGS]"
++
++build all: print
++"""
++        with BuildDir(build_plan) as b:
++            ret = b.ninja_spawn(
++                ninja_args + ["--quiet", "all"], prefix_args=prefix_args
++            )
++            self.assertEqual(ret.returncode, 0)
++            output = ret.stdout.strip()
++            pos = output.find("MAKEFLAGS=[")
++            self.assertNotEqual(pos, -1, "Could not find MAKEFLAGS in output!")
++            makeflags, sep, _ = output[pos + len("MAKEFLAGS=[") :].partition("]")
++            self.assertEqual(sep, "]", "Missing ] in output!: " + output)
++            self.assertTrue(
++                "--jobserver-auth=" in makeflags,
++                f"Missing --jobserver-auth from MAKEFLAGS [{makeflags}]\nSTDOUT [{ret.stdout}]\nSTDERR [{ret.stderr}]",
++            )
++
++    def test_client_passes_MAKEFLAGS(self):
++        self._test_MAKEFLAGS_value(
++            prefix_args=[sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--check"]
++        )
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/misc/jobserver_test_helper.py b/misc/jobserver_test_helper.py
+new file mode 100755
+index 0000000000..8c238624af
+--- /dev/null
++++ b/misc/jobserver_test_helper.py
+@@ -0,0 +1,42 @@
++#!/usr/bin/env python3
++# Copyright 2024 Google Inc. All Rights Reserved.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++"""Simple utility used by the jobserver test. Wait for specific time, then write start/stop times to output file."""
++
++import argparse
++import time
++import sys
++from pathlib import Path
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument(
++        "--duration-ms",
++        default="50",
++        help="sleep duration in milliseconds (default 50)",
++    )
++    parser.add_argument("output_file", type=Path, help="output file name.")
++    args = parser.parse_args()
++
++    now_time_ns = time.time_ns()
++    time.sleep(int(args.duration_ms) / 1000.0)
++    args.output_file.write_text(f"{now_time_ns}\n{time.time_ns()}\n")
++
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/src/build.cc b/src/build.cc
+index 01f31a9faf..5d7910f085 100644
+--- a/src/build.cc
++++ b/src/build.cc
+@@ -36,6 +36,7 @@
+ #include "disk_interface.h"
+ #include "explanations.h"
+ #include "graph.h"
++#include "jobserver.h"
+ #include "metrics.h"
+ #include "state.h"
+ #include "status.h"
+@@ -163,6 +164,15 @@ Edge* Plan::FindWork() {
+     return NULL;
+ 
+   Edge* work = ready_.top();
++
++  // If jobserver mode is enabled, try to acquire a token first,
++  // and return null in case of failure.
++  if (builder_ && builder_->jobserver_) {
++    work->job_slot_ = builder_->jobserver_->TryAcquire();
++    if (!work->job_slot_.IsValid())
++      return nullptr;
++  }
++
+   ready_.pop();
+   return work;
+ }
+@@ -199,6 +209,10 @@ bool Plan::EdgeFinished(Edge* edge, EdgeResult result, string* err) {
+     edge->pool()->EdgeFinished(*edge);
+   edge->pool()->RetrieveReadyEdges(&ready_);
+ 
++  // Release job slot if needed.
++  if (builder_ && builder_->jobserver_)
++    builder_->jobserver_->Release(std::move(edge->job_slot_));
++
+   // The rest of this function only applies to successful commands.
+   if (result != kEdgeSucceeded)
+     return true;
+@@ -592,14 +606,26 @@ void Plan::Dump() const {
+ }
+ 
+ struct RealCommandRunner : public CommandRunner {
+-  explicit RealCommandRunner(const BuildConfig& config) : config_(config) {}
++  explicit RealCommandRunner(const BuildConfig& config,
++                             Jobserver::Client* jobserver)
++      : config_(config), jobserver_(jobserver) {}
++
+   size_t CanRunMore() const override;
+   bool StartCommand(Edge* edge) override;
+   bool WaitForCommand(Result* result) override;
+   vector<Edge*> GetActiveEdges() override;
+   void Abort() override;
+ 
++  void ClearJobTokens() {
++    if (jobserver_) {
++      for (Edge* edge : GetActiveEdges()) {
++        jobserver_->Release(std::move(edge->job_slot_));
++      }
++    }
++  }
++
+   const BuildConfig& config_;
++  Jobserver::Client* jobserver_;
+   SubprocessSet subprocs_;
+   map<const Subprocess*, Edge*> subproc_to_edge_;
+ };
+@@ -613,6 +639,7 @@ vector<Edge*> RealCommandRunner::GetActiveEdges() {
+ }
+ 
+ void RealCommandRunner::Abort() {
++  ClearJobTokens();
+   subprocs_.Clear();
+ }
+ 
+@@ -622,6 +649,13 @@ size_t RealCommandRunner::CanRunMore() const {
+ 
+   int64_t capacity = config_.parallelism - subproc_number;
+ 
++  if (jobserver_) {
++    // When a jobserver token pool is used, make the
++    // capacity infinite, and let FindWork() limit jobs
++    // through token acquisitions instead.
++    capacity = INT_MAX;
++  }
++
+   if (config_.max_load_average > 0.0f) {
+     int load_capacity = config_.max_load_average - GetLoadAverage();
+     if (load_capacity < capacity)
+@@ -775,7 +809,7 @@ bool Builder::Build(string* err) {
+     if (config_.dry_run)
+       command_runner_.reset(new DryRunCommandRunner);
+     else
+-      command_runner_.reset(new RealCommandRunner(config_));
++      command_runner_.reset(new RealCommandRunner(config_, jobserver_));
+   }
+ 
+   // We are about to start the build process.
+diff --git a/src/build.h b/src/build.h
+index 9bb0c70b5c..9264b71ae0 100644
+--- a/src/build.h
++++ b/src/build.h
+@@ -24,6 +24,7 @@
+ #include "depfile_parser.h"
+ #include "exit_status.h"
+ #include "graph.h"
++#include "jobserver.h"
+ #include "util.h"  // int64_t
+ 
+ struct BuildLog;
+@@ -192,6 +193,12 @@ struct Builder {
+           int64_t start_time_millis);
+   ~Builder();
+ 
++  /// Set Jobserver client instance for this builder.
++  void SetJobserverClient(Jobserver::Client* jobserver_client) {
++    jobserver_ = jobserver_client;
++    ;
++  }
++
+   /// Clean up after interrupted commands by deleting output files.
+   void Cleanup();
+ 
+@@ -225,6 +232,7 @@ struct Builder {
+   State* state_;
+   const BuildConfig& config_;
+   Plan plan_;
++  Jobserver::Client* jobserver_ = nullptr;
+   std::unique_ptr<CommandRunner> command_runner_;
+   Status* status_;
+ 
+diff --git a/src/graph.h b/src/graph.h
+index 806260e5d7..d98f1f9440 100644
+--- a/src/graph.h
++++ b/src/graph.h
+@@ -24,6 +24,7 @@
+ #include "dyndep.h"
+ #include "eval_env.h"
+ #include "explanations.h"
++#include "jobserver.h"
+ #include "timestamp.h"
+ #include "util.h"
+ 
+@@ -263,6 +264,9 @@ struct Edge {
+   bool use_console() const;
+   bool maybe_phonycycle_diagnostic() const;
+ 
++  /// A Jobserver slot instance. Invalid by default.
++  Jobserver::Slot job_slot_;
++
+   // Historical info: how long did this edge take last time,
+   // as per .ninja_log, if known? Defaults to -1 if unknown.
+   int64_t prev_elapsed_time_millis = -1;
+diff --git a/src/ninja.cc b/src/ninja.cc
+index 7885bb3682..99e080aa91 100644
+--- a/src/ninja.cc
++++ b/src/ninja.cc
+@@ -36,13 +36,14 @@
+ #include "browse.h"
+ #include "build.h"
+ #include "build_log.h"
+-#include "deps_log.h"
+ #include "clean.h"
+ #include "debug_flags.h"
+ #include "depfile_parser.h"
++#include "deps_log.h"
+ #include "disk_interface.h"
+ #include "graph.h"
+ #include "graphviz.h"
++#include "jobserver.h"
+ #include "json.h"
+ #include "manifest_parser.h"
+ #include "metrics.h"
+@@ -157,6 +158,10 @@ struct NinjaMain : public BuildLogUser {
+   /// and record that in the edge itself. It will be used for ETA prediction.
+   void ParsePreviousElapsedTimes();
+ 
++  /// Create a jobserver client if needed. Return a nullptr value if
++  /// not. Prints info and warnings to \a status.
++  std::unique_ptr<Jobserver::Client> SetupJobserverClient(Status* status);
++
+   /// Build the targets listed on the command line.
+   /// @return an exit code.
+   int RunBuild(int argc, char** argv, Status* status);
+@@ -1358,9 +1363,55 @@ bool NinjaMain::EnsureBuildDirExists() {
+   return true;
+ }
+ 
++std::unique_ptr<Jobserver::Client> NinjaMain::SetupJobserverClient(
++    Status* status) {
++  // Empty result by default.
++  std::unique_ptr<Jobserver::Client> result;
++
++  // Disallowed for dry-runs, and for explicit -j1. Note that
++  // `-j0` means "infinite" parallelism but is translated as
++  // `config_.parallelism == INT_MAX` in ReadFlags().
++  bool use_jobserver = !config_.dry_run && config_.parallelism > 1;
++  if (!use_jobserver)
++    return result;
++
++  const char* makeflags = getenv("MAKEFLAGS");
++  if (!makeflags) {
++    // MAKEFLAGS is not defined.
++    return result;
++  }
++
++  std::string err;
++  Jobserver::Config jobserver_config;
++  if (!Jobserver::ParseNativeMakeFlagsValue(makeflags, &jobserver_config,
++                                            &err)) {
++    // MAKEFLAGS is defined but could not be parsed correctly.
++    if (config_.verbosity > BuildConfig::QUIET)
++      status->Warning("Unsupported MAKEFLAGS value: %s [%s]", err.c_str(),
++                      makeflags);
++    return result;
++  }
++
++  if (!jobserver_config.HasMode()) {
++    // MAKEFLAGS is defined, but does not describe a jobserver mode.
++    return result;
++  }
++
++  if (config_.verbosity > BuildConfig::NO_STATUS_UPDATE)
++    status->Info("Jobserver mode detected: %s", makeflags);
++
++  result = Jobserver::Client::Create(jobserver_config, &err);
++  if (!result.get()) {
++    // Jobserver client initialization failed !?
++    if (config_.verbosity > BuildConfig::QUIET)
++      status->Error("Could not initialize jobserver: %s", err.c_str());
++  }
++  return result;
++}
++
+ int NinjaMain::RunBuild(int argc, char** argv, Status* status) {
+-  string err;
+-  vector<Node*> targets;
++  std::string err;
++  std::vector<Node*> targets;
+   if (!CollectTargetsFromArgs(argc, argv, &targets, &err)) {
+     status->Error("%s", err.c_str());
+     return 1;
+@@ -1370,6 +1421,15 @@ int NinjaMain::RunBuild(int argc, char** argv, Status* status) {
+ 
+   Builder builder(&state_, config_, &build_log_, &deps_log_, &disk_interface_,
+                   status, start_time_millis_);
++
++  // Detect jobserver context and inject Jobserver::Client into the builder
++  // if needed.
++  std::unique_ptr<Jobserver::Client> jobserver_client =
++      SetupJobserverClient(status);
++  if (jobserver_client.get()) {
++    builder.SetJobserverClient(jobserver_client.get());
++  }
++
+   for (size_t i = 0; i < targets.size(); ++i) {
+     if (!builder.AddTarget(targets[i], &err)) {
+       if (!err.empty()) {
+
+From 649590b11b1ef1f8c440c1dbb4a866c3e354b4ed Mon Sep 17 00:00:00 2001
+From: David 'Digit' Turner <digit+github@google.com>
+Date: Fri, 13 Sep 2024 15:00:23 +0200
+Subject: [PATCH 5/6] Add Jobserver::Pool class
+
+Add a class that implements a Jobserver pool of job slots.
+This will later be used by Ninja to because a jobserver pool
+itself for its own spawned sub-processes.
+
+This CL includes a Posix and a Win32 implementation + some
+unit-tests.
+---
+ src/jobserver-posix.cc | 147 ++++++++++++++++++++++++++++++++++++++++-
+ src/jobserver-win32.cc |  75 +++++++++++++++++++++
+ src/jobserver.h        |  32 +++++++++
+ src/jobserver_test.cc  |  89 +++++++++++++++++++++++++
+ 4 files changed, 342 insertions(+), 1 deletion(-)
+
+diff --git a/src/jobserver-posix.cc b/src/jobserver-posix.cc
+index 153284eb77..850a06fef7 100644
+--- a/src/jobserver-posix.cc
++++ b/src/jobserver-posix.cc
+@@ -170,13 +170,136 @@ class PosixJobserverClient : public Jobserver::Client {
+   int write_fd_ = -1;
+ };
+ 
++class PosixJobserverPool : public Jobserver::Pool {
++ public:
++  std::string GetEnvMakeFlagsValue() const override {
++    std::string result;
++    if (!fifo_.empty()) {
++      result.resize(fifo_.size() + 32);
++      int ret = snprintf(const_cast<char*>(result.data()), result.size(),
++                         " -j%zd --jobserver-auth=fifo:%s", job_count_,
++                         fifo_.c_str());
++      if (ret < 0 || ret > static_cast<int>(result.size()))
++        Fatal("Could not format PosixJobserverPool MAKEFLAGS!");
++      result.resize(static_cast<size_t>(ret));
++    }
++    if (read_fd_ >= 0 && write_fd_ >= 0) {
++      result.resize(256);
++      // See technical note in jobserver.c for formatting justification.
++      int ret = snprintf(const_cast<char*>(result.data()), result.size(),
++                         " -j%zu --jobserver-fds=%d,%d --jobserver-auth=%d,%d",
++                         job_count_, read_fd_, write_fd_, read_fd_, write_fd_);
++      if (ret < 0 || ret > static_cast<int>(result.size()))
++        Fatal("Could not format PosixJobserverPool MAKEFLAGS!");
++      result.resize(static_cast<size_t>(ret));
++    }
++    return result;
++  }
++
++  virtual ~PosixJobserverPool() {
++    if (read_fd_ >= 0)
++      ::close(read_fd_);
++    if (write_fd_ >= 0)
++      ::close(write_fd_);
++    if (!fifo_.empty())
++      ::unlink(fifo_.c_str());
++  }
++
++  bool InitWithPipe(size_t slot_count, std::string* error) {
++    // Create anonymous pipe, then write job slot tokens into it.
++    int fds[2] = { -1, -1 };
++    int ret = pipe(fds);
++    if (ret < 0) {
++      *error =
++          std::string("Could not create anonymous pipe: ") + strerror(errno);
++      return false;
++    }
++
++    // The file descriptors returned by pipe() are already heritable and
++    // blocking, which is exactly what's needed here.
++    read_fd_ = fds[0];
++    write_fd_ = fds[1];
++
++    return FillSlots(slot_count, error);
++  }
++
++  bool InitWithFifo(size_t slot_count, std::string* error) {
++    const char* tmp_dir = getenv("TMPDIR");
++    if (!tmp_dir)
++      tmp_dir = "/tmp";
++
++    fifo_.resize(strlen(tmp_dir) + 32);
++    int len = snprintf(const_cast<char*>(fifo_.data()), fifo_.size(),
++                       "%s/NinjaFIFO%d", tmp_dir, getpid());
++    if (len < 0) {
++      *error = "Cannot create fifo path!";
++      return false;
++    }
++    fifo_.resize(static_cast<size_t>(len));
++
++    int ret = mknod(fifo_.c_str(), S_IFIFO | 0666, 0);
++    if (ret < 0) {
++      *error = std::string("Cannot create fifo: ") + strerror(errno);
++      return false;
++    }
++
++    do {
++      write_fd_ = ::open(fifo_.c_str(), O_RDWR | O_CLOEXEC);
++    } while (write_fd_ < 0 && errno == EINTR);
++    if (write_fd_ < 0) {
++      *error = std::string("Could not open fifo: ") + strerror(errno);
++      // Let destructor remove the fifo.
++      return false;
++    }
++
++    return FillSlots(slot_count, error);
++  }
++
++ private:
++  // Fill the pool to satisfy |slot_count| job slots. This
++  // writes |slot_count - 1| bytes to the pipe to satisfy the
++  // implicit job slot requirement.
++  bool FillSlots(size_t slot_count, std::string* error) {
++    job_count_ = slot_count;
++    for (; slot_count > 1; --slot_count) {
++      // Write '+' into the pipe, just like GNU Make. Note that some
++      // implementations write '|' instead, but so far no client or pool
++      // implementation cares about the exact value, though the official spec
++      // says this might change in the future.
++      const char slot_char = '+';
++      int ret = ::write(write_fd_, &slot_char, 1);
++      if (ret != 1) {
++        if (ret < 0 && errno == EINTR)
++          continue;
++        *error =
++            std::string("Could not fill job slots pool: ") + strerror(errno);
++        return false;
++      }
++    }
++    return true;
++  }
++
++  // Number of parallel job slots (including implicit one).
++  size_t job_count_ = 0;
++
++  // In pipe mode, these are inheritable read and write descriptors for the
++  // pipe. In fifo mode, read_fd_ will be -1, and write_fd_ will be a
++  // non-inheritable descriptor to keep the FIFO alive.
++  int read_fd_ = -1;
++  int write_fd_ = -1;
++
++  // Path to fifo, this will be empty when using an anonymous pipe.
++  std::string fifo_;
++};
++
+ }  // namespace
+ 
+ // static
+ std::unique_ptr<Jobserver::Client> Jobserver::Client::Create(
+     const Jobserver::Config& config, std::string* error) {
+   bool success = false;
+-  auto client = std::unique_ptr<PosixJobserverClient>(new PosixJobserverClient);
++  auto client =
++      std::unique_ptr<PosixJobserverClient>(new PosixJobserverClient());
+   if (config.mode == Jobserver::Config::kModePipe) {
+     success = client->InitWithPipeFds(config.read_fd, config.write_fd, error);
+   } else if (config.mode == Jobserver::Config::kModePosixFifo) {
+@@ -188,3 +311,25 @@ std::unique_ptr<Jobserver::Client> Jobserver::Client::Create(
+     client.reset();
+   return client;
+ }
++
++// static
++std::unique_ptr<Jobserver::Pool> Jobserver::Pool::Create(
++    size_t num_job_slots, Jobserver::Config::Mode mode, std::string* error) {
++  std::unique_ptr<PosixJobserverPool> pool;
++  if (num_job_slots < 2) {
++    *error = "At least 2 job slots needed";
++    return pool;
++  }
++  bool success = false;
++  pool.reset(new PosixJobserverPool());
++  if (mode == Jobserver::Config::kModePipe) {
++    success = pool->InitWithPipe(num_job_slots, error);
++  } else if (mode == Jobserver::Config::kModePosixFifo) {
++    success = pool->InitWithFifo(num_job_slots, error);
++  } else {
++    *error = "Unsupported jobserver mode";
++  }
++  if (!success)
++    pool.reset();
++  return pool;
++}
+diff --git a/src/jobserver-win32.cc b/src/jobserver-win32.cc
+index bc11d9af3f..54e43ffdb1 100644
+--- a/src/jobserver-win32.cc
++++ b/src/jobserver-win32.cc
+@@ -86,6 +86,61 @@ class Win32JobserverClient : public Jobserver::Client {
+   HANDLE handle_ = NULL;
+ };
+ 
++class Win32JobserverPool : public Jobserver::Pool {
++ public:
++  bool InitWithSemaphore(size_t slot_count, std::string* error) {
++    job_count_ = slot_count;
++    sem_name_ = GetSemaphoreName();
++    LONG count = static_cast<LONG>(slot_count - 1);
++    handle_ = ::CreateSemaphoreA(NULL, count, count, sem_name_.c_str());
++    if (!IsValid()) {
++      *error = "Could not create semaphore: " + GetLastErrorString();
++      return false;
++    }
++    return true;
++  }
++
++  std::string GetEnvMakeFlagsValue() const override {
++    std::string result;
++    result.resize(sem_name_.size() + 32);
++    int ret =
++        snprintf(const_cast<char*>(result.data()), result.size(),
++                 " -j%zd --jobserver-auth=%s", job_count_, sem_name_.c_str());
++    if (ret < 0 || ret > static_cast<int>(result.size()))
++      Fatal("Could not format Win32JobserverPool MAKEFLAGS!");
++
++    return result;
++  }
++
++  virtual ~Win32JobserverPool() {
++    if (IsValid())
++      ::CloseHandle(handle_);
++  }
++
++ private:
++  // CreateSemaphore returns NULL on failure.
++  bool IsValid() const { return handle_ != NULL; }
++
++  // Compute semaphore name for new instance.
++  static std::string GetSemaphoreName() {
++    static int counter = 0;
++    counter += 1;
++    char name[64];
++    snprintf(name, sizeof(name), "ninja_jobserver_pool_%d_%d",
++             GetCurrentProcessId(), counter);
++    return std::string(name);
++  }
++
++  // Semaphore handle.
++  HANDLE handle_ = NULL;
++
++  // Saved slot count.
++  size_t job_count_ = 0;
++
++  // Semaphore name.
++  std::string sem_name_;
++};
++
+ }  // namespace
+ 
+ // static
+@@ -103,3 +158,23 @@ std::unique_ptr<Jobserver::Client> Jobserver::Client::Create(
+     client.reset();
+   return client;
+ }
++
++// static
++std::unique_ptr<Jobserver::Pool> Jobserver::Pool::Create(
++    size_t num_job_slots, Jobserver::Config::Mode mode, std::string* error) {
++  if (num_job_slots < 2) {
++    *error = "At least 2 job slots needed";
++    return nullptr;
++  }
++  bool success;
++  auto pool = std::unique_ptr<Win32JobserverPool>(new Win32JobserverPool());
++  if (mode == Jobserver::Config::kModeWin32Semaphore) {
++    success = pool->InitWithSemaphore(num_job_slots, error);
++  } else {
++    *error = "Unsupported jobserver mode";
++    success = false;
++  }
++  if (!success)
++    pool.reset(nullptr);
++  return pool;
++}
+diff --git a/src/jobserver.h b/src/jobserver.h
+index 8ba7707d4e..e90b860e42 100644
+--- a/src/jobserver.h
++++ b/src/jobserver.h
+@@ -237,4 +237,36 @@ struct Jobserver {
+    protected:
+     Client() = default;
+   };
++
++  /// Jobserver::Pool implements a jobserver pool of job slots according
++  /// to the GNU Make protocol. Usage is the following:
++  ///
++  /// - Use Create() method to create new instances.
++  ///
++  /// - Retrieve the value of the MAKEFLAGS environment variable, and
++  ///   ensure it is passed to each client.
++  ///
++  class Pool {
++   public:
++    /// Destructor.
++    virtual ~Pool() {}
++
++    /// Default implementation mode for the current platform.
++#ifdef _WIN32
++    static constexpr Config::Mode kDefaultMode = Config::kModeWin32Semaphore;
++#else   // !_WIN32
++    static constexpr Config::Mode kDefaultMode = Config::kModePipe;
++#endif  // !_WIN32
++
++    /// Create new instance to use |num_slots| job slots, using a specific
++    /// implementation mode. On failure, set |*error| and return null.
++    ///
++    /// Note that it is an error to use a value of |num_slots| that is <= 1.
++    static std::unique_ptr<Pool> Create(size_t num_job_slots, Config::Mode mode,
++                                        std::string* error);
++
++    /// Return the value of the MAKEFLAGS variable, corresponding to this
++    /// instance, to pass to sub-processes.
++    virtual std::string GetEnvMakeFlagsValue() const = 0;
++  };
+ };
+diff --git a/src/jobserver_test.cc b/src/jobserver_test.cc
+index ffdc422005..9f6898db1b 100644
+--- a/src/jobserver_test.cc
++++ b/src/jobserver_test.cc
+@@ -416,4 +416,93 @@ TEST(Jobserver, PosixFifoClientWithWrongPath) {
+   EXPECT_FALSE(error.empty());
+   EXPECT_EQ("Empty fifo path", error);
+ }
++#endif  // _WIN32
++
++TEST(Jobserver, DefaultPool) {
++  const size_t kSlotCount = 10;
++  std::string error;
++  auto pool = Jobserver::Pool::Create(kSlotCount,
++                                      Jobserver::Config::kModeDefault, &error);
++  ASSERT_TRUE(pool.get()) << error;
++  EXPECT_TRUE(error.empty());
++
++  std::string makeflags = pool->GetEnvMakeFlagsValue();
++#ifdef _WIN32
++  std::string auth_prefix = " -j10 --jobserver-auth=";
++#else   // !_WIN32
++  std::string auth_prefix = " -j10 --jobserver-fds=";
++#endif  // !_WIN32
++  ASSERT_EQ(auth_prefix, makeflags.substr(0, auth_prefix.size()));
++
++  // Parse the MAKEFLAGS value to create a JobServer::Config
++  Jobserver::Config config;
++  ASSERT_TRUE(
++      Jobserver::ParseMakeFlagsValue(makeflags.c_str(), &config, &error));
++  EXPECT_EQ(config.mode, Jobserver::Config::kModeDefault);
++
++  // Create a client from the Config, and try to read all slots.
++  std::unique_ptr<Jobserver::Client> client =
++      Jobserver::Client::Create(config, &error);
++  EXPECT_TRUE(client.get());
++  EXPECT_TRUE(error.empty()) << error;
++
++  // First slot is always implicit.
++  Jobserver::Slot slot = client->TryAcquire();
++  EXPECT_TRUE(slot.IsValid());
++  EXPECT_TRUE(slot.IsImplicit());
++
++  // Then read kSlotCount - 1 slots from the pipe.
++  for (size_t n = 1; n < kSlotCount; ++n) {
++    Jobserver::Slot slot = client->TryAcquire();
++    EXPECT_TRUE(slot.IsValid()) << "Slot #" << n + 1;
++    EXPECT_TRUE(slot.IsExplicit()) << "Slot #" << n + 1;
++  }
++
++  // Pool should be empty now, so next TryAcquire() will fail.
++  slot = client->TryAcquire();
++  EXPECT_FALSE(slot.IsValid());
++}
++
++#ifndef _WIN32
++TEST(Jobserver, PosixFifoPool) {
++  const size_t kSlotCount = 10;
++  std::string error;
++  auto pool = Jobserver::Pool::Create(
++      kSlotCount, Jobserver::Config::kModePosixFifo, &error);
++  ASSERT_TRUE(pool.get()) << error;
++  EXPECT_TRUE(error.empty());
++
++  std::string makeflags = pool->GetEnvMakeFlagsValue();
++
++  std::string auth_prefix = " -j10 --jobserver-auth=fifo:";
++  ASSERT_EQ(auth_prefix, makeflags.substr(0, auth_prefix.size()));
++
++  // Parse the MAKEFLAGS value to create a JobServer::Config
++  Jobserver::Config config;
++  ASSERT_TRUE(
++      Jobserver::ParseMakeFlagsValue(makeflags.c_str(), &config, &error));
++  EXPECT_EQ(config.mode, Jobserver::Config::kModePosixFifo);
++
++  // Create a client from the Config, and try to read all slots.
++  std::unique_ptr<Jobserver::Client> client =
++      Jobserver::Client::Create(config, &error);
++  EXPECT_TRUE(client.get());
++  EXPECT_TRUE(error.empty()) << error;
++
++  // First slot is always implicit.
++  Jobserver::Slot slot = client->TryAcquire();
++  EXPECT_TRUE(slot.IsValid());
++  EXPECT_TRUE(slot.IsImplicit());
++
++  // Then read kSlotCount - 1 slots from the pipe.
++  for (size_t n = 1; n < kSlotCount; ++n) {
++    Jobserver::Slot slot = client->TryAcquire();
++    EXPECT_TRUE(slot.IsValid()) << "Slot #" << n + 1;
++    EXPECT_TRUE(slot.IsExplicit()) << "Slot #" << n + 1;
++  }
++
++  // Pool should be empty now, so next TryAcquire() will fail.
++  slot = client->TryAcquire();
++  EXPECT_FALSE(slot.IsValid());
++}
+ #endif  // !_WIN32
+
+From 546976ae614462cb5ce9f9a8ae308a2e7be3371c Mon Sep 17 00:00:00 2001
+From: David 'Digit' Turner <digit+github@google.com>
+Date: Fri, 13 Sep 2024 16:46:46 +0200
+Subject: [PATCH 6/6] Implement jobserver pool in Ninja.
+
+This allows Ninja to implement a jobserver-style pool of job slots,
+to better coordinate parallel jobs between spawned processes which
+compete for CPU cores/threads. With this feature, there is no need
+for being invoked from GNU Make or a script like
+misc/jobserver_pool.py.
+
+NOTE: This implementation is basic and doesn't support broken
+      protocol clients that release more tokens than they acquired.
+      If your build includes these, expect severe build performance
+      degradation.
+
+To enable this use --jobserver or --jobserver=MODE on the
+command-line, where MODE is one of the following values:
+
+  0     Do not enable the feature (the default)
+  1     Enable the feature, using best mode for the current system.
+  pipe  Implement the pool with an anonymous pipe (Posix only).
+  fifo  Implement the pool with a FIFO file (Posix only).
+  sem   Implement the pool with a Win32 semaphore (Windows only).
+
+NOTE: The `fifo` mode is only implemented since GNU Make 4.4
+      and many older clients may not support it.
+
+Alternatively, set the NINJA_JOBSERVER environment variable to
+one of these values to activate it without a command-line option.
+
+Note that if MAKEFLAGS is set in the environment, Ninja assumes
+that it is already running in the context of another jobserver
+and will not try to create its own pool.
+---
+ doc/manual.asciidoc    |  50 ++++++++++---
+ misc/jobserver_test.py |  59 +++++++++++++++
+ src/build.h            |   2 +-
+ src/ninja.cc           | 164 +++++++++++++++++++++++++++++++++++------
+ 4 files changed, 239 insertions(+), 36 deletions(-)
+
+diff --git a/doc/manual.asciidoc b/doc/manual.asciidoc
+index 6ccdceb75f..138804c759 100644
+--- a/doc/manual.asciidoc
++++ b/doc/manual.asciidoc
+@@ -190,30 +190,59 @@ you don't need to pass `-j`.)
+ GNU Jobserver support
+ ~~~~~~~~~~~~~~~~~~~~~
+ 
+-Since version 1.13., Ninja builds can follow the
++Since version 1.13., Ninja builds support the
+ https://https://www.gnu.org/software/make/manual/html_node/Job-Slots.html[GNU Make jobserver]
+-client protocol. This is useful when Ninja is invoked as part of a larger
+-build system controlled by a top-level GNU Make instance, as it allows better
++protocol, and implements both client and server mode.
++
++Client mode is useful when Ninja is invoked as part of a larger build system
++controlled by a top-level GNU Make instance, as it allows better
+ coordination between concurrent build tasks.
+ 
+-This feature is automatically enabled under the following conditions:
++Server mode is useful when Ninja is the top-level build tool that invokes
++sub-builds recursively in a similar setup.
++
++To enable server mode, use `--jobserver` or `--jobserver-mode=MODE`
++on the command line, or set `NINJA_JOBSERVER=MODE` in your
++environment, where `MODE` can be one of the following values:
++
++`0`: Do not enable the feature (the default)
++`1`: Enable the feature, using the best mode for the current system.
++`pipe`: Enable the feature, implemented with an anonymous pipe (Posix only).
++`fifo`: Enable the feature, implemented with a FIFO file path (Posix only).
++`sem`: Enable the feature, implemented with a Win32 semaphore (Windows only).
++
++Note that `--jobserver` is equivalent to `--jobserver-mode=1`.
++
++Note that `pipe` is the default mode on Posix, as `fifo` was only introduced
++in GNU Make 4.4, while many distributions (e.g. Debian 12) are still using
++GNU Make 4.3 and will not work with it. There are no performance differences
++between these two modes, and as a client, Ninja supports both transparently.
++
++As a special case, no server pool is setup if `-j1` is used on the
++command-line, as this specifically ask Ninja to not launch parallel jobs.
++
++Similarly, using `-j0` is asking for "infinite parallelism" and does
++not setup a server pool either.
++
++Otherwise, the client feature is automatically enabled for builds
++(not tools) under the following conditions:
+ 
+ - Dry-run (i.e. `-n` or `--dry-run`) is not enabled.
+ 
+ - `-j1` (no parallelism) is not used on the command line.
+-  Note that `-j0` means "infinite" parallelism and does not
++  Note that `-j0` means "infinite" parallelism and does *not*
+   disable client mode.
+ 
+ - The `MAKEFLAGS` environment variable is defined and
+   describes a valid jobserver mode using `--jobserver-auth` or
+   even `--jobserver-fds`.
+ 
+-In this case, Ninja will use the jobserver pool of job slots
++In this case, Ninja will use the shared pool of job slots
+ to control parallelism, instead of its default implementation
+ of `-j<count>`.
+ 
+-Note that load-average limitations (i.e. when using `-l<count>`)
+-are still being enforced in this mode.
++Note that other parallelism limitations, (such as `-l<count>`) are *still*
++being enforced in this mode however.
+ 
+ Environment variables
+ ~~~~~~~~~~~~~~~~~~~~~
+@@ -243,9 +272,8 @@ The default progress status is `"[%f/%t] "` (note the trailing space
+ to separate from the build rule). Another example of possible progress status
+ could be `"[%u/%r/%f] "`.
+ 
+-If `MAKEFLAGS` is defined in the environment, if may alter how
+-Ninja dispatches parallel build commands. See the GNU Jobserver support
+-section for details.
++`NINJA_JOBSERVER` and `MAKEFLAGS` may impact how Ninja dispatches
++parallel jobs, as described in the "GNU Jobserver support" section.
+ 
+ Extra tools
+ ~~~~~~~~~~~
+diff --git a/misc/jobserver_test.py b/misc/jobserver_test.py
+index 3bad98abde..788ee0994d 100755
+--- a/misc/jobserver_test.py
++++ b/misc/jobserver_test.py
+@@ -236,6 +236,65 @@ def test_client_passes_MAKEFLAGS(self):
+             prefix_args=[sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--check"]
+         )
+ 
++    def _run_pool_test(self, mode: str) -> None:
++        task_count = 10
++        build_plan = generate_build_plan(task_count)
++        extra_env = {"NINJA_JOBSERVER": mode}
++        with BuildDir(build_plan) as b:
++            # First, run the full 10 tasks with with 10 tokens, this should allow all
++            # tasks to run in parallel.
++            b.ninja_run([f"-j{task_count}", "all"], extra_env=extra_env)
++            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++            self.assertEqual(max_overlaps, 10)
++
++            # Second, use 4 tokens only, and verify that this was enforced by Ninja.
++            b.ninja_clean()
++            b.ninja_run(["-j4", "all"], extra_env=extra_env)
++            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++            self.assertEqual(max_overlaps, 4)
++
++            # Finally, verify that --token-count=1 serializes all tasks.
++            b.ninja_clean()
++            b.ninja_run(["-j1", "all"], extra_env=extra_env)
++            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++            self.assertEqual(max_overlaps, 1)
++
++    def test_jobserver_pool_with_default_mode(self):
++        self._run_pool_test("1")
++
++    def test_server_passes_MAKEFLAGS(self):
++        self._test_MAKEFLAGS_value(ninja_args=["--jobserver"])
++
++    def _verify_NINJA_JOBSERVER_value(
++        self, expected_value, ninja_args=[], env_vars={}, msg=None
++    ):
++        build_plan = r"""
++rule print
++    command = echo NINJA_JOBSERVER="[$$NINJA_JOBSERVER]"
++
++build all: print
++"""
++        with BuildDir(build_plan) as b:
++            extra_env = {"NINJA_JOBSERVER": "1"}
++            ret = b.ninja_spawn(["--quiet"] + ninja_args + ["all"], extra_env=extra_env)
++            self.assertEqual(ret.returncode, 0)
++            self.assertEqual(
++                ret.stdout.strip(), f"NINJA_JOBSERVER=[{expected_value}]", msg=msg
++            )
++
++    def test_server_unsets_NINJA_JOBSERVER(self):
++        env_jobserver_1 = {"NINJA_JOBSERVER": "1"}
++        self._verify_NINJA_JOBSERVER_value("", env_vars=env_jobserver_1)
++        self._verify_NINJA_JOBSERVER_value("", ninja_args=["--jobserver"])
++
++    @unittest.skipIf(_PLATFORM_IS_WINDOWS, "These test methods do not work on Windows")
++    def test_jobserver_pool_with_posix_pipe(self):
++        self._run_pool_test("pipe")
++
++    @unittest.skipIf(_PLATFORM_IS_WINDOWS, "These test methods do not work on Windows")
++    def test_jobserver_pool_with_posix_fifo(self):
++        self._run_pool_test("fifo")
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/src/build.h b/src/build.h
+index 9264b71ae0..c298c0cca4 100644
+--- a/src/build.h
++++ b/src/build.h
+@@ -184,6 +184,7 @@ struct BuildConfig {
+   /// means that we do not have any limit.
+   double max_load_average;
+   DepfileParserOptions depfile_parser_options;
++  Jobserver::Config::Mode jobserver_mode = Jobserver::Config::kModeNone;
+ };
+ 
+ /// Builder wraps the build process: starting commands, updating status.
+@@ -196,7 +197,6 @@ struct Builder {
+   /// Set Jobserver client instance for this builder.
+   void SetJobserverClient(Jobserver::Client* jobserver_client) {
+     jobserver_ = jobserver_client;
+-    ;
+   }
+ 
+   /// Clean up after interrupted commands by deleting output files.
+diff --git a/src/ninja.cc b/src/ninja.cc
+index 99e080aa91..12f1141c64 100644
+--- a/src/ninja.cc
++++ b/src/ninja.cc
+@@ -219,29 +219,39 @@ struct Tool {
+ 
+ /// Print usage information.
+ void Usage(const BuildConfig& config) {
+-  fprintf(stderr,
+-"usage: ninja [options] [targets...]\n"
+-"\n"
+-"if targets are unspecified, builds the 'default' target (see manual).\n"
+-"\n"
+-"options:\n"
+-"  --version      print ninja version (\"%s\")\n"
+-"  -v, --verbose  show all command lines while building\n"
+-"  --quiet        don't show progress status, just command output\n"
+-"\n"
+-"  -C DIR   change to DIR before doing anything else\n"
+-"  -f FILE  specify input build file [default=build.ninja]\n"
+-"\n"
+-"  -j N     run N jobs in parallel (0 means infinity) [default=%d on this system]\n"
+-"  -k N     keep going until N jobs fail (0 means infinity) [default=1]\n"
+-"  -l N     do not start new jobs if the load average is greater than N\n"
+-"  -n       dry run (don't run commands but act like they succeeded)\n"
+-"\n"
+-"  -d MODE  enable debugging (use '-d list' to list modes)\n"
+-"  -t TOOL  run a subtool (use '-t list' to list subtools)\n"
+-"    terminates toplevel options; further flags are passed to the tool\n"
+-"  -w FLAG  adjust warnings (use '-w list' to list warnings)\n",
+-          kNinjaVersion, config.parallelism);
++  fprintf(
++      stderr,
++      "usage: ninja [options] [targets...]\n"
++      "\n"
++      "if targets are unspecified, builds the 'default' target (see manual).\n"
++      "\n"
++      "options:\n"
++      "  --version      print ninja version (\"%s\")\n"
++      "  -v, --verbose  show all command lines while building\n"
++      "  --quiet        don't show progress status, just command output\n"
++      "\n"
++      "  -C DIR   change to DIR before doing anything else\n"
++      "  -f FILE  specify input build file [default=build.ninja]\n"
++      "\n"
++      "  -j N     run N jobs in parallel (0 means infinity) [default=%d on "
++      "this system]\n"
++      "  -k N     keep going until N jobs fail (0 means infinity) [default=1]\n"
++      "  -l N     do not start new jobs if the load average is greater than N\n"
++      "  -n       dry run (don't run commands but act like they succeeded)\n"
++      "\n"
++      "  -d MODE  enable debugging (use '-d list' to list modes)\n"
++      "  -t TOOL  run a subtool (use '-t list' to list subtools)\n"
++      "    terminates toplevel options; further flags are passed to the tool\n"
++      "  -w FLAG  adjust warnings (use '-w list' to list warnings)\n"
++      "\n"
++      "  --jobserver-mode MODE\n"
++      "      Start a GNU Make jobserver protocol pool.\n"
++      "      MODE can be one of the following values: %s\n"
++      "\n"
++      "  --jobserver\n"
++      "      Convenience flag, equivalent to --jobserver-mode=1\n\n",
++      kNinjaVersion, config.parallelism,
++      Jobserver::Config::GetValidNativeModesListAsString(", ").c_str());
+ }
+ 
+ /// Choose a default value for the -j (parallelism) flag.
+@@ -257,6 +267,64 @@ int GuessParallelism() {
+   }
+ }
+ 
++void SetEnvironmentVariable(const char* name, const char* value) {
++#ifdef _WIN32
++  std::string env = name + std::string("=") + value;
++  _putenv(env.c_str());
++#else   // !_WIN32
++  setenv(name, value, 1);
++#endif  // !_WIN32
++}
++
++void ClearEnvironmentVariable(const char* name) {
++#ifdef _WIN32
++  std::string env = std::string(name) + "=";
++  _putenv(env.c_str());
++#else   // !_WIN32
++  unsetenv(name);
++#endif  // !_WIN32
++}
++
++// Create a Jobserver::Pool instance if \a config allows it.
++// On failure, return a null instance. Info / warnings are set to \a status.
++// On success, this also changes the MAKEFLAGS variable in the current
++// process, so that it is passed to sub-commands later.
++std::unique_ptr<Jobserver::Pool> SetupJobserverPool(const BuildConfig& config,
++                                                    Status* status) {
++  std::unique_ptr<Jobserver::Pool> result;
++
++  if (config.parallelism == 1 || config.parallelism == INT_MAX) {
++    // No-parallelism (-j1) or infinite parallelism (-j0) was specified.
++    return result;
++  }
++
++  if (config.jobserver_mode == Jobserver::Config::kModeNone) {
++    // --jobserver was not used, and NINJA_JOBSERVER is not set.
++    return result;
++  }
++
++  if (config.verbosity >= BuildConfig::VERBOSE)
++    status->Info("Creating jobserver pool for %d parallel jobs",
++                 config.parallelism);
++
++  std::string err;
++  result = Jobserver::Pool::Create(static_cast<size_t>(config.parallelism),
++                                   config.jobserver_mode, &err);
++  if (!result.get()) {
++    if (config.verbosity > BuildConfig::QUIET)
++      status->Warning("Jobserver pool creation failed: %s", err.c_str());
++    return result;
++  }
++
++  std::string makeflags = result->GetEnvMakeFlagsValue();
++
++  //  Set or override the MAKEFLAGS environment variable in
++  // the current process. This ensures it is passed to sub-commands
++  // as well
++  SetEnvironmentVariable("MAKEFLAGS", makeflags.c_str());
++  return result;
++}
++
+ /// Rebuild the build manifest, if necessary.
+ /// Returns true if the manifest was rebuilt.
+ bool NinjaMain::RebuildManifest(const char* input_file, string* err,
+@@ -1509,15 +1577,23 @@ int ReadFlags(int* argc, char*** argv,
+               Options* options, BuildConfig* config) {
+   DeferGuessParallelism deferGuessParallelism(config);
+ 
+-  enum { OPT_VERSION = 1, OPT_QUIET = 2 };
++  enum {
++    OPT_VERSION = 1,
++    OPT_QUIET = 2,
++    OPT_JOBSERVER = 3,
++    OPT_JOBSERVER_MODE = 4
++  };
+   const option kLongOptions[] = {
+     { "help", no_argument, NULL, 'h' },
+     { "version", no_argument, NULL, OPT_VERSION },
+     { "verbose", no_argument, NULL, 'v' },
+     { "quiet", no_argument, NULL, OPT_QUIET },
++    { "jobserver", no_argument, NULL, OPT_JOBSERVER },
++    { "joberver-mode", required_argument, NULL, OPT_JOBSERVER_MODE },
+     { NULL, 0, NULL, 0 }
+   };
+ 
++  const char* jobserver_mode = nullptr;
+   int opt;
+   while (!options->tool &&
+          (opt = getopt_long(*argc, *argv, "d:f:j:k:l:nt:vw:C:h", kLongOptions,
+@@ -1586,6 +1662,12 @@ int ReadFlags(int* argc, char*** argv,
+       case OPT_VERSION:
+         printf("%s\n", kNinjaVersion);
+         return 0;
++      case OPT_JOBSERVER:
++        jobserver_mode = "1";
++        break;
++      case OPT_JOBSERVER_MODE:
++        jobserver_mode = optarg ? optarg : "1";
++        break;
+       case 'h':
+       default:
+         deferGuessParallelism.Refresh();
+@@ -1596,6 +1678,22 @@ int ReadFlags(int* argc, char*** argv,
+   *argv += optind;
+   *argc -= optind;
+ 
++  // If an explicit --jobserver has not been used, lookup the NINJA_JOBSERVER
++  // environment variable. Ignore it if parallelism was set explicitly on the
++  // command line though (and warn about it).
++  if (jobserver_mode == nullptr) {
++    jobserver_mode = getenv("NINJA_JOBSERVER");
++  }
++  if (jobserver_mode) {
++    auto ret = Jobserver::Config::ModeFromString(jobserver_mode);
++    config->jobserver_mode = ret.second;
++    if (!ret.first && !config->dry_run &&
++        config->verbosity > BuildConfig::QUIET) {
++      Warning("Invalid jobserver mode '%s': Must be one of: %s", jobserver_mode,
++              Jobserver::Config::GetValidNativeModesListAsString(", ").c_str());
++    }
++  }
++
+   return -1;
+ }
+ 
+@@ -1635,6 +1733,24 @@ NORETURN void real_main(int argc, char** argv) {
+     exit((ninja.*options.tool->func)(&options, argc, argv));
+   }
+ 
++  // Determine whether to setup a Jobserver pool. This depends on
++  // --jobserver or --jobserver-mode=MODE being passed on the command-line,
++  // or NINJA_JOBSERVER=MODE being set in the environment.
++  //
++  // This must be ignored if a tool is being used, or no/infinite
++  // parallelism is being asked.
++  //
++  // At the moment, this overrides any MAKEFLAGS definition in
++  // the environment.
++  std::unique_ptr<Jobserver::Pool> jobserver_pool;
++  if (!options.tool) {
++    jobserver_pool = SetupJobserverPool(config, status);
++  }
++
++  // Unset NINJA_JOBSERVER unconditionally in subprocesses
++  // to avoid multiple sub-pools to be started by mistake.
++  ClearEnvironmentVariable("NINJA_JOBSERVER");
++
+   // Limit number of rebuilds, to prevent infinite loops.
+   const int kCycleLimit = 100;
+   for (int cycle = 1; cycle <= kCycleLimit; ++cycle) {

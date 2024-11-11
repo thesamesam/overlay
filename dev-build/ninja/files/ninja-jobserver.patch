@@ -1,6 +1,6 @@
-https://github.com/ninja-build/ninja/pull/2506
+https://github.com/ninja-build/ninja/compare/master...digit-google:ninja:jobserver-pool.patch
 
-From 3eaaadfb47479605afe1fe58ae9c2f00238e13ad Mon Sep 17 00:00:00 2001
+From 603addf97be651ef49dc61d048c83f6046bc7249 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Wed, 11 Sep 2024 18:32:23 +0200
 Subject: [PATCH 1/6] Add misc/jobserver_pool.py
@@ -22,7 +22,7 @@ at all times.
 
 diff --git a/misc/jobserver_pool.py b/misc/jobserver_pool.py
 new file mode 100755
-index 0000000000..4cebd10d39
+index 0000000000..186e0536a9
 --- /dev/null
 +++ b/misc/jobserver_pool.py
 @@ -0,0 +1,339 @@
@@ -41,16 +41,16 @@ index 0000000000..4cebd10d39
 +# See the License for the specific language governing permissions and
 +# limitations under the License.
 +
-+"""Setup a GNU Make Jobserver token pool then launch a command with it.
++"""Setup a GNU Make Jobserver jobs pool then launch a command with it.
 +
 +On Windows, this only supports the semaphore-based scheme.
-+On Posix, this uses a pipe by default, unless `--fifo=FIFO` is used.
++On Posix, this uses a pipe by default, unless `--fifo` is used.
 +
-+NOTE: This is a basic implementation that doesn't support broken
-+      protocol clients that release more tokens than they acquired
-+      to the pool. Using these in your build will result in extra job
-+      slots being created, severely degrading overall performance
-+      over time.
++On exit, this script verifies that all job slots were returned to
++the pool, and will print an error message if this is not the case.
++
++This is useful to catch the use of broken protocol clients.
++Use the `--no-check` flag to disable this.
 +
 +See --help-usage for usage examples.
 +"""
@@ -78,7 +78,7 @@ index 0000000000..4cebd10d39
 +# expected size). Protocol clients should not depend on it
 +# though.
 +
-+_DEFAULT_NAME = "jobserver_tokens"
++_DEFAULT_NAME = "jobserver_pool"
 +_IS_WINDOWS = sys.platform in ("win32", "cygwin")
 +
 +if _IS_WINDOWS:
@@ -101,42 +101,42 @@ index 0000000000..4cebd10d39
 +    PyHandle: T.TypeAlias = T.Any
 +
 +    def create_sem(
-+        sem_name: str, token_count: int
++        sem_name: str, jobs_count: int
 +    ) -> T.Tuple[PyHandle, T.Dict[str, str]]:
 +        """Create and initialize Win32 semaphore."""
-+        assert token_count > 0, f"Token count must be strictly positive"
++        assert jobs_count > 0, f"Jobs count must be strictly positive"
 +        # The win32event documentation states that the first argument to CreateSemaphore()
-+        # can be None to indicate default security attributes, byut mypy only wants
++        # can be None to indicate default security attributes, but mypy only wants
 +        # a PySECURITY_ATTRIBUTES for some reason.
 +        handle = win32event.CreateSemaphore(
 +            None,  # type: ignore
-+            token_count - 1,
-+            token_count - 1,
++            jobs_count - 1,
++            jobs_count - 1,
 +            sem_name,
 +        )
 +        assert bool(handle), f"Error creating Win32 semaphore {win32api.GetLastError()}"
 +        # See technical note above about MAKEFLAGS format.
 +        env = dict(os.environ)
-+        env["MAKEFLAGS"] = f" -j{token_count} --jobserver-auth=" + sem_name
++        env["MAKEFLAGS"] = f" -j{jobs_count} --jobserver-auth=" + sem_name
 +        return handle, env
 +
-+    def check_sem_count(handle: PyHandle, token_count: int) -> int:
-+        if token_count <= 1:
++    def check_sem_count(handle: PyHandle, jobs_count: int) -> int:
++        if jobs_count <= 1:
 +            # Nothing to check here.
 +            return 0
 +
-+        expected_count = token_count - 1
++        expected_count = jobs_count - 1
 +
 +        read_count = win32event.ReleaseSemaphore(handle, 1)
 +        if read_count < expected_count:
 +            print(
-+                f"ERROR: {expected_count - read_count} were missing from the token pool (got {read_count}, expected {expected_count})",
++                f"ERROR: {expected_count - read_count} were missing from the jobs pool (got {read_count}, expected {expected_count})",
 +                file=sys.stderr,
 +            )
 +            return 1
 +        if read_count > expected_count:
 +            print(
-+                f"ERROR: {read_count - expected_count} extra tokens were released to the token pool (got {read_count}, expected {expected_count})",
++                f"ERROR: {read_count - expected_count} extra tokens were released to the jobs pool (got {read_count}, expected {expected_count})",
 +                file=sys.stderr,
 +            )
 +            return 1
@@ -145,25 +145,25 @@ index 0000000000..4cebd10d39
 +
 +    def print_usage() -> int:
 +        print(
-+            """Example usage:
++            r"""Example usage:
 +
-+# Start <command> after setting the server to provide as many tokens
++# Start <command> after setting the server to provide as many jobs
 +# as available CPUs (the default)
-+python \\path\\to\\jobserver_pool.py <command>
++python \path\to\jobserver_pool.py <command>
 +
 +# Start <command> with a fixed number of job slots.
-+python \\path\\to\\jobserver_pool.py -j10 <command>
++python \path\to\jobserver_pool.py -j10 <command>
 +
 +# Disable the feature with a non-positive count. This is equivalent
 +# to running <command> directly.
-+python \\path\\to\\jobserver_pool.py -j0 <command>
++python \path\to\jobserver_pool.py -j0 <command>
 +
 +# Use a specific semaphore name
-+python \\path\\to\\jobserver_pool.py --name=my_build_jobs <command>
++python \path\to\jobserver_pool.py --name=my_build_jobs <command>
 +
 +# Setup jobserver then start new interactive PowerShell
 +# session, print MAKEFLAGS value, build stuff, then exit.
-+python \\path\\to\\jobserver_pool.py powershell.exe
++python \path\to\jobserver_pool.py powershell.exe
 +$env:MAKEFLAGS
 +... build stuff ...
 +exit
@@ -173,21 +173,21 @@ index 0000000000..4cebd10d39
 +
 +else:  # !_IS_WINDOWS
 +
-+    def create_pipe(token_count: int) -> T.Tuple[int, int, T.Dict[str, str]]:
++    def create_pipe(jobs_count: int) -> T.Tuple[int, int, T.Dict[str, str]]:
 +        """Create and fill Posix PIPE."""
 +        read_fd, write_fd = os.pipe()
 +        os.set_inheritable(read_fd, True)
 +        os.set_inheritable(write_fd, True)
-+        assert token_count > 0, f"Token count must be strictly positive"
-+        os.write(write_fd, (token_count - 1) * b"x")
++        assert jobs_count > 0, f"Token count must be strictly positive"
++        os.write(write_fd, (jobs_count - 1) * b"x")
 +        # See technical note above about MAKEFLAGS format.
 +        env = dict(os.environ)
 +        env["MAKEFLAGS"] = (
-+            f" -j{token_count} --jobserver-fds={read_fd},{write_fd} --jobserver-auth={read_fd},{write_fd}"
++            f" -j{jobs_count} --jobserver-fds={read_fd},{write_fd} --jobserver-auth={read_fd},{write_fd}"
 +        )
 +        return read_fd, write_fd, env
 +
-+    def create_fifo(path: str, token_count: int) -> T.Tuple[int, int, T.Dict[str, str]]:
++    def create_fifo(path: str, jobs_count: int) -> T.Tuple[int, int, T.Dict[str, str]]:
 +        """Create and fill Posix FIFO."""
 +        if os.path.exists(path):
 +            os.remove(path)
@@ -197,22 +197,22 @@ index 0000000000..4cebd10d39
 +
 +        read_fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
 +        write_fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
-+        assert token_count > 0, f"Token count must be strictly positive"
-+        os.write(write_fd, (token_count - 1) * b"x")
++        assert jobs_count > 0, f"Token count must be strictly positive"
++        os.write(write_fd, (jobs_count - 1) * b"x")
 +        # See technical note above about MAKEFLAGS format.
 +        env = dict(os.environ)
-+        env["MAKEFLAGS"] = f" -j{token_count} --jobserver-auth=fifo:" + path
++        env["MAKEFLAGS"] = f" -j{jobs_count} --jobserver-auth=fifo:" + path
 +        return read_fd, write_fd, env
 +
 +    def print_usage() -> int:
 +        print(
-+            """Example usage:
++            r"""Example usage:
 +
-+# Start <command> after setting the job pool to provide as many tokens
++# Start <command> after setting the job pool to provide as many jobs
 +# as available CPUs (the default)
 +/path/to/jobserver_pool.py <command>
 +
-+# Start <command> with a fixed number of tokens
++# Start <command> with a fixed number of jobs
 +/path/to/jobserver_pool.py -j10 <command>
 +
 +# Disable the feature with a non-positive count. This is equivalent
@@ -232,12 +232,12 @@ index 0000000000..4cebd10d39
 +        )
 +        return 0
 +
-+    def check_pipe_tokens(read_fd: int, token_count: int) -> int:
-+        if token_count <= 1:  # Nothing to check
++    def check_pipe_tokens(read_fd: int, jobs_count: int) -> int:
++        if jobs_count <= 1:  # Nothing to check
 +            return 0
 +
 +        # Remove implicit token from the expected count.
-+        expected_count = token_count - 1
++        expected_count = jobs_count - 1
 +        os.set_blocking(read_fd, False)
 +        read_count = 0
 +        while True:
@@ -251,13 +251,13 @@ index 0000000000..4cebd10d39
 +
 +        if read_count < expected_count:
 +            print(
-+                f"ERROR: {expected_count - read_count} were missing from the token pool (got {read_count}, expected {expected_count})",
++                f"ERROR: {expected_count - read_count} tokens were missing from the jobs pool (got {read_count}, expected {expected_count})",
 +                file=sys.stderr,
 +            )
 +            return 1
 +        if read_count > expected_count:
 +            print(
-+                f"ERROR: {read_count - expected_count} extra tokens were released to the token pool (got {read_count}, expected {expected_count})",
++                f"ERROR: {read_count - expected_count} extra tokens were released to the jobs pool (got {read_count}, expected {expected_count})",
 +                file=sys.stderr,
 +            )
 +            return 1
@@ -288,9 +288,9 @@ index 0000000000..4cebd10d39
 +        )
 +
 +    parser.add_argument(
-+        "--check",
++        "--no-check",
 +        action="store_true",
-+        help="Check that all job slots were returned to the pool on exit.",
++        help="Disable the final check that verifies that all job slots were returned to the pool on exit.",
 +    )
 +
 +    parser.add_argument(
@@ -302,7 +302,7 @@ index 0000000000..4cebd10d39
 +        "--jobs",
 +        action="store",
 +        metavar="COUNT",
-+        dest="token_count",
++        dest="jobs_count",
 +        type=int,
 +        default=os.cpu_count(),
 +        help="Set job slots ccount, default is available CPUs count",
@@ -317,20 +317,20 @@ index 0000000000..4cebd10d39
 +    if not args.command:
 +        parser.error("This script requires at least one command argument!")
 +
-+    token_count = args.token_count
-+    if token_count <= 0:
++    jobs_count = args.jobs_count
++    if jobs_count <= 0:
 +        # Disable the feature.
 +        ret = subprocess.run(args.command)
 +        exit_code = ret.returncode
 +    elif _IS_WINDOWS:
 +        # Run with a Window semaphore.
 +        try:
-+            handle, env = create_sem(args.name, token_count)
++            handle, env = create_sem(args.name, jobs_count)
 +            ret = subprocess.run(args.command, env=env)
 +            exit_code = ret.returncode
 +
-+            if exit_code == 0 and args.check:
-+                exit_code = check_sem_count(handle, token_count)
++            if exit_code == 0 and not args.no_check:
++                exit_code = check_sem_count(handle, jobs_count)
 +
 +        finally:
 +            win32api.CloseHandle(handle)
@@ -341,17 +341,17 @@ index 0000000000..4cebd10d39
 +        try:
 +            if args.fifo:
 +                fifo_path = os.path.abspath(args.fifo)
-+                read_fd, write_fd, env = create_fifo(fifo_path, (args.token_count))
++                read_fd, write_fd, env = create_fifo(fifo_path, args.jobs_count)
 +                ret = subprocess.run(args.command, env=env)
 +            else:
-+                read_fd, write_fd, env = create_pipe(int(args.token_count))
++                read_fd, write_fd, env = create_pipe(args.jobs_count)
 +                ret = subprocess.run(
 +                    args.command, env=env, pass_fds=(read_fd, write_fd)
 +                )
 +
 +            exit_code = ret.returncode
-+            if exit_code == 0 and args.check:
-+                exit_code = check_pipe_tokens(read_fd, token_count)
++            if exit_code == 0 and not args.no_check:
++                exit_code = check_pipe_tokens(read_fd, jobs_count)
 +
 +        finally:
 +            os.close(read_fd)
@@ -540,7 +540,7 @@ index 0000000000..a49e9baa5e
 +if __name__ == "__main__":
 +    unittest.main()
 
-From 76fea09ee048c48584c2f7598d1ec78fca061b17 Mon Sep 17 00:00:00 2001
+From cecacbaa448b78b3eadc74c9e29efbeab4bdf826 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 11:13:29 +0200
 Subject: [PATCH 2/6] Add Jobserver::Slot and Jobserver::Config classes
@@ -569,7 +569,7 @@ variable.
  create mode 100644 src/jobserver_test.cc
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 47b1f9c117..c94457c7b4 100644
+index 881dd54ff9..af20370579 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -139,6 +139,7 @@ add_library(libninja OBJECT
@@ -580,7 +580,7 @@ index 47b1f9c117..c94457c7b4 100644
  	src/json.cc
  	src/line_printer.cc
  	src/manifest_parser.cc
-@@ -269,6 +270,7 @@ if(BUILD_TESTING)
+@@ -277,6 +278,7 @@ if(BUILD_TESTING)
      src/elide_middle_test.cc
      src/explanations_test.cc
      src/graph_test.cc
@@ -589,7 +589,7 @@ index 47b1f9c117..c94457c7b4 100644
      src/lexer_test.cc
      src/manifest_parser_test.cc
 diff --git a/configure.py b/configure.py
-index 7d3ecb6d38..1abc9a59f7 100755
+index 21374d2a6b..ebe183df2f 100755
 --- a/configure.py
 +++ b/configure.py
 @@ -543,6 +543,7 @@ def has_re2c() -> bool:
@@ -600,7 +600,7 @@ index 7d3ecb6d38..1abc9a59f7 100755
               'json',
               'line_printer',
               'manifest_parser',
-@@ -642,6 +643,7 @@ def has_re2c() -> bool:
+@@ -643,6 +644,7 @@ def has_re2c() -> bool:
          'elide_middle_test',
          'explanations_test',
          'graph_test',
@@ -1325,7 +1325,7 @@ index 0000000000..d80e63b35d
 +  EXPECT_EQ("Invalid file descriptor pair [10,]", error);
 +}
 
-From d23a67481c7c50016e064bc755d69c127b42f5f5 Mon Sep 17 00:00:00 2001
+From 65f9c6089956037cdf3bb3723189de8802550c93 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 13:03:09 +0200
 Subject: [PATCH 3/6] Add Jobserver::Client class
@@ -1350,10 +1350,10 @@ This commit includes both Posix and Win32 implementations.
  create mode 100644 src/jobserver-win32.cc
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index c94457c7b4..4970ba52fd 100644
+index af20370579..f96b5489f6 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -156,6 +156,7 @@ if(WIN32)
+@@ -157,6 +157,7 @@ if(WIN32)
  	target_sources(libninja PRIVATE
  		src/subprocess-win32.cc
  		src/includes_normalize-win32.cc
@@ -1361,7 +1361,7 @@ index c94457c7b4..4970ba52fd 100644
  		src/msvc_helper-win32.cc
  		src/msvc_helper_main-win32.cc
  		src/getopt.c
-@@ -171,7 +172,10 @@ if(WIN32)
+@@ -172,7 +173,10 @@ if(WIN32)
  	# errors by telling windows.h to not define those two.
  	add_compile_definitions(NOMINMAX)
  else()
@@ -1374,10 +1374,10 @@ index c94457c7b4..4970ba52fd 100644
  		target_sources(libninja PRIVATE src/getopt.c)
  		# Build getopt.c, which can be compiled as either C or C++, as C++
 diff --git a/configure.py b/configure.py
-index 1abc9a59f7..3d4ee355a1 100755
+index ebe183df2f..2920337e4f 100755
 --- a/configure.py
 +++ b/configure.py
-@@ -559,6 +559,7 @@ def has_re2c() -> bool:
+@@ -560,6 +560,7 @@ def has_re2c() -> bool:
  if platform.is_windows():
      for name in ['subprocess-win32',
                   'includes_normalize-win32',
@@ -1385,7 +1385,7 @@ index 1abc9a59f7..3d4ee355a1 100755
                   'msvc_helper-win32',
                   'msvc_helper_main-win32']:
          objs += cxx(name, variables=cxxvariables)
-@@ -566,7 +567,9 @@ def has_re2c() -> bool:
+@@ -567,7 +568,9 @@ def has_re2c() -> bool:
          objs += cxx('minidump-win32', variables=cxxvariables)
      objs += cc('getopt')
  else:
@@ -1978,7 +1978,7 @@ index d80e63b35d..ffdc422005 100644
 +}
 +#endif  // !_WIN32
 
-From 762ea9e229583391981aeb5b09e50c61a47d99e9 Mon Sep 17 00:00:00 2001
+From 013791c16c748302983ed0e1bd4c523cfe76b65f Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 13:39:47 +0200
 Subject: [PATCH 4/6] Support jobserver client mode automatically.
@@ -1987,8 +1987,12 @@ Detect that the environment variable MAKEFLAGS specifies a
 jobserver pool to use, and automatically use it to control
 build parallelism when this is the case.
 
-This overrides the `-j` option, but not the `-l` option
-used to limit dispatch based on the overall load factor.
+This is disabled is `--dry-run` or an explicit `-j<COUNT>`
+is passed on the command-line. Note that the `-l` option
+used to limit dispatch based on the overall load factor
+will still be in effect if used.
+
++ Use default member initialization for BuildConfig struct.
 
 + Add a new regression test suite that uses the
   misc/jobserver_pool.py script that was introduced in
@@ -1996,38 +2000,39 @@ used to limit dispatch based on the overall load factor.
   properly.
 ---
  .github/workflows/linux.yml   |   3 +
- doc/manual.asciidoc           |  34 ++++-
- misc/jobserver_test.py        | 241 ++++++++++++++++++++++++++++++++++
+ doc/manual.asciidoc           |  38 ++++-
+ misc/jobserver_test.py        | 255 ++++++++++++++++++++++++++++++++++
  misc/jobserver_test_helper.py |  42 ++++++
- src/build.cc                  |  38 +++++-
- src/build.h                   |   8 ++
+ src/build.cc                  |  17 ++-
+ src/build.h                   |  28 ++--
  src/graph.h                   |   4 +
- src/ninja.cc                  |  66 +++++++++-
- 8 files changed, 430 insertions(+), 6 deletions(-)
+ src/ninja.cc                  |  73 +++++++++-
+ src/real_command_runner.cc    |  20 ++-
+ 9 files changed, 463 insertions(+), 17 deletions(-)
  create mode 100755 misc/jobserver_test.py
  create mode 100755 misc/jobserver_test_helper.py
 
 diff --git a/.github/workflows/linux.yml b/.github/workflows/linux.yml
-index 9cbc8a79cd..e4f8c461d7 100644
+index 07431bf797..a0cffcfe60 100644
 --- a/.github/workflows/linux.yml
 +++ b/.github/workflows/linux.yml
 @@ -27,6 +27,7 @@ jobs:
        run: |
-         ./ninja_test
+         ./ninja_test --gtest_color=yes
          ../../misc/output_test.py
 +        ../../misc/jobserver_test.py
      - name: Build release ninja
-       run: ninja -f build-Release.ninja
+       run: CLICOLOR_FORCE=1 ninja -f build-Release.ninja
        working-directory: build
 @@ -35,6 +36,7 @@ jobs:
        run: |
-         ./ninja_test
+         ./ninja_test --gtest_color=yes
          ../../misc/output_test.py
 +        ../../misc/jobserver_test.py
  
    build:
      runs-on: [ubuntu-latest]
-@@ -170,6 +172,7 @@ jobs:
+@@ -166,6 +168,7 @@ jobs:
          ./ninja all
          python3 misc/ninja_syntax_test.py
          ./misc/output_test.py
@@ -2036,10 +2041,10 @@ index 9cbc8a79cd..e4f8c461d7 100644
    build-aarch64:
      name: Build Linux ARM64
 diff --git a/doc/manual.asciidoc b/doc/manual.asciidoc
-index 4f09674192..6ccdceb75f 100644
+index 4f09674192..12bb0b7c40 100644
 --- a/doc/manual.asciidoc
 +++ b/doc/manual.asciidoc
-@@ -187,10 +187,38 @@ Ninja defaults to running commands in parallel anyway, so typically
+@@ -187,10 +187,42 @@ Ninja defaults to running commands in parallel anyway, so typically
  you don't need to pass `-j`.)
  
  
@@ -2049,27 +2054,31 @@ index 4f09674192..6ccdceb75f 100644
 +Since version 1.13., Ninja builds can follow the
 +https://https://www.gnu.org/software/make/manual/html_node/Job-Slots.html[GNU Make jobserver]
 +client protocol. This is useful when Ninja is invoked as part of a larger
-+build system controlled by a top-level GNU Make instance, as it allows better
-+coordination between concurrent build tasks.
++build system controlled by a top-level GNU Make instance, or any other
++jobserver pool implementation, as it allows better coordination between
++concurrent build tasks.
 +
 +This feature is automatically enabled under the following conditions:
 +
 +- Dry-run (i.e. `-n` or `--dry-run`) is not enabled.
 +
-+- `-j1` (no parallelism) is not used on the command line.
-+  Note that `-j0` means "infinite" parallelism and does not
-+  disable client mode.
++- No explicit job count (e.g. `-j<COUNT>`) is passed on the command
++  line.
 +
-+- The `MAKEFLAGS` environment variable is defined and
-+  describes a valid jobserver mode using `--jobserver-auth` or
-+  even `--jobserver-fds`.
++- The `MAKEFLAGS` environment variable is defined and describes a valid
++  jobserver mode using `--jobserver-auth` or even `--jobserver-fds`.
 +
-+In this case, Ninja will use the jobserver pool of job slots
-+to control parallelism, instead of its default implementation
-+of `-j<count>`.
++In this case, Ninja will use the jobserver pool of job slots to control
++parallelism, instead of its default implementation of `-j<count>`.
 +
 +Note that load-average limitations (i.e. when using `-l<count>`)
 +are still being enforced in this mode.
++
++On Posix, Ninja supports both the `pipe` and `fifo` client modes, based on
++the content of `MAKEFLAGS`.
++
++IMPORTANT: A warning will be printed when `pipe` mode is detected, as this
++mode can be less reliable than `fifo`.
 +
  Environment variables
  ~~~~~~~~~~~~~~~~~~~~~
@@ -2079,7 +2088,7 @@ index 4f09674192..6ccdceb75f 100644
  `NINJA_STATUS`, the progress status printed before the rule being run.
  
  Several placeholders are available:
-@@ -215,6 +243,10 @@ The default progress status is `"[%f/%t] "` (note the trailing space
+@@ -215,6 +247,10 @@ The default progress status is `"[%f/%t] "` (note the trailing space
  to separate from the build rule). Another example of possible progress status
  could be `"[%u/%r/%f] "`.
  
@@ -2092,10 +2101,10 @@ index 4f09674192..6ccdceb75f 100644
  
 diff --git a/misc/jobserver_test.py b/misc/jobserver_test.py
 new file mode 100755
-index 0000000000..3bad98abde
+index 0000000000..b1743a8778
 --- /dev/null
 +++ b/misc/jobserver_test.py
-@@ -0,0 +1,241 @@
+@@ -0,0 +1,255 @@
 +#!/usr/bin/env python3
 +# Copyright 2024 Google Inc. All Rights Reserved.
 +#
@@ -2136,7 +2145,7 @@ index 0000000000..3bad98abde
 +class BuildDir:
 +    def __init__(self, build_ninja: str):
 +        self.build_ninja = dedent(build_ninja)
-+        self.d = None
++        self.d: T.Optional[tempfile.TemporaryDirectory] = None
 +
 +    def __enter__(self):
 +        self.d = tempfile.TemporaryDirectory()
@@ -2149,6 +2158,7 @@ index 0000000000..3bad98abde
 +
 +    @property
 +    def path(self) -> str:
++        assert self.d
 +        return self.d.name
 +
 +    def run(
@@ -2162,8 +2172,8 @@ index 0000000000..3bad98abde
 +
 +    def ninja_run(
 +        self,
-+        ninja_args: T.Sequence[str],
-+        prefix_args: T.Sequence[str] = [],
++        ninja_args: T.List[str],
++        prefix_args: T.List[str] = [],
 +        extra_env: T.Dict[str, str] = {},
 +    ) -> "subprocess.CompletedProcess[str]":
 +        ret = self.ninja_spawn(
@@ -2173,15 +2183,15 @@ index 0000000000..3bad98abde
 +            capture_output=False,
 +        )
 +        ret.check_returncode()
-+        return
++        return ret
 +
-+    def ninja_clean(self):
++    def ninja_clean(self) -> None:
 +        self.ninja_run(["-t", "clean"])
 +
 +    def ninja_spawn(
 +        self,
-+        ninja_args: T.Sequence[str],
-+        prefix_args: T.Sequence[str] = [],
++        ninja_args: T.List[str],
++        prefix_args: T.List[str] = [],
 +        extra_env: T.Dict[str, str] = {},
 +        capture_output: bool = True,
 +    ) -> "subprocess.CompletedProcess[str]":
@@ -2194,7 +2204,7 @@ index 0000000000..3bad98abde
 +        )
 +
 +
-+def span_output_file(span_n: int):
++def span_output_file(span_n: int) -> str:
 +    return "out%02d" % span_n
 +
 +
@@ -2232,7 +2242,7 @@ index 0000000000..3bad98abde
 +    spans: T.List[T.Tuple[int, int]] = []
 +    for n in range(command_count):
 +        with open(os.path.join(build_dir, span_output_file(n)), "rb") as f:
-+            content = f.read()
++            content = f.read().decode("utf-8")
 +        lines = content.splitlines()
 +        assert len(lines) == 2, f"Unexpected output file content: [{content}]"
 +        spans.append((int(lines[0]), int(lines[1])))
@@ -2264,14 +2274,20 @@ index 0000000000..3bad98abde
 +            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
 +            self.assertEqual(max_overlaps, task_count)
 +
-+    def _run_client_test(self, jobserver_args: T.Sequence[str]) -> None:
++            b.ninja_clean()
++            output = b.run([NINJA_PATH, "-C", b.path, "-j1", "all"])
++
++            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++            self.assertEqual(max_overlaps, 1)
++
++    def _run_client_test(self, jobserver_args: T.List[str]) -> None:
 +        task_count = 10
 +        build_plan = generate_build_plan(task_count)
 +        with BuildDir(build_plan) as b:
 +            # First, run the full 10 tasks with with 10 tokens, this should allow all
 +            # tasks to run in parallel.
 +            ret = b.ninja_run(
-+                ninja_args=["-j0", "all"],
++                ninja_args=["all"],
 +                prefix_args=jobserver_args + [f"--jobs={task_count}"],
 +            )
 +            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
@@ -2280,33 +2296,40 @@ index 0000000000..3bad98abde
 +            # Second, use 4 tokens only, and verify that this was enforced by Ninja.
 +            b.ninja_clean()
 +            b.ninja_run(
-+                ["-j0", "all"],
++                ["all"],
 +                prefix_args=jobserver_args + ["--jobs=4"],
 +            )
 +            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
 +            self.assertEqual(max_overlaps, 4)
 +
-+            # Finally, verify that --jobs=1 serializes all tasks.
++            # Third, verify that --jobs=1 serializes all tasks.
 +            b.ninja_clean()
 +            b.ninja_run(
-+                ["-j0", "all"],
++                ["all"],
 +                prefix_args=jobserver_args + ["--jobs=1"],
++            )
++            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++            self.assertEqual(max_overlaps, 1)
++
++            # Finally, verify that -j1 overrides the pool.
++            b.ninja_clean()
++            b.ninja_run(
++                ["-j1", "all"],
++                prefix_args=jobserver_args + [f"--jobs={task_count}"],
 +            )
 +            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
 +            self.assertEqual(max_overlaps, 1)
 +
 +    @unittest.skipIf(_PLATFORM_IS_WINDOWS, "These test methods do not work on Windows")
 +    def test_jobserver_client_with_posix_pipe(self):
-+        self._run_client_test(
-+            [sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--check", "--pipe"]
-+        )
++        self._run_client_test([sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--pipe"])
 +
 +    @unittest.skipIf(_PLATFORM_IS_WINDOWS, "These test methods do not work on Windows")
 +    def test_jobserver_client_with_posix_fifo(self):
-+        self._run_client_test([sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--check"])
++        self._run_client_test([sys.executable, "-S", _JOBSERVER_POOL_SCRIPT])
 +
 +    def _test_MAKEFLAGS_value(
-+        self, ninja_args: T.Sequence[str] = [], prefix_args: T.Sequence[str] = []
++        self, ninja_args: T.List[str] = [], prefix_args: T.List[str] = []
 +    ):
 +        build_plan = r"""
 +rule print
@@ -2331,7 +2354,7 @@ index 0000000000..3bad98abde
 +
 +    def test_client_passes_MAKEFLAGS(self):
 +        self._test_MAKEFLAGS_value(
-+            prefix_args=[sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--check"]
++            prefix_args=[sys.executable, "-S", _JOBSERVER_POOL_SCRIPT]
 +        )
 +
 +
@@ -2386,7 +2409,7 @@ index 0000000000..8c238624af
 +if __name__ == "__main__":
 +    sys.exit(main())
 diff --git a/src/build.cc b/src/build.cc
-index 01f31a9faf..5d7910f085 100644
+index d256d940b0..b71b5ac473 100644
 --- a/src/build.cc
 +++ b/src/build.cc
 @@ -36,6 +36,7 @@
@@ -2424,67 +2447,18 @@ index 01f31a9faf..5d7910f085 100644
    // The rest of this function only applies to successful commands.
    if (result != kEdgeSucceeded)
      return true;
-@@ -592,14 +606,26 @@ void Plan::Dump() const {
- }
- 
- struct RealCommandRunner : public CommandRunner {
--  explicit RealCommandRunner(const BuildConfig& config) : config_(config) {}
-+  explicit RealCommandRunner(const BuildConfig& config,
-+                             Jobserver::Client* jobserver)
-+      : config_(config), jobserver_(jobserver) {}
-+
-   size_t CanRunMore() const override;
-   bool StartCommand(Edge* edge) override;
-   bool WaitForCommand(Result* result) override;
-   vector<Edge*> GetActiveEdges() override;
-   void Abort() override;
- 
-+  void ClearJobTokens() {
-+    if (jobserver_) {
-+      for (Edge* edge : GetActiveEdges()) {
-+        jobserver_->Release(std::move(edge->job_slot_));
-+      }
-+    }
-+  }
-+
-   const BuildConfig& config_;
-+  Jobserver::Client* jobserver_;
-   SubprocessSet subprocs_;
-   map<const Subprocess*, Edge*> subproc_to_edge_;
- };
-@@ -613,6 +639,7 @@ vector<Edge*> RealCommandRunner::GetActiveEdges() {
- }
- 
- void RealCommandRunner::Abort() {
-+  ClearJobTokens();
-   subprocs_.Clear();
- }
- 
-@@ -622,6 +649,13 @@ size_t RealCommandRunner::CanRunMore() const {
- 
-   int64_t capacity = config_.parallelism - subproc_number;
- 
-+  if (jobserver_) {
-+    // When a jobserver token pool is used, make the
-+    // capacity infinite, and let FindWork() limit jobs
-+    // through token acquisitions instead.
-+    capacity = INT_MAX;
-+  }
-+
-   if (config_.max_load_average > 0.0f) {
-     int load_capacity = config_.max_load_average - GetLoadAverage();
-     if (load_capacity < capacity)
-@@ -775,7 +809,7 @@ bool Builder::Build(string* err) {
+@@ -699,7 +713,8 @@ bool Builder::Build(string* err) {
      if (config_.dry_run)
        command_runner_.reset(new DryRunCommandRunner);
      else
--      command_runner_.reset(new RealCommandRunner(config_));
-+      command_runner_.reset(new RealCommandRunner(config_, jobserver_));
+-      command_runner_.reset(CommandRunner::factory(config_));
++      command_runner_.reset(CommandRunner::factory(config_, jobserver_));
++    ;
    }
  
    // We are about to start the build process.
 diff --git a/src/build.h b/src/build.h
-index 9bb0c70b5c..9264b71ae0 100644
+index ba39e7728a..5d14820096 100644
 --- a/src/build.h
 +++ b/src/build.h
 @@ -24,6 +24,7 @@
@@ -2495,7 +2469,47 @@ index 9bb0c70b5c..9264b71ae0 100644
  #include "util.h"  // int64_t
  
  struct BuildLog;
-@@ -192,6 +193,12 @@ struct Builder {
+@@ -165,14 +166,15 @@ struct CommandRunner {
+   virtual std::vector<Edge*> GetActiveEdges() { return std::vector<Edge*>(); }
+   virtual void Abort() {}
+ 
+-  /// Creates the RealCommandRunner
+-  static CommandRunner* factory(const BuildConfig& config);
++  /// Creates the RealCommandRunner. \arg jobserver can be nullptr if there
++  /// is no jobserver pool to use.
++  static CommandRunner* factory(const BuildConfig& config,
++                                Jobserver::Client* jobserver);
+ };
+ 
+ /// Options (e.g. verbosity, parallelism) passed to a build.
+ struct BuildConfig {
+-  BuildConfig() : verbosity(NORMAL), dry_run(false), parallelism(1),
+-                  failures_allowed(1), max_load_average(-0.0f) {}
++  BuildConfig() = default;
+ 
+   enum Verbosity {
+     QUIET,  // No output -- used when testing.
+@@ -180,13 +182,14 @@ struct BuildConfig {
+     NORMAL,  // regular output and status update
+     VERBOSE
+   };
+-  Verbosity verbosity;
+-  bool dry_run;
+-  int parallelism;
+-  int failures_allowed;
++  Verbosity verbosity = NORMAL;
++  bool dry_run = false;
++  int parallelism = 1;
++  bool disable_jobserver_client = false;
++  int failures_allowed = 1;
+   /// The maximum load average we must not exceed. A negative value
+   /// means that we do not have any limit.
+-  double max_load_average;
++  double max_load_average = -0.0f;
+   DepfileParserOptions depfile_parser_options;
+ };
+ 
+@@ -197,6 +200,12 @@ struct Builder {
            int64_t start_time_millis);
    ~Builder();
  
@@ -2508,7 +2522,7 @@ index 9bb0c70b5c..9264b71ae0 100644
    /// Clean up after interrupted commands by deleting output files.
    void Cleanup();
  
-@@ -225,6 +232,7 @@ struct Builder {
+@@ -230,6 +239,7 @@ struct Builder {
    State* state_;
    const BuildConfig& config_;
    Plan plan_;
@@ -2539,7 +2553,7 @@ index 806260e5d7..d98f1f9440 100644
    // as per .ninja_log, if known? Defaults to -1 if unknown.
    int64_t prev_elapsed_time_millis = -1;
 diff --git a/src/ninja.cc b/src/ninja.cc
-index 7885bb3682..99e080aa91 100644
+index 7885bb3682..4efa3d8db6 100644
 --- a/src/ninja.cc
 +++ b/src/ninja.cc
 @@ -36,13 +36,14 @@
@@ -2569,7 +2583,7 @@ index 7885bb3682..99e080aa91 100644
    /// Build the targets listed on the command line.
    /// @return an exit code.
    int RunBuild(int argc, char** argv, Status* status);
-@@ -1358,9 +1363,55 @@ bool NinjaMain::EnsureBuildDirExists() {
+@@ -1358,9 +1363,60 @@ bool NinjaMain::EnsureBuildDirExists() {
    return true;
  }
  
@@ -2578,11 +2592,8 @@ index 7885bb3682..99e080aa91 100644
 +  // Empty result by default.
 +  std::unique_ptr<Jobserver::Client> result;
 +
-+  // Disallowed for dry-runs, and for explicit -j1. Note that
-+  // `-j0` means "infinite" parallelism but is translated as
-+  // `config_.parallelism == INT_MAX` in ReadFlags().
-+  bool use_jobserver = !config_.dry_run && config_.parallelism > 1;
-+  if (!use_jobserver)
++  // If dry-run or explicit job count, don't even look at MAKEFLAGS
++  if (config_.disable_jobserver_client)
 +    return result;
 +
 +  const char* makeflags = getenv("MAKEFLAGS");
@@ -2607,8 +2618,16 @@ index 7885bb3682..99e080aa91 100644
 +    return result;
 +  }
 +
-+  if (config_.verbosity > BuildConfig::NO_STATUS_UPDATE)
++  if (config_.verbosity > BuildConfig::NO_STATUS_UPDATE) {
 +    status->Info("Jobserver mode detected: %s", makeflags);
++#ifndef _WIN32
++    if (jobserver_config.mode == Jobserver::Config::kModePipe) {
++      status->Warning(
++          "Jobserver 'pipe' mode detected, a pool that implements 'fifo' mode "
++          "would be more reliable!");
++    }
++#endif
++  }
 +
 +  result = Jobserver::Client::Create(jobserver_config, &err);
 +  if (!result.get()) {
@@ -2627,7 +2646,7 @@ index 7885bb3682..99e080aa91 100644
    if (!CollectTargetsFromArgs(argc, argv, &targets, &err)) {
      status->Error("%s", err.c_str());
      return 1;
-@@ -1370,6 +1421,15 @@ int NinjaMain::RunBuild(int argc, char** argv, Status* status) {
+@@ -1370,6 +1426,15 @@ int NinjaMain::RunBuild(int argc, char** argv, Status* status) {
  
    Builder builder(&state_, config_, &build_log_, &deps_log_, &disk_interface_,
                    status, start_time_millis_);
@@ -2643,8 +2662,78 @@ index 7885bb3682..99e080aa91 100644
    for (size_t i = 0; i < targets.size(); ++i) {
      if (!builder.AddTarget(targets[i], &err)) {
        if (!err.empty()) {
+@@ -1479,6 +1544,7 @@ int ReadFlags(int* argc, char*** argv,
+         // We want to run N jobs in parallel. For N = 0, INT_MAX
+         // is close enough to infinite for most sane builds.
+         config->parallelism = value > 0 ? value : INT_MAX;
++        config->disable_jobserver_client = true;
+         deferGuessParallelism.needGuess = false;
+         break;
+       }
+@@ -1504,6 +1570,7 @@ int ReadFlags(int* argc, char*** argv,
+       }
+       case 'n':
+         config->dry_run = true;
++        config->disable_jobserver_client = true;
+         break;
+       case 't':
+         options->tool = ChooseTool(optarg);
+diff --git a/src/real_command_runner.cc b/src/real_command_runner.cc
+index 453652f5e5..e7b206509d 100644
+--- a/src/real_command_runner.cc
++++ b/src/real_command_runner.cc
+@@ -13,18 +13,30 @@
+ // limitations under the License.
+ 
+ #include "build.h"
++#include "jobserver.h"
+ #include "subprocess.h"
+ 
+ struct RealCommandRunner : public CommandRunner {
+-  explicit RealCommandRunner(const BuildConfig& config) : config_(config) {}
++  explicit RealCommandRunner(const BuildConfig& config,
++                             Jobserver::Client* jobserver)
++      : config_(config), jobserver_(jobserver) {}
+   size_t CanRunMore() const override;
+   bool StartCommand(Edge* edge) override;
+   bool WaitForCommand(Result* result) override;
+   std::vector<Edge*> GetActiveEdges() override;
+   void Abort() override;
+ 
++  void ClearJobTokens() {
++    if (jobserver_) {
++      for (Edge* edge : GetActiveEdges()) {
++        jobserver_->Release(std::move(edge->job_slot_));
++      }
++    }
++  }
++
+   const BuildConfig& config_;
+   SubprocessSet subprocs_;
++  Jobserver::Client* jobserver_ = nullptr;
+   std::map<const Subprocess*, Edge*> subproc_to_edge_;
+ };
+ 
+@@ -38,6 +50,7 @@ std::vector<Edge*> RealCommandRunner::GetActiveEdges() {
+ }
+ 
+ void RealCommandRunner::Abort() {
++  ClearJobTokens();
+   subprocs_.Clear();
+ }
+ 
+@@ -93,6 +106,7 @@ bool RealCommandRunner::WaitForCommand(Result* result) {
+   return true;
+ }
+ 
+-CommandRunner* CommandRunner::factory(const BuildConfig& config) {
+-  return new RealCommandRunner(config);
++CommandRunner* CommandRunner::factory(const BuildConfig& config,
++                                      Jobserver::Client* jobserver) {
++  return new RealCommandRunner(config, jobserver);
+ }
 
-From 649590b11b1ef1f8c440c1dbb4a866c3e354b4ed Mon Sep 17 00:00:00 2001
+From aae29fba65502ea56d7a96a227f0f13795b3bf17 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 15:00:23 +0200
 Subject: [PATCH 5/6] Add Jobserver::Pool class
@@ -3060,7 +3149,7 @@ index ffdc422005..9f6898db1b 100644
 +}
  #endif  // !_WIN32
 
-From 546976ae614462cb5ce9f9a8ae308a2e7be3371c Mon Sep 17 00:00:00 2001
+From b9df8c5e29555ba236d2fd8c1be2228b69528fc0 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 16:46:46 +0200
 Subject: [PATCH 6/6] Implement jobserver pool in Ninja.
@@ -3095,17 +3184,17 @@ Note that if MAKEFLAGS is set in the environment, Ninja assumes
 that it is already running in the context of another jobserver
 and will not try to create its own pool.
 ---
- doc/manual.asciidoc    |  50 ++++++++++---
+ doc/manual.asciidoc    |  49 +++++++++---
  misc/jobserver_test.py |  59 +++++++++++++++
  src/build.h            |   2 +-
  src/ninja.cc           | 164 +++++++++++++++++++++++++++++++++++------
- 4 files changed, 239 insertions(+), 36 deletions(-)
+ 4 files changed, 238 insertions(+), 36 deletions(-)
 
 diff --git a/doc/manual.asciidoc b/doc/manual.asciidoc
-index 6ccdceb75f..138804c759 100644
+index 12bb0b7c40..a8b0adb67b 100644
 --- a/doc/manual.asciidoc
 +++ b/doc/manual.asciidoc
-@@ -190,30 +190,59 @@ you don't need to pass `-j`.)
+@@ -190,14 +190,42 @@ you don't need to pass `-j`.)
  GNU Jobserver support
  ~~~~~~~~~~~~~~~~~~~~~
  
@@ -3113,14 +3202,16 @@ index 6ccdceb75f..138804c759 100644
 +Since version 1.13., Ninja builds support the
  https://https://www.gnu.org/software/make/manual/html_node/Job-Slots.html[GNU Make jobserver]
 -client protocol. This is useful when Ninja is invoked as part of a larger
--build system controlled by a top-level GNU Make instance, as it allows better
+-build system controlled by a top-level GNU Make instance, or any other
+-jobserver pool implementation, as it allows better coordination between
+-concurrent build tasks.
 +protocol, and implements both client and server mode.
-+
-+Client mode is useful when Ninja is invoked as part of a larger build system
-+controlled by a top-level GNU Make instance, as it allows better
- coordination between concurrent build tasks.
  
 -This feature is automatically enabled under the following conditions:
++Client mode is useful when Ninja is invoked as part of a larger build system
++controlled by a top-level GNU Make instance, or any other jobserver pool
++implementation, as it allows better coordination between concurrent build tasks.
++
 +Server mode is useful when Ninja is the top-level build tool that invokes
 +sub-builds recursively in a similar setup.
 +
@@ -3152,28 +3243,18 @@ index 6ccdceb75f..138804c759 100644
  
  - Dry-run (i.e. `-n` or `--dry-run`) is not enabled.
  
- - `-j1` (no parallelism) is not used on the command line.
--  Note that `-j0` means "infinite" parallelism and does not
-+  Note that `-j0` means "infinite" parallelism and does *not*
-   disable client mode.
- 
- - The `MAKEFLAGS` environment variable is defined and
-   describes a valid jobserver mode using `--jobserver-auth` or
-   even `--jobserver-fds`.
- 
--In this case, Ninja will use the jobserver pool of job slots
-+In this case, Ninja will use the shared pool of job slots
- to control parallelism, instead of its default implementation
- of `-j<count>`.
+@@ -210,8 +238,8 @@ This feature is automatically enabled under the following conditions:
+ In this case, Ninja will use the jobserver pool of job slots to control
+ parallelism, instead of its default implementation of `-j<count>`.
  
 -Note that load-average limitations (i.e. when using `-l<count>`)
 -are still being enforced in this mode.
 +Note that other parallelism limitations, (such as `-l<count>`) are *still*
 +being enforced in this mode however.
  
- Environment variables
- ~~~~~~~~~~~~~~~~~~~~~
-@@ -243,9 +272,8 @@ The default progress status is `"[%f/%t] "` (note the trailing space
+ On Posix, Ninja supports both the `pipe` and `fifo` client modes, based on
+ the content of `MAKEFLAGS`.
+@@ -247,9 +275,8 @@ The default progress status is `"[%f/%t] "` (note the trailing space
  to separate from the build rule). Another example of possible progress status
  could be `"[%u/%r/%f] "`.
  
@@ -3186,11 +3267,11 @@ index 6ccdceb75f..138804c759 100644
  Extra tools
  ~~~~~~~~~~~
 diff --git a/misc/jobserver_test.py b/misc/jobserver_test.py
-index 3bad98abde..788ee0994d 100755
+index b1743a8778..685f6b5b71 100755
 --- a/misc/jobserver_test.py
 +++ b/misc/jobserver_test.py
-@@ -236,6 +236,65 @@ def test_client_passes_MAKEFLAGS(self):
-             prefix_args=[sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--check"]
+@@ -250,6 +250,65 @@ def test_client_passes_MAKEFLAGS(self):
+             prefix_args=[sys.executable, "-S", _JOBSERVER_POOL_SCRIPT]
          )
  
 +    def _run_pool_test(self, mode: str) -> None:
@@ -3256,18 +3337,18 @@ index 3bad98abde..788ee0994d 100755
  if __name__ == "__main__":
      unittest.main()
 diff --git a/src/build.h b/src/build.h
-index 9264b71ae0..c298c0cca4 100644
+index 5d14820096..ab18f51b62 100644
 --- a/src/build.h
 +++ b/src/build.h
-@@ -184,6 +184,7 @@ struct BuildConfig {
+@@ -191,6 +191,7 @@ struct BuildConfig {
    /// means that we do not have any limit.
-   double max_load_average;
+   double max_load_average = -0.0f;
    DepfileParserOptions depfile_parser_options;
 +  Jobserver::Config::Mode jobserver_mode = Jobserver::Config::kModeNone;
  };
  
  /// Builder wraps the build process: starting commands, updating status.
-@@ -196,7 +197,6 @@ struct Builder {
+@@ -203,7 +204,6 @@ struct Builder {
    /// Set Jobserver client instance for this builder.
    void SetJobserverClient(Jobserver::Client* jobserver_client) {
      jobserver_ = jobserver_client;
@@ -3276,7 +3357,7 @@ index 9264b71ae0..c298c0cca4 100644
  
    /// Clean up after interrupted commands by deleting output files.
 diff --git a/src/ninja.cc b/src/ninja.cc
-index 99e080aa91..12f1141c64 100644
+index 4efa3d8db6..64753c7c7b 100644
 --- a/src/ninja.cc
 +++ b/src/ninja.cc
 @@ -219,29 +219,39 @@ struct Tool {
@@ -3407,7 +3488,7 @@ index 99e080aa91..12f1141c64 100644
  /// Rebuild the build manifest, if necessary.
  /// Returns true if the manifest was rebuilt.
  bool NinjaMain::RebuildManifest(const char* input_file, string* err,
-@@ -1509,15 +1577,23 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1514,15 +1582,23 @@ int ReadFlags(int* argc, char*** argv,
                Options* options, BuildConfig* config) {
    DeferGuessParallelism deferGuessParallelism(config);
  
@@ -3432,7 +3513,7 @@ index 99e080aa91..12f1141c64 100644
    int opt;
    while (!options->tool &&
           (opt = getopt_long(*argc, *argv, "d:f:j:k:l:nt:vw:C:h", kLongOptions,
-@@ -1586,6 +1662,12 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1593,6 +1669,12 @@ int ReadFlags(int* argc, char*** argv,
        case OPT_VERSION:
          printf("%s\n", kNinjaVersion);
          return 0;
@@ -3445,7 +3526,7 @@ index 99e080aa91..12f1141c64 100644
        case 'h':
        default:
          deferGuessParallelism.Refresh();
-@@ -1596,6 +1678,22 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1603,6 +1685,22 @@ int ReadFlags(int* argc, char*** argv,
    *argv += optind;
    *argc -= optind;
  
@@ -3468,7 +3549,7 @@ index 99e080aa91..12f1141c64 100644
    return -1;
  }
  
-@@ -1635,6 +1733,24 @@ NORETURN void real_main(int argc, char** argv) {
+@@ -1642,6 +1740,24 @@ NORETURN void real_main(int argc, char** argv) {
      exit((ninja.*options.tool->func)(&options, argc, argv));
    }
  
@@ -3493,3 +3574,4 @@ index 99e080aa91..12f1141c64 100644
    // Limit number of rebuilds, to prevent infinite loops.
    const int kCycleLimit = 100;
    for (int cycle = 1; cycle <= kCycleLimit; ++cycle) {
+

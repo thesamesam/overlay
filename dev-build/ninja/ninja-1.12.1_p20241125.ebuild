@@ -15,7 +15,7 @@ if [[ ${PV} == 9999 ]]; then
 	inherit git-r3
 else
 	if [[ ${PV} == *_p* ]] ; then
-		NINJA_COMMIT="b40052cd6f3d7d801e035cd768b2462c06ff4ffd"
+		NINJA_COMMIT="335e66d643e6ac3c3a5ded14613d91bebfa2cbfb"
 		SRC_URI="https://github.com/ninja-build/ninja/archive/${NINJA_COMMIT}.tar.gz -> ${P}-${NINJA_COMMIT}.gh.tar.gz"
 		S="${WORKDIR}"/${PN}-${NINJA_COMMIT}
 	else

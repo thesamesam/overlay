@@ -1,6 +1,6 @@
 https://github.com/ninja-build/ninja/compare/master...digit-google:ninja:jobserver-pool.patch
 
-From d869a3a0249e8789f37eaf4ae484146943f00fbb Mon Sep 17 00:00:00 2001
+From db4058bbd296f2673a08d5051fafcf2beed8a56c Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Wed, 11 Sep 2024 18:32:23 +0200
 Subject: [PATCH 1/6] Add misc/jobserver_pool.py
@@ -540,7 +540,7 @@ index 0000000000..a49e9baa5e
 +if __name__ == "__main__":
 +    unittest.main()
 
-From 4f06a87c2fb89d364234e01d493792287a65e63e Mon Sep 17 00:00:00 2001
+From f81b4ebbe9046f81552e4f993c5a5eab9ad7cf6a Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 11:13:29 +0200
 Subject: [PATCH 2/6] Add Jobserver::Slot and Jobserver::Config classes
@@ -1325,7 +1325,7 @@ index 0000000000..d80e63b35d
 +  EXPECT_EQ("Invalid file descriptor pair [10,]", error);
 +}
 
-From 244837e729ccc28af7e978a504ec8f073297e079 Mon Sep 17 00:00:00 2001
+From 1c73f9056fcc30be04efa4c4c439cb4d222a74ad Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 13:03:09 +0200
 Subject: [PATCH 3/6] Add Jobserver::Client class
@@ -1978,7 +1978,7 @@ index d80e63b35d..ffdc422005 100644
 +}
 +#endif  // !_WIN32
 
-From 6e1b0386ce103740fe7e14f03ed2eba95414b2f3 Mon Sep 17 00:00:00 2001
+From d18af81202edfa993ba069fd5a971db8438f45c0 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 13:39:47 +0200
 Subject: [PATCH 4/6] Support jobserver client mode automatically.
@@ -2734,7 +2734,7 @@ index 453652f5e5..e7b206509d 100644
 +  return new RealCommandRunner(config, jobserver);
  }
 
-From 8960985fc9ed2199a19a3907e2d1acef2eb3ee94 Mon Sep 17 00:00:00 2001
+From 70a60c1a14d725845316ae91d8ffe9248094ba8b Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 15:00:23 +0200
 Subject: [PATCH 5/6] Add Jobserver::Pool class
@@ -3150,7 +3150,7 @@ index ffdc422005..9f6898db1b 100644
 +}
  #endif  // !_WIN32
 
-From d2d34d66a5ac21c17105842f708d9c09bcd9ed88 Mon Sep 17 00:00:00 2001
+From e66e1249d935bad93cce4c7211ccfedccfbf67fc Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 16:46:46 +0200
 Subject: [PATCH 6/6] Implement jobserver pool in Ninja.

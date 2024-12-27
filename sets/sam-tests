@@ -7,3 +7,4 @@ dev-libs/mimalloc
 net-libs/mbedtls
 dev-libs/protobuf-c
 sys-devel/qbe
+sys-fs/dd-rescue

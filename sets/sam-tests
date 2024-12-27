@@ -6,5 +6,6 @@ dev-libs/libtommath
 dev-libs/mimalloc
 net-libs/mbedtls
 dev-libs/protobuf-c
+games-simulation/openttd
 sys-devel/qbe
 sys-fs/dd-rescue

@@ -1,9 +1,9 @@
 https://github.com/ninja-build/ninja/compare/master...digit-google:ninja:jobserver-pool.patch
 
-From db4058bbd296f2673a08d5051fafcf2beed8a56c Mon Sep 17 00:00:00 2001
+From 6008d716c31332fd70d515f3da6d6884faf7be01 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Wed, 11 Sep 2024 18:32:23 +0200
-Subject: [PATCH 1/6] Add misc/jobserver_pool.py
+Subject: [PATCH 1/7] Add misc/jobserver_pool.py
 
 This implements a GNU jobserver token pool that will be used
 for testing the upcoming jobserver Ninja client implementation.
@@ -540,10 +540,10 @@ index 0000000000..a49e9baa5e
 +if __name__ == "__main__":
 +    unittest.main()
 
-From f81b4ebbe9046f81552e4f993c5a5eab9ad7cf6a Mon Sep 17 00:00:00 2001
+From 2483cb7f8d5c8a2e6167e9eba362aad3219e8f64 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 11:13:29 +0200
-Subject: [PATCH 2/6] Add Jobserver::Slot and Jobserver::Config classes
+Subject: [PATCH 2/7] Add Jobserver::Slot and Jobserver::Config classes
 
 This adds two new classes related to GNU jobserver support
 and related unit-tests:
@@ -560,10 +560,10 @@ variable.
 ---
  CMakeLists.txt        |   2 +
  configure.py          |   2 +
- src/jobserver.cc      | 282 ++++++++++++++++++++++++++++++++++++++++++
- src/jobserver.h       | 189 ++++++++++++++++++++++++++++
- src/jobserver_test.cc | 227 ++++++++++++++++++++++++++++++++++
- 5 files changed, 702 insertions(+)
+ src/jobserver.cc      | 207 ++++++++++++++++++++++++++++++++++++++++++
+ src/jobserver.h       | 167 ++++++++++++++++++++++++++++++++++
+ src/jobserver_test.cc | 167 ++++++++++++++++++++++++++++++++++
+ 5 files changed, 545 insertions(+)
  create mode 100644 src/jobserver.cc
  create mode 100644 src/jobserver.h
  create mode 100644 src/jobserver_test.cc
@@ -589,10 +589,10 @@ index 881dd54ff9..af20370579 100644
      src/lexer_test.cc
      src/manifest_parser_test.cc
 diff --git a/configure.py b/configure.py
-index 21374d2a6b..ebe183df2f 100755
+index 59fc0b8ecf..60a6e05431 100755
 --- a/configure.py
 +++ b/configure.py
-@@ -543,6 +543,7 @@ def has_re2c() -> bool:
+@@ -544,6 +544,7 @@ def has_re2c() -> bool:
               'eval_env',
               'graph',
               'graphviz',
@@ -600,7 +600,7 @@ index 21374d2a6b..ebe183df2f 100755
               'json',
               'line_printer',
               'manifest_parser',
-@@ -643,6 +644,7 @@ def has_re2c() -> bool:
+@@ -644,6 +645,7 @@ def has_re2c() -> bool:
          'elide_middle_test',
          'explanations_test',
          'graph_test',
@@ -610,10 +610,10 @@ index 21374d2a6b..ebe183df2f 100755
          'manifest_parser_test',
 diff --git a/src/jobserver.cc b/src/jobserver.cc
 new file mode 100644
-index 0000000000..1d2912d3a4
+index 0000000000..7c33a6b589
 --- /dev/null
 +++ b/src/jobserver.cc
-@@ -0,0 +1,282 @@
+@@ -0,0 +1,207 @@
 +// Copyright 2024 Google Inc. All Rights Reserved.
 +//
 +// Licensed under the Apache License, Version 2.0 (the "License");
@@ -669,30 +669,6 @@ index 0000000000..1d2912d3a4
 +
 +  return true;
 +}
-+
-+enum SupportedSystem {
-+  kSystemAll = 0,
-+  kSystemPosix,
-+  kSystemWin32,
-+#ifdef _WIN32
-+  kSystemCurrent = kSystemWin32,
-+#else   // !_WIN32
-+  kSystemCurrent = kSystemPosix,
-+#endif  // !_WIN32
-+};
-+
-+static const struct {
-+  const char* mode_str;
-+  Jobserver::Config::Mode mode_value;
-+  SupportedSystem system;
-+} kValidModes[] = {
-+  { "none", Jobserver::Config::kModeNone, kSystemAll },
-+  { "pipe", Jobserver::Config::kModePipe, kSystemPosix },
-+  { "fifo", Jobserver::Config::kModePosixFifo, kSystemPosix },
-+  { "sem", Jobserver::Config::kModeWin32Semaphore, kSystemWin32 },
-+  { "0", Jobserver::Config::kModeNone, kSystemAll },
-+  { "1", Jobserver::Config::kModeDefault, kSystemAll },
-+};
 +
 +}  // namespace
 +
@@ -845,63 +821,12 @@ index 0000000000..1d2912d3a4
 +#endif  // !_WIN32
 +  return true;
 +}
-+
-+// static
-+std::string Jobserver::Config::ModeToString(Jobserver::Config::Mode mode) {
-+  std::string result;
-+  for (const auto& valid : kValidModes) {
-+    if (valid.mode_value == mode) {
-+      result = valid.mode_str;
-+      break;
-+    }
-+  }
-+  return result;
-+}
-+
-+std::pair<bool, Jobserver::Config::Mode> Jobserver::Config::ModeFromString(
-+    const std::string& mode_str) {
-+  std::pair<bool, Jobserver::Config::Mode> result = {
-+    false, Jobserver::Config::kModeNone
-+  };
-+  for (const auto& valid : kValidModes) {
-+    if (mode_str == valid.mode_str) {
-+      result.first = true;
-+      result.second = valid.mode_value;
-+      break;
-+    }
-+  }
-+  return result;
-+}
-+
-+std::string Jobserver::Config::GetValidModesListAsString(
-+    const char* separator) {
-+  std::string result;
-+  for (const auto& valid : kValidModes) {
-+    if (!result.empty())
-+      result += separator;
-+    result += valid.mode_str;
-+  }
-+  return result;
-+}
-+
-+std::string Jobserver::Config::GetValidNativeModesListAsString(
-+    const char* separator) {
-+  std::string result;
-+  for (const auto& valid : kValidModes) {
-+    if (valid.system != kSystemAll && valid.system != kSystemCurrent)
-+      continue;
-+    if (!result.empty())
-+      result += separator;
-+    result += valid.mode_str;
-+  }
-+  return result;
-+}
 diff --git a/src/jobserver.h b/src/jobserver.h
 new file mode 100644
-index 0000000000..791291d9fe
+index 0000000000..15273d84a9
 --- /dev/null
 +++ b/src/jobserver.h
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,167 @@
 +// Copyright 2024 Google Inc. All Rights Reserved.
 +//
 +// Licensed under the Apache License, Version 2.0 (the "License");
@@ -1042,28 +967,6 @@ index 0000000000..791291d9fe
 +#endif  // _WIN32
 +    };
 +
-+    /// Convert a mode value into an equivalent string value.
-+    /// Useful for debugging and error messages.
-+    static std::string ModeToString(Mode mode);
-+
-+    /// Convert a string into the equivalent Mode value.
-+    /// On success, return (true, <mode>), on failure,
-+    /// return (false, kModeNone). NOTE: As a special case,
-+    /// this also accepts "0" for kModeNone. and "1" for kModeDefault
-+    /// which is useful when reading the value from an environment
-+    /// variable.
-+    static std::pair<bool, Mode> ModeFromString(const std::string& str);
-+
-+    /// Return the list of valid modes as a space-separated string.
-+    /// Allow using a custom separator. This includes "0" and "1" as
-+    /// aliases for kModeNone and kModeDefault.
-+    static std::string GetValidModesListAsString(const char* separator = " ");
-+
-+    /// Same as GetValidModesListAsString(), but only returns values
-+    /// valid for the current system.
-+    static std::string GetValidNativeModesListAsString(
-+        const char* separator = " ");
-+
 +    /// Implementation mode for the pool.
 +    Mode mode = kModeNone;
 +
@@ -1093,10 +996,10 @@ index 0000000000..791291d9fe
 +};
 diff --git a/src/jobserver_test.cc b/src/jobserver_test.cc
 new file mode 100644
-index 0000000000..d80e63b35d
+index 0000000000..0fd3b2ff8e
 --- /dev/null
 +++ b/src/jobserver_test.cc
-@@ -0,0 +1,227 @@
+@@ -0,0 +1,167 @@
 +// Copyright 2024 Google Inc. All Rights Reserved.
 +//
 +// Licensed under the Apache License, Version 2.0 (the "License");
@@ -1138,66 +1041,6 @@ index 0000000000..d80e63b35d
 +#endif  // !_WIN32
 +
 +}  // namespace
-+
-+TEST(Jobserver, ModeToString) {
-+  static const struct {
-+    Jobserver::Config::Mode mode;
-+    const char* expected;
-+  } kTestCases[] = {
-+    { Jobserver::Config::kModeNone, "none" },
-+    { Jobserver::Config::kModePipe, "pipe" },
-+    { Jobserver::Config::kModePosixFifo, "fifo" },
-+    { Jobserver::Config::kModeWin32Semaphore, "sem" },
-+  };
-+  for (const auto& test_case : kTestCases) {
-+    EXPECT_EQ(Jobserver::Config::ModeToString(test_case.mode),
-+              test_case.expected)
-+        << test_case.mode;
-+  }
-+}
-+
-+TEST(Jobserver, ModeFromString) {
-+  static const struct {
-+    const char* input;
-+    bool expected_first;
-+    Jobserver::Config::Mode expected_second;
-+  } kSuccessCases[] = {
-+    { "none", true, Jobserver::Config::kModeNone },
-+    { "pipe", true, Jobserver::Config::kModePipe },
-+    { "fifo", true, Jobserver::Config::kModePosixFifo },
-+    { "sem", true, Jobserver::Config::kModeWin32Semaphore },
-+    { "0", true, Jobserver::Config::kModeNone },
-+    { "1", true, Jobserver::Config::kModeDefault },
-+    { "", false, Jobserver::Config::kModeNone },
-+    { "unknown", false, Jobserver::Config::kModeNone },
-+  };
-+  for (const auto& test_case : kSuccessCases) {
-+    auto ret = Jobserver::Config::ModeFromString(test_case.input);
-+    EXPECT_EQ(ret.first, test_case.expected_first) << test_case.input;
-+    EXPECT_EQ(ret.second, test_case.expected_second) << test_case.input;
-+  }
-+}
-+
-+TEST(Jobserver, GetValidModesListAsString) {
-+  EXPECT_EQ("none pipe fifo sem 0 1",
-+            Jobserver::Config::GetValidModesListAsString());
-+  EXPECT_EQ("none, pipe, fifo, sem, 0, 1",
-+            Jobserver::Config::GetValidModesListAsString(", "));
-+}
-+
-+TEST(Jobserver, GetValidNativeModesListAsString) {
-+#ifdef _WIN32
-+  EXPECT_EQ("none sem 0 1",
-+            Jobserver::Config::GetValidNativeModesListAsString());
-+  EXPECT_EQ("none, sem, 0, 1",
-+            Jobserver::Config::GetValidNativeModesListAsString(", "));
-+#else   // !_WIN32
-+  EXPECT_EQ("none pipe fifo 0 1",
-+            Jobserver::Config::GetValidNativeModesListAsString());
-+  EXPECT_EQ("none, pipe, fifo, 0, 1",
-+            Jobserver::Config::GetValidNativeModesListAsString(", "));
-+#endif  // !_WIN32
-+}
 +
 +TEST(Jobserver, SlotTest) {
 +  // Default construction.
@@ -1325,10 +1168,10 @@ index 0000000000..d80e63b35d
 +  EXPECT_EQ("Invalid file descriptor pair [10,]", error);
 +}
 
-From 1c73f9056fcc30be04efa4c4c439cb4d222a74ad Mon Sep 17 00:00:00 2001
+From b43aa706cd1d8076a8eca4e9e7b72dcd4ab3079f Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 13:03:09 +0200
-Subject: [PATCH 3/6] Add Jobserver::Client class
+Subject: [PATCH 3/7] Add Jobserver::Client class
 
 This adds a new interface class for jobserver clients,
 providing a way to acquire and release job slots easily.
@@ -1374,10 +1217,10 @@ index af20370579..f96b5489f6 100644
  		target_sources(libninja PRIVATE src/getopt.c)
  		# Build getopt.c, which can be compiled as either C or C++, as C++
 diff --git a/configure.py b/configure.py
-index ebe183df2f..2920337e4f 100755
+index 60a6e05431..a52fb96c74 100755
 --- a/configure.py
 +++ b/configure.py
-@@ -560,6 +560,7 @@ def has_re2c() -> bool:
+@@ -561,6 +561,7 @@ def has_re2c() -> bool:
  if platform.is_windows():
      for name in ['subprocess-win32',
                   'includes_normalize-win32',
@@ -1385,7 +1228,7 @@ index ebe183df2f..2920337e4f 100755
                   'msvc_helper-win32',
                   'msvc_helper_main-win32']:
          objs += cxx(name, variables=cxxvariables)
-@@ -567,7 +568,9 @@ def has_re2c() -> bool:
+@@ -568,7 +569,9 @@ def has_re2c() -> bool:
          objs += cxx('minidump-win32', variables=cxxvariables)
      objs += cc('getopt')
  else:
@@ -1704,10 +1547,10 @@ index 0000000000..bc11d9af3f
 +  return client;
 +}
 diff --git a/src/jobserver.h b/src/jobserver.h
-index 791291d9fe..8ba7707d4e 100644
+index 15273d84a9..10b51b67bc 100644
 --- a/src/jobserver.h
 +++ b/src/jobserver.h
-@@ -171,6 +171,10 @@ struct Jobserver {
+@@ -149,6 +149,10 @@ struct Jobserver {
      /// extracted from MAKEFLAGS.
      int read_fd = -1;
      int write_fd = -1;
@@ -1718,7 +1561,7 @@ index 791291d9fe..8ba7707d4e 100644
    };
  
    /// Parse the value of a MAKEFLAGS environment variable. On success return
-@@ -186,4 +190,51 @@ struct Jobserver {
+@@ -164,4 +168,51 @@ struct Jobserver {
    /// while --jobserver-auth=NAME only work on Windows.
    static bool ParseNativeMakeFlagsValue(const char* makeflags_env,
                                          Config* config, std::string* error);
@@ -1771,10 +1614,10 @@ index 791291d9fe..8ba7707d4e 100644
 +  };
  };
 diff --git a/src/jobserver_test.cc b/src/jobserver_test.cc
-index d80e63b35d..ffdc422005 100644
+index 0fd3b2ff8e..38422abec8 100644
 --- a/src/jobserver_test.cc
 +++ b/src/jobserver_test.cc
-@@ -175,6 +175,22 @@ TEST(Jobserver, ParseMakeFlagsValue) {
+@@ -115,6 +115,22 @@ TEST(Jobserver, ParseMakeFlagsValue) {
    EXPECT_EQ(Jobserver::Config::kModePosixFifo, config.mode);
    EXPECT_EQ("foo", config.path);
  
@@ -1797,7 +1640,7 @@ index d80e63b35d..ffdc422005 100644
    // Passing an `n` in the first word _after_ a dash works though, i.e.
    // It is not interpreted as GNU Make dry-run flag.
    config = {};
-@@ -225,3 +241,179 @@ TEST(Jobserver, ParseMakeFlagsValue) {
+@@ -165,3 +181,179 @@ TEST(Jobserver, ParseMakeFlagsValue) {
        Jobserver::ParseMakeFlagsValue("--jobserver-fds=10,", &config, &error));
    EXPECT_EQ("Invalid file descriptor pair [10,]", error);
  }
@@ -1978,10 +1821,10 @@ index d80e63b35d..ffdc422005 100644
 +}
 +#endif  // !_WIN32
 
-From d18af81202edfa993ba069fd5a971db8438f45c0 Mon Sep 17 00:00:00 2001
+From 5d790b153bd1d5674e3fa39ad5234653c1205c52 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 13:39:47 +0200
-Subject: [PATCH 4/6] Support jobserver client mode automatically.
+Subject: [PATCH 4/7] Support jobserver client mode automatically.
 
 Detect that the environment variable MAKEFLAGS specifies a
 jobserver pool to use, and automatically use it to control
@@ -1999,47 +1842,39 @@ will still be in effect if used.
   a previous commit, to verify that everything works
   properly.
 ---
- .github/workflows/linux.yml   |   3 +
+ .github/workflows/linux.yml   |   2 +
  doc/manual.asciidoc           |  38 ++++-
- misc/jobserver_test.py        | 255 ++++++++++++++++++++++++++++++++++
+ misc/jobserver_test.py        | 275 ++++++++++++++++++++++++++++++++++
  misc/jobserver_test_helper.py |  42 ++++++
- src/build.cc                  |  17 ++-
- src/build.h                   |  28 ++--
+ src/build.cc                  |  18 ++-
+ src/build.h                   |  27 ++--
  src/graph.h                   |   4 +
- src/ninja.cc                  |  73 +++++++++-
- src/real_command_runner.cc    |  20 ++-
- 9 files changed, 463 insertions(+), 17 deletions(-)
+ src/ninja.cc                  |  74 ++++++++-
+ src/real_command_runner.cc    |  28 +++-
+ 9 files changed, 490 insertions(+), 18 deletions(-)
  create mode 100755 misc/jobserver_test.py
  create mode 100755 misc/jobserver_test_helper.py
 
 diff --git a/.github/workflows/linux.yml b/.github/workflows/linux.yml
-index 07431bf797..a0cffcfe60 100644
+index 34ce30daf6..a53bcd08c2 100644
 --- a/.github/workflows/linux.yml
 +++ b/.github/workflows/linux.yml
 @@ -27,6 +27,7 @@ jobs:
-       run: |
-         ./ninja_test --gtest_color=yes
-         ../../misc/output_test.py
-+        ../../misc/jobserver_test.py
-     - name: Build release ninja
-       run: CLICOLOR_FORCE=1 ninja -f build-Release.ninja
-       working-directory: build
+         run: |
+           ./ninja_test --gtest_color=yes
+           ../../misc/output_test.py
++          ../../misc/jobserver_test.py
+       - name: Build release ninja
+         run: CLICOLOR_FORCE=1 ninja -f build-Release.ninja
+         working-directory: build
 @@ -35,6 +36,7 @@ jobs:
-       run: |
-         ./ninja_test --gtest_color=yes
-         ../../misc/output_test.py
-+        ../../misc/jobserver_test.py
+         run: |
+           ./ninja_test --gtest_color=yes
+           ../../misc/output_test.py
++          ../../misc/jobserver_test.py
  
    build:
      runs-on: [ubuntu-latest]
-@@ -166,6 +168,7 @@ jobs:
-         ./ninja all
-         python3 misc/ninja_syntax_test.py
-         ./misc/output_test.py
-+        ./misc/jobserver_test.py
- 
-   build-aarch64:
-     name: Build Linux ARM64
 diff --git a/doc/manual.asciidoc b/doc/manual.asciidoc
 index 1e9ede9891..1e5ae64b4b 100644
 --- a/doc/manual.asciidoc
@@ -2101,10 +1936,10 @@ index 1e9ede9891..1e5ae64b4b 100644
  
 diff --git a/misc/jobserver_test.py b/misc/jobserver_test.py
 new file mode 100755
-index 0000000000..510c2e0e14
+index 0000000000..4eeca5a041
 --- /dev/null
 +++ b/misc/jobserver_test.py
-@@ -0,0 +1,255 @@
+@@ -0,0 +1,275 @@
 +#!/usr/bin/env python3
 +# Copyright 2024 Google Inc. All Rights Reserved.
 +#
@@ -2284,7 +2119,7 @@ index 0000000000..510c2e0e14
 +        task_count = 4
 +        build_plan = generate_build_plan(task_count)
 +        with BuildDir(build_plan) as b:
-+            # First, run the full 10 tasks with with 10 tokens, this should allow all
++            # First, run the full tasks with with {task_count} tokens, this should allow all
 +            # tasks to run in parallel.
 +            ret = b.ninja_run(
 +                ninja_args=["all"],
@@ -2320,9 +2155,29 @@ index 0000000000..510c2e0e14
 +            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
 +            self.assertEqual(max_overlaps, 1)
 +
-+    @unittest.skipIf(_PLATFORM_IS_WINDOWS, "These test methods do not work on Windows")
-+    def test_jobserver_client_with_posix_pipe(self):
-+        self._run_client_test([sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--pipe"])
++            # On Linux, use taskset to limit the number of available cores to 1
++            # and verify that the jobserver overrides the default Ninja parallelism
++            # and that {task_count} tasks are still spawned in parallel.
++            if platform.system() == "Linux":
++                # First, run without a jobserver, with a single CPU, Ninja will
++                # use a parallelism of 2 in this case (GuessParallelism() in ninja.cc)
++                b.ninja_clean()
++                b.ninja_run(
++                  ["all"],
++                  prefix_args=["taskset", "-c", "0"],
++                )
++                max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++                self.assertEqual(max_overlaps, 2)
++
++                # Now with a jobserver with {task_count} tasks.
++                b.ninja_clean()
++                b.ninja_run(
++                  ["all"],
++                  prefix_args=jobserver_args + [f"--jobs={task_count}"] + ["taskset", "-c", "0"],
++                )
++                max_overlaps = compute_max_overlapped_spans(b.path, task_count)
++                self.assertEqual(max_overlaps, task_count)
++
 +
 +    @unittest.skipIf(_PLATFORM_IS_WINDOWS, "These test methods do not work on Windows")
 +    def test_jobserver_client_with_posix_fifo(self):
@@ -2409,18 +2264,26 @@ index 0000000000..8c238624af
 +if __name__ == "__main__":
 +    sys.exit(main())
 diff --git a/src/build.cc b/src/build.cc
-index d256d940b0..b71b5ac473 100644
+index 9411824f3a..c0de3d5c12 100644
 --- a/src/build.cc
 +++ b/src/build.cc
-@@ -36,6 +36,7 @@
- #include "disk_interface.h"
+@@ -20,7 +20,6 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ 
+-#include <climits>
+ #include <functional>
+ #include <unordered_set>
+ 
+@@ -37,6 +36,7 @@
+ #include "exit_status.h"
  #include "explanations.h"
  #include "graph.h"
 +#include "jobserver.h"
  #include "metrics.h"
  #include "state.h"
  #include "status.h"
-@@ -163,6 +164,15 @@ Edge* Plan::FindWork() {
+@@ -163,6 +163,15 @@ Edge* Plan::FindWork() {
      return NULL;
  
    Edge* work = ready_.top();
@@ -2436,7 +2299,7 @@ index d256d940b0..b71b5ac473 100644
    ready_.pop();
    return work;
  }
-@@ -199,6 +209,10 @@ bool Plan::EdgeFinished(Edge* edge, EdgeResult result, string* err) {
+@@ -199,6 +208,10 @@ bool Plan::EdgeFinished(Edge* edge, EdgeResult result, string* err) {
      edge->pool()->EdgeFinished(*edge);
    edge->pool()->RetrieveReadyEdges(&ready_);
  
@@ -2447,7 +2310,7 @@ index d256d940b0..b71b5ac473 100644
    // The rest of this function only applies to successful commands.
    if (result != kEdgeSucceeded)
      return true;
-@@ -699,7 +713,8 @@ bool Builder::Build(string* err) {
+@@ -699,7 +712,8 @@ ExitStatus Builder::Build(string* err) {
      if (config_.dry_run)
        command_runner_.reset(new DryRunCommandRunner);
      else
@@ -2458,7 +2321,7 @@ index d256d940b0..b71b5ac473 100644
  
    // We are about to start the build process.
 diff --git a/src/build.h b/src/build.h
-index ba39e7728a..5d14820096 100644
+index 04e007627f..cce6284e23 100644
 --- a/src/build.h
 +++ b/src/build.h
 @@ -24,6 +24,7 @@
@@ -2509,20 +2372,19 @@ index ba39e7728a..5d14820096 100644
    DepfileParserOptions depfile_parser_options;
  };
  
-@@ -197,6 +200,12 @@ struct Builder {
+@@ -197,6 +200,11 @@ struct Builder {
            int64_t start_time_millis);
    ~Builder();
  
 +  /// Set Jobserver client instance for this builder.
 +  void SetJobserverClient(Jobserver::Client* jobserver_client) {
 +    jobserver_ = jobserver_client;
-+    ;
 +  }
 +
    /// Clean up after interrupted commands by deleting output files.
    void Cleanup();
  
-@@ -230,6 +239,7 @@ struct Builder {
+@@ -230,6 +238,7 @@ struct Builder {
    State* state_;
    const BuildConfig& config_;
    Plan plan_;
@@ -2553,7 +2415,7 @@ index 806260e5d7..d98f1f9440 100644
    // as per .ninja_log, if known? Defaults to -1 if unknown.
    int64_t prev_elapsed_time_millis = -1;
 diff --git a/src/ninja.cc b/src/ninja.cc
-index bf8c3f60c0..a1e6f2ab1f 100644
+index 1e934ea678..ff1d25871c 100644
 --- a/src/ninja.cc
 +++ b/src/ninja.cc
 @@ -38,14 +38,15 @@
@@ -2564,9 +2426,9 @@ index bf8c3f60c0..a1e6f2ab1f 100644
  #include "clean.h"
  #include "command_collector.h"
  #include "debug_flags.h"
- #include "depfile_parser.h"
 +#include "deps_log.h"
  #include "disk_interface.h"
+ #include "exit_status.h"
  #include "graph.h"
  #include "graphviz.h"
 +#include "jobserver.h"
@@ -2583,8 +2445,8 @@ index bf8c3f60c0..a1e6f2ab1f 100644
 +
    /// Build the targets listed on the command line.
    /// @return an exit code.
-   int RunBuild(int argc, char** argv, Status* status);
-@@ -1537,9 +1542,60 @@ bool NinjaMain::EnsureBuildDirExists() {
+   ExitStatus RunBuild(int argc, char** argv, Status* status);
+@@ -1541,9 +1546,60 @@ bool NinjaMain::EnsureBuildDirExists() {
    return true;
  }
  
@@ -2639,23 +2501,26 @@ index bf8c3f60c0..a1e6f2ab1f 100644
 +  return result;
 +}
 +
- int NinjaMain::RunBuild(int argc, char** argv, Status* status) {
+ ExitStatus NinjaMain::RunBuild(int argc, char** argv, Status* status) {
 -  string err;
 -  vector<Node*> targets;
 +  std::string err;
 +  std::vector<Node*> targets;
    if (!CollectTargetsFromArgs(argc, argv, &targets, &err)) {
      status->Error("%s", err.c_str());
-     return 1;
-@@ -1549,6 +1605,15 @@ int NinjaMain::RunBuild(int argc, char** argv, Status* status) {
+     return ExitFailure;
+@@ -1551,8 +1607,18 @@ ExitStatus NinjaMain::RunBuild(int argc, char** argv, Status* status) {
  
-   Builder builder(&state_, config_, &build_log_, &deps_log_, &disk_interface_,
-                   status, start_time_millis_);
-+
+   disk_interface_.AllowStatCache(g_experimental_statcache);
+ 
 +  // Detect jobserver context and inject Jobserver::Client into the builder
 +  // if needed.
 +  std::unique_ptr<Jobserver::Client> jobserver_client =
 +      SetupJobserverClient(status);
++
+   Builder builder(&state_, config_, &build_log_, &deps_log_, &disk_interface_,
+                   status, start_time_millis_);
++
 +  if (jobserver_client.get()) {
 +    builder.SetJobserverClient(jobserver_client.get());
 +  }
@@ -2663,7 +2528,7 @@ index bf8c3f60c0..a1e6f2ab1f 100644
    for (size_t i = 0; i < targets.size(); ++i) {
      if (!builder.AddTarget(targets[i], &err)) {
        if (!err.empty()) {
-@@ -1658,6 +1723,7 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1662,6 +1728,7 @@ int ReadFlags(int* argc, char*** argv,
          // We want to run N jobs in parallel. For N = 0, INT_MAX
          // is close enough to infinite for most sane builds.
          config->parallelism = value > 0 ? value : INT_MAX;
@@ -2671,7 +2536,7 @@ index bf8c3f60c0..a1e6f2ab1f 100644
          deferGuessParallelism.needGuess = false;
          break;
        }
-@@ -1683,6 +1749,7 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1687,6 +1754,7 @@ int ReadFlags(int* argc, char*** argv,
        }
        case 'n':
          config->dry_run = true;
@@ -2680,14 +2545,15 @@ index bf8c3f60c0..a1e6f2ab1f 100644
        case 't':
          options->tool = ChooseTool(optarg);
 diff --git a/src/real_command_runner.cc b/src/real_command_runner.cc
-index 453652f5e5..e7b206509d 100644
+index 453652f5e5..4a01276c0f 100644
 --- a/src/real_command_runner.cc
 +++ b/src/real_command_runner.cc
-@@ -13,18 +13,30 @@
+@@ -13,18 +13,31 @@
  // limitations under the License.
  
  #include "build.h"
 +#include "jobserver.h"
++#include "limits.h"
  #include "subprocess.h"
  
  struct RealCommandRunner : public CommandRunner {
@@ -2715,7 +2581,7 @@ index 453652f5e5..e7b206509d 100644
    std::map<const Subprocess*, Edge*> subproc_to_edge_;
  };
  
-@@ -38,6 +50,7 @@ std::vector<Edge*> RealCommandRunner::GetActiveEdges() {
+@@ -38,6 +51,7 @@ std::vector<Edge*> RealCommandRunner::GetActiveEdges() {
  }
  
  void RealCommandRunner::Abort() {
@@ -2723,7 +2589,21 @@ index 453652f5e5..e7b206509d 100644
    subprocs_.Clear();
  }
  
-@@ -93,6 +106,7 @@ bool RealCommandRunner::WaitForCommand(Result* result) {
+@@ -47,6 +61,13 @@ size_t RealCommandRunner::CanRunMore() const {
+ 
+   int64_t capacity = config_.parallelism - subproc_number;
+ 
++  if (jobserver_) {
++    // When a jobserver token pool is used, make the
++    // capacity infinite, and let FindWork() limit jobs
++    // through token acquisitions instead.
++    capacity = INT_MAX;
++  }
++
+   if (config_.max_load_average > 0.0f) {
+     int load_capacity = config_.max_load_average - GetLoadAverage();
+     if (load_capacity < capacity)
+@@ -93,6 +114,7 @@ bool RealCommandRunner::WaitForCommand(Result* result) {
    return true;
  }
  
@@ -2734,10 +2614,220 @@ index 453652f5e5..e7b206509d 100644
 +  return new RealCommandRunner(config, jobserver);
  }
 
-From 70a60c1a14d725845316ae91d8ffe9248094ba8b Mon Sep 17 00:00:00 2001
+From 2ea7dd98d6f836b4af305aa5e584412f92b76c13 Mon Sep 17 00:00:00 2001
+From: David 'Digit' Turner <digit+github@google.com>
+Date: Mon, 13 Jan 2025 10:49:51 +0100
+Subject: [PATCH 5/7] Add Jobserver::ModeToString() et al.
+
+These functions are useful to parse and print strings
+decribing the various jobserver modes supported by Ninja,
+and will be used by its pool server implementation in
+future commits.
+---
+ src/jobserver.cc      | 75 +++++++++++++++++++++++++++++++++++++++++++
+ src/jobserver.h       | 22 +++++++++++++
+ src/jobserver_test.cc | 60 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 157 insertions(+)
+
+diff --git a/src/jobserver.cc b/src/jobserver.cc
+index 7c33a6b589..1d2912d3a4 100644
+--- a/src/jobserver.cc
++++ b/src/jobserver.cc
+@@ -54,6 +54,30 @@ bool GetFileDescriptorPair(StringPiece input, Jobserver::Config* config) {
+   return true;
+ }
+ 
++enum SupportedSystem {
++  kSystemAll = 0,
++  kSystemPosix,
++  kSystemWin32,
++#ifdef _WIN32
++  kSystemCurrent = kSystemWin32,
++#else   // !_WIN32
++  kSystemCurrent = kSystemPosix,
++#endif  // !_WIN32
++};
++
++static const struct {
++  const char* mode_str;
++  Jobserver::Config::Mode mode_value;
++  SupportedSystem system;
++} kValidModes[] = {
++  { "none", Jobserver::Config::kModeNone, kSystemAll },
++  { "pipe", Jobserver::Config::kModePipe, kSystemPosix },
++  { "fifo", Jobserver::Config::kModePosixFifo, kSystemPosix },
++  { "sem", Jobserver::Config::kModeWin32Semaphore, kSystemWin32 },
++  { "0", Jobserver::Config::kModeNone, kSystemAll },
++  { "1", Jobserver::Config::kModeDefault, kSystemAll },
++};
++
+ }  // namespace
+ 
+ // static
+@@ -205,3 +229,54 @@ bool Jobserver::ParseNativeMakeFlagsValue(const char* makeflags_env,
+ #endif  // !_WIN32
+   return true;
+ }
++
++// static
++std::string Jobserver::Config::ModeToString(Jobserver::Config::Mode mode) {
++  std::string result;
++  for (const auto& valid : kValidModes) {
++    if (valid.mode_value == mode) {
++      result = valid.mode_str;
++      break;
++    }
++  }
++  return result;
++}
++
++std::pair<bool, Jobserver::Config::Mode> Jobserver::Config::ModeFromString(
++    const std::string& mode_str) {
++  std::pair<bool, Jobserver::Config::Mode> result = {
++    false, Jobserver::Config::kModeNone
++  };
++  for (const auto& valid : kValidModes) {
++    if (mode_str == valid.mode_str) {
++      result.first = true;
++      result.second = valid.mode_value;
++      break;
++    }
++  }
++  return result;
++}
++
++std::string Jobserver::Config::GetValidModesListAsString(
++    const char* separator) {
++  std::string result;
++  for (const auto& valid : kValidModes) {
++    if (!result.empty())
++      result += separator;
++    result += valid.mode_str;
++  }
++  return result;
++}
++
++std::string Jobserver::Config::GetValidNativeModesListAsString(
++    const char* separator) {
++  std::string result;
++  for (const auto& valid : kValidModes) {
++    if (valid.system != kSystemAll && valid.system != kSystemCurrent)
++      continue;
++    if (!result.empty())
++      result += separator;
++    result += valid.mode_str;
++  }
++  return result;
++}
+diff --git a/src/jobserver.h b/src/jobserver.h
+index 10b51b67bc..8ba7707d4e 100644
+--- a/src/jobserver.h
++++ b/src/jobserver.h
+@@ -138,6 +138,28 @@ struct Jobserver {
+ #endif  // _WIN32
+     };
+ 
++    /// Convert a mode value into an equivalent string value.
++    /// Useful for debugging and error messages.
++    static std::string ModeToString(Mode mode);
++
++    /// Convert a string into the equivalent Mode value.
++    /// On success, return (true, <mode>), on failure,
++    /// return (false, kModeNone). NOTE: As a special case,
++    /// this also accepts "0" for kModeNone. and "1" for kModeDefault
++    /// which is useful when reading the value from an environment
++    /// variable.
++    static std::pair<bool, Mode> ModeFromString(const std::string& str);
++
++    /// Return the list of valid modes as a space-separated string.
++    /// Allow using a custom separator. This includes "0" and "1" as
++    /// aliases for kModeNone and kModeDefault.
++    static std::string GetValidModesListAsString(const char* separator = " ");
++
++    /// Same as GetValidModesListAsString(), but only returns values
++    /// valid for the current system.
++    static std::string GetValidNativeModesListAsString(
++        const char* separator = " ");
++
+     /// Implementation mode for the pool.
+     Mode mode = kModeNone;
+ 
+diff --git a/src/jobserver_test.cc b/src/jobserver_test.cc
+index 38422abec8..ffdc422005 100644
+--- a/src/jobserver_test.cc
++++ b/src/jobserver_test.cc
+@@ -40,6 +40,66 @@ struct ScopedTestFd {
+ 
+ }  // namespace
+ 
++TEST(Jobserver, ModeToString) {
++  static const struct {
++    Jobserver::Config::Mode mode;
++    const char* expected;
++  } kTestCases[] = {
++    { Jobserver::Config::kModeNone, "none" },
++    { Jobserver::Config::kModePipe, "pipe" },
++    { Jobserver::Config::kModePosixFifo, "fifo" },
++    { Jobserver::Config::kModeWin32Semaphore, "sem" },
++  };
++  for (const auto& test_case : kTestCases) {
++    EXPECT_EQ(Jobserver::Config::ModeToString(test_case.mode),
++              test_case.expected)
++        << test_case.mode;
++  }
++}
++
++TEST(Jobserver, ModeFromString) {
++  static const struct {
++    const char* input;
++    bool expected_first;
++    Jobserver::Config::Mode expected_second;
++  } kSuccessCases[] = {
++    { "none", true, Jobserver::Config::kModeNone },
++    { "pipe", true, Jobserver::Config::kModePipe },
++    { "fifo", true, Jobserver::Config::kModePosixFifo },
++    { "sem", true, Jobserver::Config::kModeWin32Semaphore },
++    { "0", true, Jobserver::Config::kModeNone },
++    { "1", true, Jobserver::Config::kModeDefault },
++    { "", false, Jobserver::Config::kModeNone },
++    { "unknown", false, Jobserver::Config::kModeNone },
++  };
++  for (const auto& test_case : kSuccessCases) {
++    auto ret = Jobserver::Config::ModeFromString(test_case.input);
++    EXPECT_EQ(ret.first, test_case.expected_first) << test_case.input;
++    EXPECT_EQ(ret.second, test_case.expected_second) << test_case.input;
++  }
++}
++
++TEST(Jobserver, GetValidModesListAsString) {
++  EXPECT_EQ("none pipe fifo sem 0 1",
++            Jobserver::Config::GetValidModesListAsString());
++  EXPECT_EQ("none, pipe, fifo, sem, 0, 1",
++            Jobserver::Config::GetValidModesListAsString(", "));
++}
++
++TEST(Jobserver, GetValidNativeModesListAsString) {
++#ifdef _WIN32
++  EXPECT_EQ("none sem 0 1",
++            Jobserver::Config::GetValidNativeModesListAsString());
++  EXPECT_EQ("none, sem, 0, 1",
++            Jobserver::Config::GetValidNativeModesListAsString(", "));
++#else   // !_WIN32
++  EXPECT_EQ("none pipe fifo 0 1",
++            Jobserver::Config::GetValidNativeModesListAsString());
++  EXPECT_EQ("none, pipe, fifo, 0, 1",
++            Jobserver::Config::GetValidNativeModesListAsString(", "));
++#endif  // !_WIN32
++}
++
+ TEST(Jobserver, SlotTest) {
+   // Default construction.
+   Jobserver::Slot slot;
+
+From f9254e9a0ba2d6043f947278bf929c91443596fd Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 15:00:23 +0200
-Subject: [PATCH 5/6] Add Jobserver::Pool class
+Subject: [PATCH 6/7] Add Jobserver::Pool class
 
 Add a class that implements a Jobserver pool of job slots.
 This will later be used by Ninja to because a jobserver pool
@@ -3150,10 +3240,10 @@ index ffdc422005..9f6898db1b 100644
 +}
  #endif  // !_WIN32
 
-From e66e1249d935bad93cce4c7211ccfedccfbf67fc Mon Sep 17 00:00:00 2001
+From 49ca5c17b1b9731b5e6558df04890bbc47956977 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Fri, 13 Sep 2024 16:46:46 +0200
-Subject: [PATCH 6/6] Implement jobserver pool in Ninja.
+Subject: [PATCH 7/7] Implement jobserver pool in Ninja.
 
 This allows Ninja to implement a jobserver-style pool of job slots,
 to better coordinate parallel jobs between spawned processes which
@@ -3187,9 +3277,9 @@ and will not try to create its own pool.
 ---
  doc/manual.asciidoc    |  49 +++++++++---
  misc/jobserver_test.py |  59 +++++++++++++++
- src/build.h            |   2 +-
+ src/build.h            |   1 +
  src/ninja.cc           | 164 +++++++++++++++++++++++++++++++++++------
- 4 files changed, 238 insertions(+), 36 deletions(-)
+ 4 files changed, 238 insertions(+), 35 deletions(-)
 
 diff --git a/doc/manual.asciidoc b/doc/manual.asciidoc
 index 1e5ae64b4b..b35eee2eaf 100644
@@ -3268,10 +3358,10 @@ index 1e5ae64b4b..b35eee2eaf 100644
  Extra tools
  ~~~~~~~~~~~
 diff --git a/misc/jobserver_test.py b/misc/jobserver_test.py
-index 510c2e0e14..d9d792a8fc 100755
+index 4eeca5a041..5c70005d54 100755
 --- a/misc/jobserver_test.py
 +++ b/misc/jobserver_test.py
-@@ -250,6 +250,65 @@ def test_client_passes_MAKEFLAGS(self):
+@@ -270,6 +270,65 @@ def test_client_passes_MAKEFLAGS(self):
              prefix_args=[sys.executable, "-S", _JOBSERVER_POOL_SCRIPT]
          )
  
@@ -3338,7 +3428,7 @@ index 510c2e0e14..d9d792a8fc 100755
  if __name__ == "__main__":
      unittest.main()
 diff --git a/src/build.h b/src/build.h
-index 5d14820096..ab18f51b62 100644
+index cce6284e23..d0d90a30e5 100644
 --- a/src/build.h
 +++ b/src/build.h
 @@ -191,6 +191,7 @@ struct BuildConfig {
@@ -3349,16 +3439,8 @@ index 5d14820096..ab18f51b62 100644
  };
  
  /// Builder wraps the build process: starting commands, updating status.
-@@ -203,7 +204,6 @@ struct Builder {
-   /// Set Jobserver client instance for this builder.
-   void SetJobserverClient(Jobserver::Client* jobserver_client) {
-     jobserver_ = jobserver_client;
--    ;
-   }
- 
-   /// Clean up after interrupted commands by deleting output files.
 diff --git a/src/ninja.cc b/src/ninja.cc
-index a1e6f2ab1f..6705122e1c 100644
+index ff1d25871c..9d96ea1d24 100644
 --- a/src/ninja.cc
 +++ b/src/ninja.cc
 @@ -225,29 +225,39 @@ struct Tool {
@@ -3489,7 +3571,7 @@ index a1e6f2ab1f..6705122e1c 100644
  /// Rebuild the build manifest, if necessary.
  /// Returns true if the manifest was rebuilt.
  bool NinjaMain::RebuildManifest(const char* input_file, string* err,
-@@ -1693,15 +1761,23 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1698,15 +1766,23 @@ int ReadFlags(int* argc, char*** argv,
                Options* options, BuildConfig* config) {
    DeferGuessParallelism deferGuessParallelism(config);
  
@@ -3514,7 +3596,7 @@ index a1e6f2ab1f..6705122e1c 100644
    int opt;
    while (!options->tool &&
           (opt = getopt_long(*argc, *argv, "d:f:j:k:l:nt:vw:C:h", kLongOptions,
-@@ -1772,6 +1848,12 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1777,6 +1853,12 @@ int ReadFlags(int* argc, char*** argv,
        case OPT_VERSION:
          printf("%s\n", kNinjaVersion);
          return 0;
@@ -3527,7 +3609,7 @@ index a1e6f2ab1f..6705122e1c 100644
        case 'h':
        default:
          deferGuessParallelism.Refresh();
-@@ -1782,6 +1864,22 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1787,6 +1869,22 @@ int ReadFlags(int* argc, char*** argv,
    *argv += optind;
    *argc -= optind;
  
@@ -3550,7 +3632,7 @@ index a1e6f2ab1f..6705122e1c 100644
    return -1;
  }
  
-@@ -1821,6 +1919,24 @@ NORETURN void real_main(int argc, char** argv) {
+@@ -1826,6 +1924,24 @@ NORETURN void real_main(int argc, char** argv) {
      exit((ninja.*options.tool->func)(&options, argc, argv));
    }
  

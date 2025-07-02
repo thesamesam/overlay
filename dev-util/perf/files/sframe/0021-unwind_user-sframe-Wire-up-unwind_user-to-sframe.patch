@@ -1,0 +1,111 @@
+From 6a0d4be3c7d94b765a852487c2d977e4359d54b8 Mon Sep 17 00:00:00 2001
+Message-ID: <6a0d4be3c7d94b765a852487c2d977e4359d54b8.1751425744.git.sam@gentoo.org>
+In-Reply-To: <53c7380a6e70192a830e502febd067db70461be7.1751425744.git.sam@gentoo.org>
+References: <53c7380a6e70192a830e502febd067db70461be7.1751425744.git.sam@gentoo.org>
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Tue, 1 Jul 2025 14:49:45 -0400
+Subject: [PATCH 21/39] unwind_user/sframe: Wire up unwind_user to sframe
+
+Now that the sframe infrastructure is fully in place, make it work by
+hooking it up to the unwind_user interface.
+
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ arch/Kconfig                      |  1 +
+ include/linux/unwind_user_types.h |  1 +
+ kernel/unwind/user.c              | 25 ++++++++++++++++++++++---
+ 3 files changed, 24 insertions(+), 3 deletions(-)
+
+diff --git a/arch/Kconfig b/arch/Kconfig
+index c54d35e2f860..0c6056ef13de 100644
+--- a/arch/Kconfig
++++ b/arch/Kconfig
+@@ -448,6 +448,7 @@ config HAVE_UNWIND_USER_COMPAT_FP
+ 
+ config HAVE_UNWIND_USER_SFRAME
+ 	bool
++	select UNWIND_USER
+ 
+ config HAVE_PERF_REGS
+ 	bool
+diff --git a/include/linux/unwind_user_types.h b/include/linux/unwind_user_types.h
+index 0b6563951ca4..4d50476e950e 100644
+--- a/include/linux/unwind_user_types.h
++++ b/include/linux/unwind_user_types.h
+@@ -13,6 +13,7 @@ enum unwind_user_type {
+ 	UNWIND_USER_TYPE_NONE,
+ 	UNWIND_USER_TYPE_FP,
+ 	UNWIND_USER_TYPE_COMPAT_FP,
++	UNWIND_USER_TYPE_SFRAME,
+ };
+ 
+ struct unwind_stacktrace {
+diff --git a/kernel/unwind/user.c b/kernel/unwind/user.c
+index 2bb7995c3f23..139ca9740875 100644
+--- a/kernel/unwind/user.c
++++ b/kernel/unwind/user.c
+@@ -7,6 +7,7 @@
+ #include <linux/sched/task_stack.h>
+ #include <linux/unwind_user.h>
+ #include <linux/uaccess.h>
++#include <linux/sframe.h>
+ 
+ static struct unwind_user_frame fp_frame = {
+ 	ARCH_INIT_USER_FP_FRAME
+@@ -28,6 +29,12 @@ static inline bool compat_fp_state(struct unwind_user_state *state)
+ 	       state->type == UNWIND_USER_TYPE_COMPAT_FP;
+ }
+ 
++static inline bool sframe_state(struct unwind_user_state *state)
++{
++	return IS_ENABLED(CONFIG_HAVE_UNWIND_USER_SFRAME) &&
++	       state->type == UNWIND_USER_TYPE_SFRAME;
++}
++
+ #define unwind_get_user_long(to, from, state)				\
+ ({									\
+ 	int __ret;							\
+@@ -41,17 +48,27 @@ static inline bool compat_fp_state(struct unwind_user_state *state)
+ int unwind_user_next(struct unwind_user_state *state)
+ {
+ 	struct unwind_user_frame *frame;
++	struct unwind_user_frame _frame;
+ 	unsigned long cfa = 0, fp, ra = 0;
+ 
+ 	if (state->done)
+ 		return -EINVAL;
+ 
+-	if (compat_fp_state(state))
++	if (compat_fp_state(state)) {
+ 		frame = &compat_fp_frame;
+-	else if (fp_state(state))
++	} else if (sframe_state(state)) {
++		/* sframe expects the frame to be local storage */
++		frame = &_frame;
++		if (sframe_find(state->ip, frame)) {
++			if (!IS_ENABLED(CONFIG_HAVE_UNWIND_USER_FP))
++				goto done;
++			frame = &fp_frame;
++		}
++	} else if (fp_state(state)) {
+ 		frame = &fp_frame;
+-	else
++	} else {
+ 		goto done;
++	}
+ 
+ 	/* Get the Canonical Frame Address (CFA) */
+ 	cfa = (frame->use_fp ? state->fp : state->sp) + frame->cfa_off;
+@@ -94,6 +111,8 @@ int unwind_user_start(struct unwind_user_state *state)
+ 
+ 	if (IS_ENABLED(CONFIG_HAVE_UNWIND_USER_COMPAT_FP) && in_compat_mode(regs))
+ 		state->type = UNWIND_USER_TYPE_COMPAT_FP;
++	else if (current_has_sframe())
++		state->type = UNWIND_USER_TYPE_SFRAME;
+ 	else if (IS_ENABLED(CONFIG_HAVE_UNWIND_USER_FP))
+ 		state->type = UNWIND_USER_TYPE_FP;
+ 	else
+-- 
+2.50.0
+

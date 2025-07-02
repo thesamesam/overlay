@@ -1,0 +1,33 @@
+From 8b431eb4bc8bcf2b219276e7380fabb48a946a73 Mon Sep 17 00:00:00 2001
+Message-ID: <8b431eb4bc8bcf2b219276e7380fabb48a946a73.1751425744.git.sam@gentoo.org>
+In-Reply-To: <53c7380a6e70192a830e502febd067db70461be7.1751425744.git.sam@gentoo.org>
+References: <53c7380a6e70192a830e502febd067db70461be7.1751425744.git.sam@gentoo.org>
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Tue, 1 Jul 2025 14:04:15 -0400
+Subject: [PATCH 33/39] perf: Skip user unwind if the task is a kernel thread
+
+If the task is not a user thread, there's no user stack to unwind.
+
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ kernel/events/core.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/events/core.c b/kernel/events/core.c
+index 2c524fe4bd19..43d76ed882da 100644
+--- a/kernel/events/core.c
++++ b/kernel/events/core.c
+@@ -8166,7 +8166,8 @@ struct perf_callchain_entry *
+ perf_callchain(struct perf_event *event, struct pt_regs *regs)
+ {
+ 	bool kernel = !event->attr.exclude_callchain_kernel;
+-	bool user   = !event->attr.exclude_callchain_user;
++	bool user   = !event->attr.exclude_callchain_user &&
++		!(current->flags & (PF_KTHREAD | PF_USER_WORKER));
+ 	/* Disallow cross-task user callchains. */
+ 	bool crosstask = event->ctx->task && event->ctx->task != current;
+ 	const u32 max_stack = event->attr.sample_max_stack;
+-- 
+2.50.0
+

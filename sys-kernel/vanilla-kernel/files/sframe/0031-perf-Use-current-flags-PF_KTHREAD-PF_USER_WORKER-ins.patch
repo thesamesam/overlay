@@ -1,0 +1,66 @@
+From 334fe0a3d2f95e3045f5e9339edaae9940187915 Mon Sep 17 00:00:00 2001
+Message-ID: <334fe0a3d2f95e3045f5e9339edaae9940187915.1751424804.git.sam@gentoo.org>
+In-Reply-To: <53c7380a6e70192a830e502febd067db70461be7.1751424803.git.sam@gentoo.org>
+References: <53c7380a6e70192a830e502febd067db70461be7.1751424803.git.sam@gentoo.org>
+From: Steven Rostedt <rostedt@goodmis.org>
+Date: Tue, 1 Jul 2025 14:04:13 -0400
+Subject: [PATCH 31/39] perf: Use current->flags & PF_KTHREAD|PF_USER_WORKER
+ instead of current->mm == NULL
+
+To determine if a task is a kernel thread or not, it is more reliable to
+use (current->flags & (PF_KTHREAD|PF_USER_WORKERi)) than to rely on
+current->mm being NULL.  That is because some kernel tasks (io_uring
+helpers) may have a mm field.
+
+Link: https://lore.kernel.org/linux-trace-kernel/20250424163607.GE18306@noisy.programming.kicks-ass.net/
+Link: https://lore.kernel.org/all/20250624130744.602c5b5f@batman.local.home/
+
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ kernel/events/callchain.c | 6 +++---
+ kernel/events/core.c      | 4 ++--
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/kernel/events/callchain.c b/kernel/events/callchain.c
+index cd0e3fc7ed05..5982d18f169b 100644
+--- a/kernel/events/callchain.c
++++ b/kernel/events/callchain.c
+@@ -246,10 +246,10 @@ get_perf_callchain(struct pt_regs *regs, bool kernel, bool user,
+ 
+ 	if (user && !crosstask) {
+ 		if (!user_mode(regs)) {
+-			if  (current->mm)
+-				regs = task_pt_regs(current);
+-			else
++			if (current->flags & (PF_KTHREAD | PF_USER_WORKER))
+ 				regs = NULL;
++			else
++				regs = task_pt_regs(current);
+ 		}
+ 
+ 		if (regs) {
+diff --git a/kernel/events/core.c b/kernel/events/core.c
+index f2f7cff826e0..2c524fe4bd19 100644
+--- a/kernel/events/core.c
++++ b/kernel/events/core.c
+@@ -7414,7 +7414,7 @@ static void perf_sample_regs_user(struct perf_regs *regs_user,
+ 	if (user_mode(regs)) {
+ 		regs_user->abi = perf_reg_abi(current);
+ 		regs_user->regs = regs;
+-	} else if (!(current->flags & PF_KTHREAD)) {
++	} else if (!(current->flags & (PF_KTHREAD | PF_USER_WORKER))) {
+ 		perf_get_regs_user(regs_user, regs);
+ 	} else {
+ 		regs_user->abi = PERF_SAMPLE_REGS_ABI_NONE;
+@@ -8054,7 +8054,7 @@ static u64 perf_virt_to_phys(u64 virt)
+ 		 * Try IRQ-safe get_user_page_fast_only first.
+ 		 * If failed, leave phys_addr as 0.
+ 		 */
+-		if (current->mm != NULL) {
++		if (!(current->flags & PF_KTHREAD)) {
+ 			struct page *p;
+ 
+ 			pagefault_disable();
+-- 
+2.50.0
+

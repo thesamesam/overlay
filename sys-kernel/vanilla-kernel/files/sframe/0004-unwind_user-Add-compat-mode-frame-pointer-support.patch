@@ -1,0 +1,183 @@
+From 1d427d421b383cdd9049e763d1d5caacca073c72 Mon Sep 17 00:00:00 2001
+Message-ID: <1d427d421b383cdd9049e763d1d5caacca073c72.1751424803.git.sam@gentoo.org>
+In-Reply-To: <53c7380a6e70192a830e502febd067db70461be7.1751424803.git.sam@gentoo.org>
+References: <53c7380a6e70192a830e502febd067db70461be7.1751424803.git.sam@gentoo.org>
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Mon, 30 Jun 2025 20:53:24 -0400
+Subject: [PATCH 04/39] unwind_user: Add compat mode frame pointer support
+
+Add optional support for user space compat mode frame pointer unwinding.
+If supported, the arch needs to enable CONFIG_HAVE_UNWIND_USER_COMPAT_FP
+and define ARCH_INIT_USER_COMPAT_FP_FRAME.
+
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+Co-developed-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ arch/Kconfig                            |  4 ++++
+ include/asm-generic/Kbuild              |  1 +
+ include/asm-generic/unwind_user_types.h |  5 ++++
+ include/linux/unwind_user.h             |  5 ++++
+ include/linux/unwind_user_types.h       |  7 ++++++
+ kernel/unwind/user.c                    | 32 +++++++++++++++++++++----
+ 6 files changed, 50 insertions(+), 4 deletions(-)
+ create mode 100644 include/asm-generic/unwind_user_types.h
+
+diff --git a/arch/Kconfig b/arch/Kconfig
+index 8e3fd723bd74..2c41d3072910 100644
+--- a/arch/Kconfig
++++ b/arch/Kconfig
+@@ -442,6 +442,10 @@ config HAVE_UNWIND_USER_FP
+ 	bool
+ 	select UNWIND_USER
+ 
++config HAVE_UNWIND_USER_COMPAT_FP
++	bool
++	depends on HAVE_UNWIND_USER_FP
++
+ config HAVE_PERF_REGS
+ 	bool
+ 	help
+diff --git a/include/asm-generic/Kbuild b/include/asm-generic/Kbuild
+index 295c94a3ccc1..b797a2434396 100644
+--- a/include/asm-generic/Kbuild
++++ b/include/asm-generic/Kbuild
+@@ -60,6 +60,7 @@ mandatory-y += topology.h
+ mandatory-y += trace_clock.h
+ mandatory-y += uaccess.h
+ mandatory-y += unwind_user.h
++mandatory-y += unwind_user_types.h
+ mandatory-y += vermagic.h
+ mandatory-y += vga.h
+ mandatory-y += video.h
+diff --git a/include/asm-generic/unwind_user_types.h b/include/asm-generic/unwind_user_types.h
+new file mode 100644
+index 000000000000..f568b82e52cd
+--- /dev/null
++++ b/include/asm-generic/unwind_user_types.h
+@@ -0,0 +1,5 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _ASM_GENERIC_UNWIND_USER_TYPES_H
++#define _ASM_GENERIC_UNWIND_USER_TYPES_H
++
++#endif /* _ASM_GENERIC_UNWIND_USER_TYPES_H */
+diff --git a/include/linux/unwind_user.h b/include/linux/unwind_user.h
+index a405111c41b0..ac007363820a 100644
+--- a/include/linux/unwind_user.h
++++ b/include/linux/unwind_user.h
+@@ -9,6 +9,11 @@
+  #define ARCH_INIT_USER_FP_FRAME
+ #endif
+ 
++#ifndef ARCH_INIT_USER_COMPAT_FP_FRAME
++ #define ARCH_INIT_USER_COMPAT_FP_FRAME
++ #define in_compat_mode(regs) false
++#endif
++
+ int unwind_user_start(struct unwind_user_state *state);
+ int unwind_user_next(struct unwind_user_state *state);
+ 
+diff --git a/include/linux/unwind_user_types.h b/include/linux/unwind_user_types.h
+index 65bd070eb6b0..0b6563951ca4 100644
+--- a/include/linux/unwind_user_types.h
++++ b/include/linux/unwind_user_types.h
+@@ -3,10 +3,16 @@
+ #define _LINUX_UNWIND_USER_TYPES_H
+ 
+ #include <linux/types.h>
++#include <asm/unwind_user_types.h>
++
++#ifndef arch_unwind_user_state
++struct arch_unwind_user_state {};
++#endif
+ 
+ enum unwind_user_type {
+ 	UNWIND_USER_TYPE_NONE,
+ 	UNWIND_USER_TYPE_FP,
++	UNWIND_USER_TYPE_COMPAT_FP,
+ };
+ 
+ struct unwind_stacktrace {
+@@ -25,6 +31,7 @@ struct unwind_user_state {
+ 	unsigned long ip;
+ 	unsigned long sp;
+ 	unsigned long fp;
++	struct arch_unwind_user_state arch;
+ 	enum unwind_user_type type;
+ 	bool done;
+ };
+diff --git a/kernel/unwind/user.c b/kernel/unwind/user.c
+index 1201d655654a..3a0ac4346f5b 100644
+--- a/kernel/unwind/user.c
++++ b/kernel/unwind/user.c
+@@ -12,12 +12,32 @@ static struct unwind_user_frame fp_frame = {
+ 	ARCH_INIT_USER_FP_FRAME
+ };
+ 
++static struct unwind_user_frame compat_fp_frame = {
++	ARCH_INIT_USER_COMPAT_FP_FRAME
++};
++
+ static inline bool fp_state(struct unwind_user_state *state)
+ {
+ 	return IS_ENABLED(CONFIG_HAVE_UNWIND_USER_FP) &&
+ 	       state->type == UNWIND_USER_TYPE_FP;
+ }
+ 
++static inline bool compat_fp_state(struct unwind_user_state *state)
++{
++	return IS_ENABLED(CONFIG_HAVE_UNWIND_USER_COMPAT_FP) &&
++	       state->type == UNWIND_USER_TYPE_COMPAT_FP;
++}
++
++#define unwind_get_user_long(to, from, state)				\
++({									\
++	int __ret;							\
++	if (compat_fp_state(state))					\
++		__ret = get_user(to, (u32 __user *)(from));		\
++	else								\
++		__ret = get_user(to, (unsigned long __user *)(from));	\
++	__ret;								\
++})
++
+ int unwind_user_next(struct unwind_user_state *state)
+ {
+ 	struct unwind_user_frame *frame;
+@@ -26,7 +46,9 @@ int unwind_user_next(struct unwind_user_state *state)
+ 	if (state->done)
+ 		return -EINVAL;
+ 
+-	if (fp_state(state))
++	if (compat_fp_state(state))
++		frame = &compat_fp_frame;
++	else if (fp_state(state))
+ 		frame = &fp_frame;
+ 	else
+ 		goto done;
+@@ -39,10 +61,10 @@ int unwind_user_next(struct unwind_user_state *state)
+ 		goto done;
+ 
+ 	/* Find the Return Address (RA) */
+-	if (get_user(ra, (unsigned long *)(cfa + frame->ra_off)))
++	if (unwind_get_user_long(ra, cfa + frame->ra_off, state))
+ 		goto done;
+ 
+-	if (frame->fp_off && get_user(fp, (unsigned long __user *)(cfa + frame->fp_off)))
++	if (frame->fp_off && unwind_get_user_long(fp, cfa + frame->fp_off, state))
+ 		goto done;
+ 
+ 	state->ip = ra;
+@@ -68,7 +90,9 @@ int unwind_user_start(struct unwind_user_state *state)
+ 		return -EINVAL;
+ 	}
+ 
+-	if (IS_ENABLED(CONFIG_HAVE_UNWIND_USER_FP))
++	if (IS_ENABLED(CONFIG_HAVE_UNWIND_USER_COMPAT_FP) && in_compat_mode(regs))
++		state->type = UNWIND_USER_TYPE_COMPAT_FP;
++	else if (IS_ENABLED(CONFIG_HAVE_UNWIND_USER_FP))
+ 		state->type = UNWIND_USER_TYPE_FP;
+ 	else
+ 		state->type = UNWIND_USER_TYPE_NONE;
+-- 
+2.50.0
+

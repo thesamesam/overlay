@@ -56,6 +56,10 @@ PDEPEND="
 
 VERIFY_SIG_OPENPGP_KEY_PATH=/usr/share/openpgp-keys/kernel.org.asc
 
+PATCHES=(
+	"${FILESDIR}"/sframe
+)
+
 src_prepare() {
 	default
 

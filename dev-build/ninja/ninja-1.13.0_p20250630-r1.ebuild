@@ -49,6 +49,7 @@ PDEPEND="
 PATCHES=(
 	"${FILESDIR}"/ninja-cflags.patch
 	"${FILESDIR}"/ninja-jobserver-2.patch
+	"${FILESDIR}"/ninja-jobserver-2-dont-disable-client-with-j.patch
 )
 
 pkg_setup() {

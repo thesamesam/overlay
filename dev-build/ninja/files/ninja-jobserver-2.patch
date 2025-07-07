@@ -1,6 +1,6 @@
 https://github.com/ninja-build/ninja/pull/2634
 
-From 4f8ec8254d976a9e563260ef3b94d135bf106ca9 Mon Sep 17 00:00:00 2001
+From 4cb5bec61ac6e62cad1ea6beef15f32e61f0723d Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Mon, 16 Jun 2025 14:14:31 +0200
 Subject: [PATCH 1/3] Add JobserverPool class.
@@ -410,7 +410,7 @@ index 0000000000..0882c4f441
 +  EXPECT_FALSE(slot.IsValid());
 +}
 
-From c58cd0ea5977561dbb6fc3fcc96ee22f81c44510 Mon Sep 17 00:00:00 2001
+From 3f5e43d5a27be11249cc21b2e0b70ecdd77c368d Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Mon, 16 Jun 2025 14:44:56 +0200
 Subject: [PATCH 2/3] Implement GNU jobserver pool mode.
@@ -433,14 +433,15 @@ invoked with the `--jobserver-pool` command-line option.
 
 - Update manual accordingly, detailing how everything works.
 ---
- doc/manual.asciidoc    |  56 ++++++++--
- misc/jobserver_test.py |  68 +++++++++++-
- src/build.h            |   1 +
- src/ninja.cc           | 242 +++++++++++++++++++++++++++++------------
- 4 files changed, 285 insertions(+), 82 deletions(-)
+ doc/manual.asciidoc    |  55 +++++++--
+ misc/jobserver_test.py |  79 ++++++++++++-
+ src/build.h            |   6 +-
+ src/jobserver_pool.cc  |  16 +--
+ src/ninja.cc           | 245 +++++++++++++++++++++++++++++------------
+ 5 files changed, 309 insertions(+), 92 deletions(-)
 
 diff --git a/doc/manual.asciidoc b/doc/manual.asciidoc
-index 9bbabc205d..ddb3e3d821 100644
+index 9bbabc205d..a8f7287d1d 100644
 --- a/doc/manual.asciidoc
 +++ b/doc/manual.asciidoc
 @@ -192,12 +192,33 @@ GNU Jobserver support
@@ -482,7 +483,7 @@ index 9bbabc205d..ddb3e3d821 100644
  
  - Dry-run (i.e. `-n` or `--dry-run`) is not enabled.
  
-@@ -208,18 +229,31 @@ This feature is automatically enabled under the following conditions:
+@@ -208,18 +229,30 @@ This feature is automatically enabled under the following conditions:
    jobserver mode using `--jobserver-auth=SEMAPHORE_NAME` on Windows, or
    `--jobserver-auth=fifo:PATH` on Posix.
  
@@ -498,9 +499,8 @@ index 9bbabc205d..ddb3e3d821 100644
  `--jobserver-auth=<read>,<write>`) and will print a warning, but will
  otherwise ignore it.
  
-+Since version 1.14, Ninja can also be used as a top-level protocol server
-+by using the `--jobserver-pool` flag on the command-line. Note that this
-+feature is ignored if any of this is true:
++Using `--jobserver-pool` will make Ninja act as a protocol server, unless
++any of these are true:
 +
 +- An existing pool was detected, as this keeps all processes cooperating
 +  properly.
@@ -521,7 +521,7 @@ index 9bbabc205d..ddb3e3d821 100644
  ~~~~~~~~~~~~~~~~~~~~~
  
 diff --git a/misc/jobserver_test.py b/misc/jobserver_test.py
-index 0378c98870..5e5d503825 100755
+index 0378c98870..53410ec8e2 100755
 --- a/misc/jobserver_test.py
 +++ b/misc/jobserver_test.py
 @@ -31,6 +31,7 @@
@@ -550,7 +550,7 @@ index 0378c98870..5e5d503825 100755
              if _DEBUG:
                  print(f"OUTPUT [{output}]\nERROR [{error}]\n", file=sys.stderr)
              self.assertFalse(error.find("Pipe-based protocol is not supported!") >= 0)
-@@ -290,6 +291,69 @@ def run_ninja_with_jobserver_pipe(args):
+@@ -290,6 +291,80 @@ def run_ninja_with_jobserver_pipe(args):
              max_overlaps = compute_max_overlapped_spans(b.path, task_count)
              self.assertEqual(max_overlaps, 1)
  
@@ -566,10 +566,21 @@ index 0378c98870..5e5d503825 100755
 +            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
 +            self.assertEqual(max_overlaps, task_count)
 +
-+            # Second, use 2 tokens only, and verify that this was enforced by Ninja.
++            # Second, use 2 tokens only, and verify that this was enforced by Ninja and
++            # that both a pool and a client were setup by Ninja.
 +            b.ninja_clean()
-+            b.ninja_run(
-+                ["-j2", "--jobserver-pool", "all"],
++            ret = b.ninja_spawn(
++                ["-j2", "--jobserver-pool", "--verbose", "all"],
++                capture_output=True,
++            )
++            self.assertEqual(ret.returncode, 0)
++            self.assertTrue(
++                "ninja: Creating jobserver pool for 2 parallel jobs" in ret.stdout,
++                msg="Ninja failed to setup jobserver pool!",
++            )
++            self.assertTrue(
++                "ninja: Jobserver mode detected: " in ret.stdout,
++                msg="Ninja failed to setup jobserver client!",
 +            )
 +            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
 +            self.assertEqual(max_overlaps, 2)
@@ -612,7 +623,7 @@ index 0378c98870..5e5d503825 100755
 +            # Setup a top-level pool with 2 jobs, and verify that `--jobserver-pool` respected it.
 +            ret = b.ninja_run(
 +                ninja_args=["--jobserver-pool", "all"],
-+                prefix_args=[sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--jobs=2"]
++                prefix_args=[sys.executable, "-S", _JOBSERVER_POOL_SCRIPT, "--jobs=2"],
 +            )
 +            max_overlaps = compute_max_overlapped_spans(b.path, task_count)
 +            self.assertEqual(max_overlaps, 2)
@@ -621,19 +632,59 @@ index 0378c98870..5e5d503825 100755
          self, ninja_args: T.List[str] = [], prefix_args: T.List[str] = []
      ):
 diff --git a/src/build.h b/src/build.h
-index 0531747be1..df0843c31a 100644
+index 0531747be1..afdbc8e83e 100644
 --- a/src/build.h
 +++ b/src/build.h
-@@ -186,6 +186,7 @@ struct BuildConfig {
+@@ -184,8 +184,12 @@ struct BuildConfig {
+   };
+   Verbosity verbosity = NORMAL;
    bool dry_run = false;
++  /// Number of concurrent jobs, auto-detected or specified explicitly.
    int parallelism = 1;
-   bool disable_jobserver_client = false;
+-  bool disable_jobserver_client = false;
++  /// True if -j<count> was used on the command line.
++  bool explicit_parallelism = false;
++  /// True if --jobserver-pool was used on the command line.
 +  bool jobserver_pool = false;
    int failures_allowed = 1;
    /// The maximum load average we must not exceed. A negative value
    /// means that we do not have any limit.
+diff --git a/src/jobserver_pool.cc b/src/jobserver_pool.cc
+index 8465c5f6be..0e9faa64ed 100644
+--- a/src/jobserver_pool.cc
++++ b/src/jobserver_pool.cc
+@@ -142,20 +142,22 @@ class PosixJobserverPool : public JobserverPool {
+   // implicit job slot requirement.
+   bool FillSlots(size_t slot_count, std::string* error) {
+     job_count_ = slot_count;
+-    for (; slot_count > 1; --slot_count) {
++    while (slot_count > 1) {
+       // Write '+' into the pipe, just like GNU Make. Note that some
+       // implementations write '|' instead, but so far no client or pool
+       // implementation cares about the exact value, though the official spec
+       // says this might change in the future.
+       const char slot_char = '+';
+       ssize_t ret = ::write(write_fd_, &slot_char, 1);
+-      if (ret != 1) {
+-        if (ret < 0 && errno == EINTR)
+-          continue;
+-        *error =
+-            std::string("Could not fill job slots pool: ") + strerror(errno);
+-        return false;
++      if (ret == 1) {
++        slot_count--;
++        continue;
+       }
++      if (ret < 0 && errno == EINTR)
++        continue;
++
++      *error = std::string("Could not fill job slots pool: ") + strerror(errno);
++      return false;
+     }
+     return true;
+   }
 diff --git a/src/ninja.cc b/src/ninja.cc
-index 92d0761aa3..c9f3cab717 100644
+index 92d0761aa3..70af71c3d4 100644
 --- a/src/ninja.cc
 +++ b/src/ninja.cc
 @@ -47,6 +47,7 @@
@@ -834,7 +885,7 @@ index 92d0761aa3..c9f3cab717 100644
 +    *reason = "Dry-run mode";
 +    return false;
 +  }
-+  if (config.disable_jobserver_client) {
++  if (config.explicit_parallelism && !config.jobserver_pool) {
 +    *reason = "Explicit parallelism specified";
 +    return false;
 +  }
@@ -941,7 +992,24 @@ index 92d0761aa3..c9f3cab717 100644
  
    int opt;
    while (!options->tool &&
-@@ -1771,6 +1873,9 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1721,7 +1823,7 @@ int ReadFlags(int* argc, char*** argv,
+         // is close enough to infinite for most sane builds.
+         config->parallelism =
+             static_cast<int>((value > 0 && value < INT_MAX) ? value : INT_MAX);
+-        config->disable_jobserver_client = true;
++        config->explicit_parallelism = true;
+         deferGuessParallelism.needGuess = false;
+         break;
+       }
+@@ -1748,7 +1850,6 @@ int ReadFlags(int* argc, char*** argv,
+       }
+       case 'n':
+         config->dry_run = true;
+-        config->disable_jobserver_client = true;
+         break;
+       case 't':
+         options->tool = ChooseTool(optarg);
+@@ -1771,6 +1872,9 @@ int ReadFlags(int* argc, char*** argv,
        case OPT_VERSION:
          printf("%s\n", kNinjaVersion);
          return 0;
@@ -951,7 +1019,7 @@ index 92d0761aa3..c9f3cab717 100644
        case 'h':
        default:
          deferGuessParallelism.Refresh();
-@@ -1780,7 +1885,6 @@ int ReadFlags(int* argc, char*** argv,
+@@ -1780,7 +1884,6 @@ int ReadFlags(int* argc, char*** argv,
    }
    *argv += optind;
    *argc -= optind;
@@ -960,7 +1028,7 @@ index 92d0761aa3..c9f3cab717 100644
  }
  
 
-From 7161925dfa6dc2cd87fc3db27d68403a1b497ec2 Mon Sep 17 00:00:00 2001
+From b3d934a8b72d411684e4962ae00c0ecdcb6e0156 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Tue, 1 Jul 2025 18:36:05 +0200
 Subject: [PATCH 3/3] Support `enable_jobserver_pool = 1` in `build.ninja`.
@@ -981,16 +1049,16 @@ Note that:
 - Just like `--jobserver-pool`, this is ignored if a parent
   jobserver pool is detected when Ninja is invoked.
 ---
- doc/manual.asciidoc         | 13 +++++++--
+ doc/manual.asciidoc         | 14 ++++++---
  misc/jobserver_test.py      | 57 +++++++++++++++++++++++++++++++++++--
  src/manifest_parser.cc      |  4 +++
  src/manifest_parser.h       |  7 ++++-
  src/manifest_parser_test.cc | 25 ++++++++++++++++
  src/ninja.cc                | 10 +++++++
- 6 files changed, 109 insertions(+), 7 deletions(-)
+ 6 files changed, 109 insertions(+), 8 deletions(-)
 
 diff --git a/doc/manual.asciidoc b/doc/manual.asciidoc
-index ddb3e3d821..5474282ea4 100644
+index a8f7287d1d..95b606e2f8 100644
 --- a/doc/manual.asciidoc
 +++ b/doc/manual.asciidoc
 @@ -203,7 +203,8 @@ Ninja becomes a protocol client automatically if it detects the right
@@ -1003,17 +1071,18 @@ index ddb3e3d821..5474282ea4 100644
  
  In jobserver-enabled builds, there is one top-level "server" process which:
  
-@@ -236,7 +237,8 @@ when a pipe-based jobserver is being used (i.e. when `MAKEFLAGS` contains
+@@ -235,8 +236,8 @@ when a pipe-based jobserver is being used (i.e. when `MAKEFLAGS` contains
+ `--jobserver-auth=<read>,<write>`) and will print a warning, but will
  otherwise ignore it.
  
- Since version 1.14, Ninja can also be used as a top-level protocol server
--by using the `--jobserver-pool` flag on the command-line. Note that this
-+by using the `--jobserver-pool` flag on the command-line, or by setting
-+`enable_jobserver_pool = 1` in the Ninja build file. Note that this
- feature is ignored if any of this is true:
+-Using `--jobserver-pool` will make Ninja act as a protocol server, unless
+-any of these are true:
++Using `--jobserver-pool` or `enable_jobserver_pool = 1` will make Ninja
++act as a protocol server, unless any of these are true:
  
  - An existing pool was detected, as this keeps all processes cooperating
-@@ -984,7 +986,7 @@ previous one, it closes the previous scope.
+   properly.
+@@ -983,7 +984,7 @@ previous one, it closes the previous scope.
  Top-level variables
  ~~~~~~~~~~~~~~~~~~~
  
@@ -1022,7 +1091,7 @@ index ddb3e3d821..5474282ea4 100644
  
  `builddir`:: a directory for some Ninja output files.  See <<ref_log,the
    discussion of the build log>>.  (You can also store other build output
-@@ -993,6 +995,11 @@ Two variables are significant when declared in the outermost file scope.
+@@ -992,6 +993,11 @@ Two variables are significant when declared in the outermost file scope.
  `ninja_required_version`:: the minimum version of Ninja required to process
    the build correctly.  See <<ref_versioning,the discussion of versioning>>.
  
@@ -1035,7 +1104,7 @@ index ddb3e3d821..5474282ea4 100644
  [[ref_rule]]
  Rule variables
 diff --git a/misc/jobserver_test.py b/misc/jobserver_test.py
-index 5e5d503825..1c66813e74 100755
+index 53410ec8e2..834437f7a6 100755
 --- a/misc/jobserver_test.py
 +++ b/misc/jobserver_test.py
 @@ -111,13 +111,13 @@ def span_output_file(span_n: int) -> str:
@@ -1063,7 +1132,7 @@ index 5e5d503825..1c66813e74 100755
          task_count = 4
          build_plan = generate_build_plan(task_count)
          with BuildDir(build_plan) as b:
-@@ -354,6 +354,57 @@ def test_jobserver_pool_mode_ignored_with_existing_pool(self):
+@@ -365,6 +365,57 @@ def test_jobserver_pool_mode_ignored_with_existing_pool(self):
              max_overlaps = compute_max_overlapped_spans(b.path, task_count)
              self.assertEqual(max_overlaps, 2)
  
@@ -1188,10 +1257,10 @@ index 03ce0b1b80..2d47f8ab13 100644
 +  ASSERT_EQ(parser.LookupVariable("zoo"), "");
 +}
 diff --git a/src/ninja.cc b/src/ninja.cc
-index c9f3cab717..fb5da19ddd 100644
+index 70af71c3d4..d763d4fe51 100644
 --- a/src/ninja.cc
 +++ b/src/ninja.cc
-@@ -1965,6 +1965,16 @@ NORETURN void real_main(int argc, char** argv) {
+@@ -1964,6 +1964,16 @@ NORETURN void real_main(int argc, char** argv) {
        exit(1);
      }
  

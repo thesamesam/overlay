@@ -1,23 +1,15 @@
 diff --git a/src/ninja.cc b/src/ninja.cc
-index fb5da19..65eb783 100644
+index d763d4f..ff2b57d 100644
 --- a/src/ninja.cc
 +++ b/src/ninja.cc
 @@ -1633,10 +1633,6 @@ bool JobserverState::ShouldSetupClient(const BuildConfig& config,
      *reason = "Dry-run mode";
      return false;
    }
--  if (config.disable_jobserver_client) {
+-  if (config.explicit_parallelism && !config.jobserver_pool) {
 -    *reason = "Explicit parallelism specified";
 -    return false;
 -  }
    return HasExternalJobserverPool(reason);
  }
  
-@@ -1823,7 +1819,6 @@ int ReadFlags(int* argc, char*** argv,
-         // is close enough to infinite for most sane builds.
-         config->parallelism =
-             static_cast<int>((value > 0 && value < INT_MAX) ? value : INT_MAX);
--        config->disable_jobserver_client = true;
-         deferGuessParallelism.needGuess = false;
-         break;
-       }

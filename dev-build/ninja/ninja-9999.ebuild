@@ -15,7 +15,7 @@ if [[ ${PV} == 9999 ]]; then
 	inherit git-r3
 else
 	if [[ ${PV} == *_p* ]] ; then
-		NINJA_COMMIT="089af0065cf00d3b3137b7e666a949379051ddf4"
+		NINJA_COMMIT="31af25000a45b4411026747e247453c219f94a85"
 		SRC_URI="https://github.com/ninja-build/ninja/archive/${NINJA_COMMIT}.tar.gz -> ${P}-${NINJA_COMMIT}.gh.tar.gz"
 		S="${WORKDIR}"/${PN}-${NINJA_COMMIT}
 	else
@@ -24,7 +24,7 @@ else
 	KEYWORDS="~alpha ~amd64 ~arm ~arm64 ~hppa ~loong ~m68k ~mips ~ppc ~ppc64 ~riscv ~s390 ~sparc ~x86 ~amd64-linux ~x86-linux ~arm64-macos ~ppc-macos ~x64-macos ~x64-solaris"
 fi
 
-GTEST_VER=1.14.0
+GTEST_VER=1.16.0
 SRC_URI+=" test? ( https://github.com/google/googletest/archive/refs/tags/v${GTEST_VER}.tar.gz -> gtest-${GTEST_VER}.tar.gz )"
 
 LICENSE="Apache-2.0"
@@ -48,7 +48,8 @@ PDEPEND="
 
 PATCHES=(
 	"${FILESDIR}"/ninja-cflags.patch
-	"${FILESDIR}"/ninja-jobserver.patch
+	"${FILESDIR}"/ninja-jobserver-2.patch
+	"${FILESDIR}"/ninja-jobserver-2-dont-disable-client-with-j.patch
 )
 
 pkg_setup() {
@@ -136,6 +137,9 @@ src_install() {
 }
 
 pkg_postinst() {
+	elog "To use the patched-in jobserver functionality, set the following:"
+	elog "NINJAOPTS=\"-j32 -l32 --jobserver-pool\""
+
 	if ! [[ -e "${EROOT}/usr/bin/ninja" ]]; then
 		ln -s ninja-reference "${EROOT}/usr/bin/ninja" || die
 	fi

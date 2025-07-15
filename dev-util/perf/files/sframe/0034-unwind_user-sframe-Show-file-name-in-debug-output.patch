@@ -1,0 +1,217 @@
+From 76401b2e5e6ecba6fb236604f207acfb1756881a Mon Sep 17 00:00:00 2001
+Message-ID: <76401b2e5e6ecba6fb236604f207acfb1756881a.1752539564.git.sam@gentoo.org>
+In-Reply-To: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+References: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Tue, 1 Jul 2025 14:49:48 -0400
+Subject: [PATCH 34/37] unwind_user/sframe: Show file name in debug output
+
+When debugging sframe issues, the error messages aren't all that helpful
+without knowing what file a corresponding .sframe section belongs to.
+Prefix debug output strings with the file name.
+
+Cc: Masami Hiramatsu <mhiramat@kernel.org>
+Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Ingo Molnar <mingo@kernel.org>
+Cc: Jiri Olsa <jolsa@kernel.org>
+Cc: Namhyung Kim <namhyung@kernel.org>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: Andrii Nakryiko <andrii@kernel.org>
+Cc: Indu Bhagat <indu.bhagat@oracle.com>
+Cc: "Jose E. Marchesi" <jemarch@gnu.org>
+Cc: Beau Belgrave <beaub@linux.microsoft.com>
+Cc: Jens Remus <jremus@linux.ibm.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Andrew Morton <akpm@linux-foundation.org>
+Cc: Jens Axboe <axboe@kernel.dk>
+Cc: Florian Weimer <fweimer@redhat.com>
+Link: https://lore.kernel.org/20250701185033.107691440@goodmis.org
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ include/linux/sframe.h       |  4 +++-
+ kernel/unwind/sframe.c       | 23 ++++++++++--------
+ kernel/unwind/sframe_debug.h | 45 +++++++++++++++++++++++++++++++-----
+ 3 files changed, 56 insertions(+), 16 deletions(-)
+
+diff --git a/include/linux/sframe.h b/include/linux/sframe.h
+index 9a72209696f9..b79c5ec09229 100644
+--- a/include/linux/sframe.h
++++ b/include/linux/sframe.h
+@@ -10,7 +10,9 @@
+ 
+ struct sframe_section {
+ 	struct rcu_head	rcu;
+-
++#ifdef CONFIG_DYNAMIC_DEBUG
++	const char	*filename;
++#endif
+ 	unsigned long	sframe_start;
+ 	unsigned long	sframe_end;
+ 	unsigned long	text_start;
+diff --git a/kernel/unwind/sframe.c b/kernel/unwind/sframe.c
+index f246ead6c2a0..66d3ba3c8389 100644
+--- a/kernel/unwind/sframe.c
++++ b/kernel/unwind/sframe.c
+@@ -311,14 +311,17 @@ int sframe_find(unsigned long ip, struct unwind_user_frame *frame)
+ end:
+ 	user_read_access_end();
+ 
+-	if (ret == -EFAULT)
++	if (ret == -EFAULT) {
++		dbg_sec("removing bad .sframe section\n");
+ 		WARN_ON_ONCE(sframe_remove_section(sec->sframe_start));
++	}
+ 
+ 	return ret;
+ }
+ 
+ static void free_section(struct sframe_section *sec)
+ {
++	dbg_free(sec);
+ 	kfree(sec);
+ }
+ 
+@@ -329,7 +332,7 @@ static int sframe_read_header(struct sframe_section *sec)
+ 	unsigned int num_fdes;
+ 
+ 	if (copy_from_user(&shdr, (void __user *)sec->sframe_start, sizeof(shdr))) {
+-		dbg("header usercopy failed\n");
++		dbg_sec("header usercopy failed\n");
+ 		return -EFAULT;
+ 	}
+ 
+@@ -337,18 +340,18 @@ static int sframe_read_header(struct sframe_section *sec)
+ 	    shdr.preamble.version != SFRAME_VERSION_2 ||
+ 	    !(shdr.preamble.flags & SFRAME_F_FDE_SORTED) ||
+ 	    shdr.auxhdr_len) {
+-		dbg("bad/unsupported sframe header\n");
++		dbg_sec("bad/unsupported sframe header\n");
+ 		return -EINVAL;
+ 	}
+ 
+ 	if (!shdr.num_fdes || !shdr.num_fres) {
+-		dbg("no fde/fre entries\n");
++		dbg_sec("no fde/fre entries\n");
+ 		return -EINVAL;
+ 	}
+ 
+ 	header_end = sec->sframe_start + SFRAME_HEADER_SIZE(shdr);
+ 	if (header_end >= sec->sframe_end) {
+-		dbg("header doesn't fit in section\n");
++		dbg_sec("header doesn't fit in section\n");
+ 		return -EINVAL;
+ 	}
+ 
+@@ -360,7 +363,7 @@ static int sframe_read_header(struct sframe_section *sec)
+ 	fres_end   = fres_start + shdr.fre_len;
+ 
+ 	if (fres_start < fdes_end || fres_end > sec->sframe_end) {
+-		dbg("inconsistent fde/fre offsets\n");
++		dbg_sec("inconsistent fde/fre offsets\n");
+ 		return -EINVAL;
+ 	}
+ 
+@@ -416,6 +419,8 @@ int sframe_add_section(unsigned long sframe_start, unsigned long sframe_end,
+ 	sec->text_start		= text_start;
+ 	sec->text_end		= text_end;
+ 
++	dbg_init(sec);
++
+ 	ret = sframe_read_header(sec);
+ 	if (ret) {
+ 		dbg_print_header(sec);
+@@ -424,8 +429,8 @@ int sframe_add_section(unsigned long sframe_start, unsigned long sframe_end,
+ 
+ 	ret = mtree_insert_range(sframe_mt, sec->text_start, sec->text_end, sec, GFP_KERNEL);
+ 	if (ret) {
+-		dbg("mtree_insert_range failed: text=%lx-%lx\n",
+-		    sec->text_start, sec->text_end);
++		dbg_sec("mtree_insert_range failed: text=%lx-%lx\n",
++			sec->text_start, sec->text_end);
+ 		goto err_free;
+ 	}
+ 
+@@ -447,7 +452,7 @@ static int __sframe_remove_section(struct mm_struct *mm,
+ 				   struct sframe_section *sec)
+ {
+ 	if (!mtree_erase(&mm->sframe_mt, sec->text_start)) {
+-		dbg("mtree_erase failed: text=%lx\n", sec->text_start);
++		dbg_sec("mtree_erase failed: text=%lx\n", sec->text_start);
+ 		return -EINVAL;
+ 	}
+ 
+diff --git a/kernel/unwind/sframe_debug.h b/kernel/unwind/sframe_debug.h
+index 055c8c8fae24..7794bf0bd78c 100644
+--- a/kernel/unwind/sframe_debug.h
++++ b/kernel/unwind/sframe_debug.h
+@@ -10,26 +10,59 @@
+ #define dbg(fmt, ...)							\
+ 	pr_debug("%s (%d): " fmt, current->comm, current->pid, ##__VA_ARGS__)
+ 
++#define dbg_sec(fmt, ...)						\
++	dbg("%s: " fmt, sec->filename, ##__VA_ARGS__)
++
+ static __always_inline void dbg_print_header(struct sframe_section *sec)
+ {
+ 	unsigned long fdes_end;
+ 
+ 	fdes_end = sec->fdes_start + (sec->num_fdes * sizeof(struct sframe_fde));
+ 
+-	dbg("SEC: sframe:0x%lx-0x%lx text:0x%lx-0x%lx "
+-	    "fdes:0x%lx-0x%lx fres:0x%lx-0x%lx "
+-	    "ra_off:%d fp_off:%d\n",
+-	    sec->sframe_start, sec->sframe_end, sec->text_start, sec->text_end,
+-	    sec->fdes_start, fdes_end, sec->fres_start, sec->fres_end,
+-	    sec->ra_off, sec->fp_off);
++	dbg_sec("SEC: sframe:0x%lx-0x%lx text:0x%lx-0x%lx "
++		"fdes:0x%lx-0x%lx fres:0x%lx-0x%lx "
++		"ra_off:%d fp_off:%d\n",
++		sec->sframe_start, sec->sframe_end, sec->text_start, sec->text_end,
++		sec->fdes_start, fdes_end, sec->fres_start, sec->fres_end,
++		sec->ra_off, sec->fp_off);
++}
++
++static inline void dbg_init(struct sframe_section *sec)
++{
++	struct mm_struct *mm = current->mm;
++	struct vm_area_struct *vma;
++
++	guard(mmap_read_lock)(mm);
++	vma = vma_lookup(mm, sec->sframe_start);
++	if (!vma)
++		sec->filename = kstrdup("(vma gone???)", GFP_KERNEL);
++	else if (vma->vm_file)
++		sec->filename = kstrdup_quotable_file(vma->vm_file, GFP_KERNEL);
++	else if (vma->vm_ops && vma->vm_ops->name)
++		sec->filename = kstrdup(vma->vm_ops->name(vma), GFP_KERNEL);
++	else if (arch_vma_name(vma))
++		sec->filename = kstrdup(arch_vma_name(vma), GFP_KERNEL);
++	else if (!vma->vm_mm)
++		sec->filename = kstrdup("(vdso)", GFP_KERNEL);
++	else
++		sec->filename = kstrdup("(anonymous)", GFP_KERNEL);
++}
++
++static inline void dbg_free(struct sframe_section *sec)
++{
++	kfree(sec->filename);
+ }
+ 
+ #else /* !CONFIG_DYNAMIC_DEBUG */
+ 
+ #define dbg(args...)			no_printk(args)
++#define dbg_sec(args...	)		no_printk(args)
+ 
+ static inline void dbg_print_header(struct sframe_section *sec) {}
+ 
++static inline void dbg_init(struct sframe_section *sec) {}
++static inline void dbg_free(struct sframe_section *sec) {}
++
+ #endif /* !CONFIG_DYNAMIC_DEBUG */
+ 
+ #endif /* _SFRAME_DEBUG_H */
+-- 
+2.50.1
+

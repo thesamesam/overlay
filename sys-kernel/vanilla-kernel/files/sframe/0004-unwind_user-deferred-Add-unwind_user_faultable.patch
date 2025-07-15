@@ -1,0 +1,225 @@
+From a485a587eb22845a15984d3d7f68ed480ad2afbc Mon Sep 17 00:00:00 2001
+Message-ID: <a485a587eb22845a15984d3d7f68ed480ad2afbc.1752539563.git.sam@gentoo.org>
+In-Reply-To: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+References: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+From: Steven Rostedt <rostedt@goodmis.org>
+Date: Mon, 30 Jun 2025 20:53:25 -0400
+Subject: [PATCH 04/37] unwind_user/deferred: Add unwind_user_faultable()
+
+Add a new API to retrieve a user space callstack called
+unwind_user_faultable(). The difference between this user space stack
+tracer from the current user space stack tracer is that this must be
+called from faultable context as it may use routines to access user space
+data that needs to be faulted in.
+
+It can be safely called from entering or exiting a system call as the code
+can still be faulted in there.
+
+This code is based on work by Josh Poimboeuf's deferred unwinding code:
+
+Link: https://lore.kernel.org/all/6052e8487746603bdb29b65f4033e739092d9925.1737511963.git.jpoimboe@kernel.org/
+
+Cc: Masami Hiramatsu <mhiramat@kernel.org>
+Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Cc: Josh Poimboeuf <jpoimboe@kernel.org>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Ingo Molnar <mingo@kernel.org>
+Cc: Jiri Olsa <jolsa@kernel.org>
+Cc: Namhyung Kim <namhyung@kernel.org>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: Andrii Nakryiko <andrii@kernel.org>
+Cc: Indu Bhagat <indu.bhagat@oracle.com>
+Cc: "Jose E. Marchesi" <jemarch@gnu.org>
+Cc: Beau Belgrave <beaub@linux.microsoft.com>
+Cc: Jens Remus <jremus@linux.ibm.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Andrew Morton <akpm@linux-foundation.org>
+Cc: Jens Axboe <axboe@kernel.dk>
+Cc: Florian Weimer <fweimer@redhat.com>
+Link: https://lore.kernel.org/20250701005451.227323466@goodmis.org
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ include/linux/sched.h                 |  5 +++
+ include/linux/unwind_deferred.h       | 24 +++++++++++
+ include/linux/unwind_deferred_types.h |  9 ++++
+ kernel/fork.c                         |  4 ++
+ kernel/unwind/Makefile                |  2 +-
+ kernel/unwind/deferred.c              | 60 +++++++++++++++++++++++++++
+ 6 files changed, 103 insertions(+), 1 deletion(-)
+ create mode 100644 include/linux/unwind_deferred.h
+ create mode 100644 include/linux/unwind_deferred_types.h
+ create mode 100644 kernel/unwind/deferred.c
+
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index aa9c5be7a632..a904924c28af 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -46,6 +46,7 @@
+ #include <linux/rv.h>
+ #include <linux/uidgid_types.h>
+ #include <linux/tracepoint-defs.h>
++#include <linux/unwind_deferred_types.h>
+ #include <asm/kmap_size.h>
+ 
+ /* task_struct member predeclarations (sorted alphabetically): */
+@@ -1650,6 +1651,10 @@ struct task_struct {
+ 	struct user_event_mm		*user_event_mm;
+ #endif
+ 
++#ifdef CONFIG_UNWIND_USER
++	struct unwind_task_info		unwind_info;
++#endif
++
+ 	/* CPU-specific state of this task: */
+ 	struct thread_struct		thread;
+ 
+diff --git a/include/linux/unwind_deferred.h b/include/linux/unwind_deferred.h
+new file mode 100644
+index 000000000000..a5f6e8f8a1a2
+--- /dev/null
++++ b/include/linux/unwind_deferred.h
+@@ -0,0 +1,24 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _LINUX_UNWIND_USER_DEFERRED_H
++#define _LINUX_UNWIND_USER_DEFERRED_H
++
++#include <linux/unwind_user.h>
++#include <linux/unwind_deferred_types.h>
++
++#ifdef CONFIG_UNWIND_USER
++
++void unwind_task_init(struct task_struct *task);
++void unwind_task_free(struct task_struct *task);
++
++int unwind_user_faultable(struct unwind_stacktrace *trace);
++
++#else /* !CONFIG_UNWIND_USER */
++
++static inline void unwind_task_init(struct task_struct *task) {}
++static inline void unwind_task_free(struct task_struct *task) {}
++
++static inline int unwind_user_faultable(struct unwind_stacktrace *trace) { return -ENOSYS; }
++
++#endif /* !CONFIG_UNWIND_USER */
++
++#endif /* _LINUX_UNWIND_USER_DEFERRED_H */
+diff --git a/include/linux/unwind_deferred_types.h b/include/linux/unwind_deferred_types.h
+new file mode 100644
+index 000000000000..aa32db574e43
+--- /dev/null
++++ b/include/linux/unwind_deferred_types.h
+@@ -0,0 +1,9 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _LINUX_UNWIND_USER_DEFERRED_TYPES_H
++#define _LINUX_UNWIND_USER_DEFERRED_TYPES_H
++
++struct unwind_task_info {
++	unsigned long		*entries;
++};
++
++#endif /* _LINUX_UNWIND_USER_DEFERRED_TYPES_H */
+diff --git a/kernel/fork.c b/kernel/fork.c
+index 1ee8eb11f38b..3341d50c61f2 100644
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -105,6 +105,7 @@
+ #include <uapi/linux/pidfd.h>
+ #include <linux/pidfs.h>
+ #include <linux/tick.h>
++#include <linux/unwind_deferred.h>
+ 
+ #include <asm/pgalloc.h>
+ #include <linux/uaccess.h>
+@@ -732,6 +733,7 @@ void __put_task_struct(struct task_struct *tsk)
+ 	WARN_ON(refcount_read(&tsk->usage));
+ 	WARN_ON(tsk == current);
+ 
++	unwind_task_free(tsk);
+ 	sched_ext_free(tsk);
+ 	io_uring_free(tsk);
+ 	cgroup_free(tsk);
+@@ -2135,6 +2137,8 @@ __latent_entropy struct task_struct *copy_process(
+ 	p->bpf_ctx = NULL;
+ #endif
+ 
++	unwind_task_init(p);
++
+ 	/* Perform scheduler related setup. Assign this task to a CPU. */
+ 	retval = sched_fork(clone_flags, p);
+ 	if (retval)
+diff --git a/kernel/unwind/Makefile b/kernel/unwind/Makefile
+index 349ce3677526..eae37bea54fd 100644
+--- a/kernel/unwind/Makefile
++++ b/kernel/unwind/Makefile
+@@ -1 +1 @@
+- obj-$(CONFIG_UNWIND_USER) += user.o
++ obj-$(CONFIG_UNWIND_USER)	+= user.o deferred.o
+diff --git a/kernel/unwind/deferred.c b/kernel/unwind/deferred.c
+new file mode 100644
+index 000000000000..a0badbeb3cc1
+--- /dev/null
++++ b/kernel/unwind/deferred.c
+@@ -0,0 +1,60 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Deferred user space unwinding
++ */
++#include <linux/kernel.h>
++#include <linux/sched.h>
++#include <linux/slab.h>
++#include <linux/unwind_deferred.h>
++
++#define UNWIND_MAX_ENTRIES 512
++
++/**
++ * unwind_user_faultable - Produce a user stacktrace in faultable context
++ * @trace: The descriptor that will store the user stacktrace
++ *
++ * This must be called in a known faultable context (usually when entering
++ * or exiting user space). Depending on the available implementations
++ * the @trace will be loaded with the addresses of the user space stacktrace
++ * if it can be found.
++ *
++ * Return: 0 on success and negative on error
++ *         On success @trace will contain the user space stacktrace
++ */
++int unwind_user_faultable(struct unwind_stacktrace *trace)
++{
++	struct unwind_task_info *info = &current->unwind_info;
++
++	/* Should always be called from faultable context */
++	might_fault();
++
++	if (current->flags & PF_EXITING)
++		return -EINVAL;
++
++	if (!info->entries) {
++		info->entries = kmalloc_array(UNWIND_MAX_ENTRIES, sizeof(long),
++					      GFP_KERNEL);
++		if (!info->entries)
++			return -ENOMEM;
++	}
++
++	trace->nr = 0;
++	trace->entries = info->entries;
++	unwind_user(trace, UNWIND_MAX_ENTRIES);
++
++	return 0;
++}
++
++void unwind_task_init(struct task_struct *task)
++{
++	struct unwind_task_info *info = &task->unwind_info;
++
++	memset(info, 0, sizeof(*info));
++}
++
++void unwind_task_free(struct task_struct *task)
++{
++	struct unwind_task_info *info = &task->unwind_info;
++
++	kfree(info->entries);
++}
+-- 
+2.50.1
+

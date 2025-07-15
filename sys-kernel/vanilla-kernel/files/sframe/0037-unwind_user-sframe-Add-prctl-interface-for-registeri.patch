@@ -1,0 +1,95 @@
+From 9d2d0def1f441dc1a2babf8eb7f78bdec03fa2bb Mon Sep 17 00:00:00 2001
+Message-ID: <9d2d0def1f441dc1a2babf8eb7f78bdec03fa2bb.1752539564.git.sam@gentoo.org>
+In-Reply-To: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+References: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Tue, 1 Jul 2025 14:49:51 -0400
+Subject: [PATCH 37/37] unwind_user/sframe: Add prctl() interface for
+ registering .sframe sections
+
+The kernel doesn't have direct visibility to the ELF contents of shared
+libraries.  Add some prctl() interfaces which allow glibc to tell the
+kernel where to find .sframe sections.
+
+[
+  This adds an interface for prctl() for testing loading of sframes for
+  libraries. But this interface should really be a system call. This patch
+  is for testing purposes only and should not be applied to mainline.
+]
+
+Cc: Masami Hiramatsu <mhiramat@kernel.org>
+Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Ingo Molnar <mingo@kernel.org>
+Cc: Jiri Olsa <jolsa@kernel.org>
+Cc: Namhyung Kim <namhyung@kernel.org>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: Andrii Nakryiko <andrii@kernel.org>
+Cc: Indu Bhagat <indu.bhagat@oracle.com>
+Cc: "Jose E. Marchesi" <jemarch@gnu.org>
+Cc: Beau Belgrave <beaub@linux.microsoft.com>
+Cc: Jens Remus <jremus@linux.ibm.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Andrew Morton <akpm@linux-foundation.org>
+Cc: Jens Axboe <axboe@kernel.dk>
+Cc: Florian Weimer <fweimer@redhat.com>
+Link: https://lore.kernel.org/20250701185033.617068929@goodmis.org
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ include/uapi/linux/prctl.h | 6 +++++-
+ kernel/sys.c               | 9 +++++++++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/include/uapi/linux/prctl.h b/include/uapi/linux/prctl.h
+index 43dec6eed559..c575cf7151b1 100644
+--- a/include/uapi/linux/prctl.h
++++ b/include/uapi/linux/prctl.h
+@@ -351,7 +351,7 @@ struct prctl_mm_map {
+  * configuration.  All bits may be locked via this call, including
+  * undefined bits.
+  */
+-#define PR_LOCK_SHADOW_STACK_STATUS      76
++#define PR_LOCK_SHADOW_STACK_STATUS	76
+ 
+ /*
+  * Controls the mode of timer_create() for CRIU restore operations.
+@@ -371,4 +371,8 @@ struct prctl_mm_map {
+ # define PR_FUTEX_HASH_GET_SLOTS	2
+ # define PR_FUTEX_HASH_GET_IMMUTABLE	3
+ 
++/* SFRAME management */
++#define PR_ADD_SFRAME			79
++#define PR_REMOVE_SFRAME		80
++
+ #endif /* _LINUX_PRCTL_H */
+diff --git a/kernel/sys.c b/kernel/sys.c
+index adc0de0aa364..cf788e66dc86 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -65,6 +65,7 @@
+ #include <linux/rcupdate.h>
+ #include <linux/uidgid.h>
+ #include <linux/cred.h>
++#include <linux/sframe.h>
+ 
+ #include <linux/nospec.h>
+ 
+@@ -2824,6 +2825,14 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
+ 	case PR_FUTEX_HASH:
+ 		error = futex_hash_prctl(arg2, arg3, arg4);
+ 		break;
++	case PR_ADD_SFRAME:
++		error = sframe_add_section(arg2, arg3, arg4, arg5);
++		break;
++	case PR_REMOVE_SFRAME:
++		if (arg3 || arg4 || arg5)
++			return -EINVAL;
++		error = sframe_remove_section(arg2);
++		break;
+ 	default:
+ 		trace_task_prctl_unknown(option, arg2, arg3, arg4, arg5);
+ 		error = -EINVAL;
+-- 
+2.50.1
+

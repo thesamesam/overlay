@@ -1,0 +1,175 @@
+From 7dd80bdccf143025f9fb004c73bfa7a4226f2880 Mon Sep 17 00:00:00 2001
+Message-ID: <7dd80bdccf143025f9fb004c73bfa7a4226f2880.1752539563.git.sam@gentoo.org>
+In-Reply-To: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+References: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+From: Steven Rostedt <rostedt@goodmis.org>
+Date: Mon, 30 Jun 2025 20:53:28 -0400
+Subject: [PATCH 07/37] unwind_user/deferred: Make unwind deferral requests
+ NMI-safe
+
+Make unwind_deferred_request() NMI-safe so tracers in NMI context can
+call it and safely request a user space stacktrace when the task exits.
+
+Note, this is only allowed for architectures that implement a safe
+cmpxchg. If an architecture requests a deferred stack trace from NMI
+context that does not support a safe NMI cmpxchg, it will get an -EINVAL.
+For those architectures, they would need another method (perhaps an
+irqwork), to request a deferred user space stack trace. That can be dealt
+with later if one of theses architectures require this feature.
+
+Changes since v12: https://lore.kernel.org/20250701005451.737614486@goodmis.org
+
+- Now that the timestamp has been replaced by a cookie that uses only a 32
+  bit cmpxchg(), this code just checks if the architecture has a safe
+  cmpxchg that can be used in NMI and doesn't do the 64 bit check.
+  Only the pending value is converted to local_t.
+
+Suggested-by: Peter Zijlstra <peterz@infradead.org>
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ include/linux/unwind_deferred_types.h |  4 +-
+ kernel/unwind/deferred.c              | 56 ++++++++++++++++++++++-----
+ 2 files changed, 49 insertions(+), 11 deletions(-)
+
+diff --git a/include/linux/unwind_deferred_types.h b/include/linux/unwind_deferred_types.h
+index 79b4f8cece53..cd95ed1c8610 100644
+--- a/include/linux/unwind_deferred_types.h
++++ b/include/linux/unwind_deferred_types.h
+@@ -2,6 +2,8 @@
+ #ifndef _LINUX_UNWIND_USER_DEFERRED_TYPES_H
+ #define _LINUX_UNWIND_USER_DEFERRED_TYPES_H
+ 
++#include <asm/local.h>
++
+ struct unwind_cache {
+ 	unsigned int		nr_entries;
+ 	unsigned long		entries[];
+@@ -20,7 +22,7 @@ struct unwind_task_info {
+ 	struct unwind_cache	*cache;
+ 	struct callback_head	work;
+ 	union unwind_task_id	id;
+-	int			pending;
++	local_t			pending;
+ };
+ 
+ #endif /* _LINUX_UNWIND_USER_DEFERRED_TYPES_H */
+diff --git a/kernel/unwind/deferred.c b/kernel/unwind/deferred.c
+index b1faaa55e5d5..2417e4ebbc82 100644
+--- a/kernel/unwind/deferred.c
++++ b/kernel/unwind/deferred.c
+@@ -12,6 +12,31 @@
+ #include <linux/slab.h>
+ #include <linux/mm.h>
+ 
++/*
++ * For requesting a deferred user space stack trace from NMI context
++ * the architecture must support a safe cmpxchg in NMI context.
++ * For those architectures that do not have that, then it cannot ask
++ * for a deferred user space stack trace from an NMI context. If it
++ * does, then it will get -EINVAL.
++ */
++#if defined(CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG)
++# define CAN_USE_IN_NMI		1
++static inline bool try_assign_cnt(struct unwind_task_info *info, u32 cnt)
++{
++	u32 old = 0;
++
++	return try_cmpxchg(&info->id.cnt, &old, cnt);
++}
++#else
++# define CAN_USE_IN_NMI		0
++/* When NMIs are not allowed, this always succeeds */
++static inline bool try_assign_cnt(struct unwind_task_info *info, u32 cnt)
++{
++	info->id.cnt = cnt;
++	return true;
++}
++#endif
++
+ /* Make the cache fit in a 4K page */
+ #define UNWIND_MAX_ENTRIES					\
+ 	((SZ_4K - sizeof(struct unwind_cache)) / sizeof(long))
+@@ -43,7 +68,6 @@ static u64 get_cookie(struct unwind_task_info *info)
+ {
+ 	u32 cpu_cnt;
+ 	u32 cnt;
+-	u32 old = 0;
+ 
+ 	if (info->id.cpu)
+ 		return info->id.id;
+@@ -52,7 +76,7 @@ static u64 get_cookie(struct unwind_task_info *info)
+ 	cpu_cnt += 2;
+ 	cnt = cpu_cnt | 1; /* Always make non zero */
+ 
+-	if (try_cmpxchg(&info->id.cnt, &old, cnt)) {
++	if (try_assign_cnt(info, cnt)) {
+ 		/* Update the per cpu counter */
+ 		__this_cpu_write(unwind_ctx_ctr, cpu_cnt);
+ 	}
+@@ -119,11 +143,11 @@ static void unwind_deferred_task_work(struct callback_head *head)
+ 	struct unwind_work *work;
+ 	u64 cookie;
+ 
+-	if (WARN_ON_ONCE(!info->pending))
++	if (WARN_ON_ONCE(!local_read(&info->pending)))
+ 		return;
+ 
+ 	/* Allow work to come in again */
+-	WRITE_ONCE(info->pending, 0);
++	local_set(&info->pending, 0);
+ 
+ 	/*
+ 	 * From here on out, the callback must always be called, even if it's
+@@ -170,31 +194,43 @@ static void unwind_deferred_task_work(struct callback_head *head)
+ int unwind_deferred_request(struct unwind_work *work, u64 *cookie)
+ {
+ 	struct unwind_task_info *info = &current->unwind_info;
++	long pending;
+ 	int ret;
+ 
+ 	*cookie = 0;
+ 
+-	if (WARN_ON_ONCE(in_nmi()))
+-		return -EINVAL;
+-
+ 	if ((current->flags & (PF_KTHREAD | PF_EXITING)) ||
+ 	    !user_mode(task_pt_regs(current)))
+ 		return -EINVAL;
+ 
++	/* NMI requires having safe cmpxchg operations */
++	if (!CAN_USE_IN_NMI && in_nmi())
++		return -EINVAL;
++
+ 	guard(irqsave)();
+ 
+ 	*cookie = get_cookie(info);
+ 
+ 	/* callback already pending? */
+-	if (info->pending)
++	pending = local_read(&info->pending);
++	if (pending)
+ 		return 1;
+ 
++	if (CAN_USE_IN_NMI) {
++		/* Claim the work unless an NMI just now swooped in to do so. */
++		if (!local_try_cmpxchg(&info->pending, &pending, 1))
++			return 1;
++	} else {
++		local_set(&info->pending, 1);
++	}
++
+ 	/* The work has been claimed, now schedule it. */
+ 	ret = task_work_add(current, &info->work, TWA_RESUME);
+-	if (WARN_ON_ONCE(ret))
++	if (WARN_ON_ONCE(ret)) {
++		local_set(&info->pending, 0);
+ 		return ret;
++	}
+ 
+-	info->pending = 1;
+ 	return 0;
+ }
+ 
+-- 
+2.50.1
+

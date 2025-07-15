@@ -1,0 +1,107 @@
+From 73352e2dd1ac2c54a7c6af2e0450178bddfe38c4 Mon Sep 17 00:00:00 2001
+Message-ID: <73352e2dd1ac2c54a7c6af2e0450178bddfe38c4.1752539563.git.sam@gentoo.org>
+In-Reply-To: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+References: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+From: Steven Rostedt <rostedt@goodmis.org>
+Date: Mon, 30 Jun 2025 20:53:32 -0400
+Subject: [PATCH 11/37] unwind: Add USED bit to only have one conditional on
+ way back to user space
+
+On the way back to user space, the function unwind_reset_info() is called
+unconditionally (but always inlined). It currently has two conditionals.
+One that checks the unwind_mask which is set whenever a deferred trace is
+called and is used to know that the mask needs to be cleared. The other
+checks if the cache has been allocated, and if so, it resets the
+nr_entries so that the unwinder knows it needs to do the work to get a new
+user space stack trace again (it only does it once per entering the
+kernel).
+
+Use one of the bits in the unwind mask as a "USED" bit that gets set
+whenever a trace is created. This will make it possible to only check the
+unwind_mask in the unwind_reset_info() to know if it needs to do work or
+not and eliminates a conditional that happens every time the task goes
+back to user space.
+
+Cc: Masami Hiramatsu <mhiramat@kernel.org>
+Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Cc: Josh Poimboeuf <jpoimboe@kernel.org>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Ingo Molnar <mingo@kernel.org>
+Cc: Jiri Olsa <jolsa@kernel.org>
+Cc: Namhyung Kim <namhyung@kernel.org>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: Andrii Nakryiko <andrii@kernel.org>
+Cc: Indu Bhagat <indu.bhagat@oracle.com>
+Cc: "Jose E. Marchesi" <jemarch@gnu.org>
+Cc: Beau Belgrave <beaub@linux.microsoft.com>
+Cc: Jens Remus <jremus@linux.ibm.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Andrew Morton <akpm@linux-foundation.org>
+Cc: Jens Axboe <axboe@kernel.dk>
+Cc: Florian Weimer <fweimer@redhat.com>
+Link: https://lore.kernel.org/20250701005452.410928589@goodmis.org
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ include/linux/unwind_deferred.h | 14 +++++++-------
+ kernel/unwind/deferred.c        |  5 ++++-
+ 2 files changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/include/linux/unwind_deferred.h b/include/linux/unwind_deferred.h
+index 587e120c0fd6..376bfd50ff75 100644
+--- a/include/linux/unwind_deferred.h
++++ b/include/linux/unwind_deferred.h
+@@ -21,6 +21,10 @@ struct unwind_work {
+ #define UNWIND_PENDING_BIT	(BITS_PER_LONG - 1)
+ #define UNWIND_PENDING		BIT(UNWIND_PENDING_BIT)
+ 
++/* Set if the unwinding was used (directly or deferred) */
++#define UNWIND_USED_BIT		(UNWIND_PENDING_BIT - 1)
++#define UNWIND_USED		BIT(UNWIND_USED_BIT)
++
+ enum {
+ 	UNWIND_ALREADY_PENDING	= 1,
+ 	UNWIND_ALREADY_EXECUTED	= 2,
+@@ -49,14 +53,10 @@ static __always_inline void unwind_reset_info(void)
+ 				return;
+ 		} while (!try_cmpxchg(&info->unwind_mask, &bits, 0UL));
+ 		current->unwind_info.id.id = 0;
++
++		if (unlikely(info->cache))
++			info->cache->nr_entries = 0;
+ 	}
+-	/*
+-	 * As unwind_user_faultable() can be called directly and
+-	 * depends on nr_entries being cleared on exit to user,
+-	 * this needs to be a separate conditional.
+-	 */
+-	if (unlikely(info->cache))
+-		info->cache->nr_entries = 0;
+ }
+ 
+ #else /* !CONFIG_UNWIND_USER */
+diff --git a/kernel/unwind/deferred.c b/kernel/unwind/deferred.c
+index 256458f3eafe..9299974b6562 100644
+--- a/kernel/unwind/deferred.c
++++ b/kernel/unwind/deferred.c
+@@ -140,6 +140,9 @@ int unwind_user_faultable(struct unwind_stacktrace *trace)
+ 
+ 	cache->nr_entries = trace->nr;
+ 
++	/* Clear nr_entries on way back to user space */
++	set_bit(UNWIND_USED_BIT, &info->unwind_mask);
++
+ 	return 0;
+ }
+ 
+@@ -314,7 +317,7 @@ int unwind_deferred_init(struct unwind_work *work, unwind_callback_t func)
+ 	guard(mutex)(&callback_mutex);
+ 
+ 	/* See if there's a bit in the mask available */
+-	if (unwind_mask == ~(UNWIND_PENDING))
++	if (unwind_mask == ~(UNWIND_PENDING|UNWIND_USED))
+ 		return -EBUSY;
+ 
+ 	work->bit = ffz(unwind_mask);
+-- 
+2.50.1
+

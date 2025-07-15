@@ -1,10 +1,10 @@
 From c3e41e0894263c6a485a64955f86203e0070cb56 Mon Sep 17 00:00:00 2001
-Message-ID: <c3e41e0894263c6a485a64955f86203e0070cb56.1752548321.git.sam@gentoo.org>
-In-Reply-To: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752548321.git.sam@gentoo.org>
-References: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752548321.git.sam@gentoo.org>
+Message-ID: <c3e41e0894263c6a485a64955f86203e0070cb56.1752551497.git.sam@gentoo.org>
+In-Reply-To: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752551497.git.sam@gentoo.org>
+References: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752551497.git.sam@gentoo.org>
 From: "H.J. Lu" <hjl.tools@gmail.com>
 Date: Tue, 15 Jul 2025 10:41:25 +0800
-Subject: [PATCH 3/3] x86-64: Remove sframe relocs against discarded sections
+Subject: [PATCH 3/4] x86-64: Remove sframe relocs against discarded sections
 
 Since unlike eh_frame editing code, sframe editing code keeps
 R_X86_64_NONE reloc as is, its r_offset is wrong, we must not

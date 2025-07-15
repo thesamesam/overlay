@@ -1,0 +1,343 @@
+From b73944d46c3c911b998ee5f610ddaa1a1df3bada Mon Sep 17 00:00:00 2001
+Message-ID: <b73944d46c3c911b998ee5f610ddaa1a1df3bada.1752540326.git.sam@gentoo.org>
+In-Reply-To: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+References: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+From: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
+Date: Mon, 14 Jul 2025 12:43:30 +0300
+Subject: [PATCH 5/6] configure: Add --enable-sframe option
+
+Enable SFrame stack track information. The --enable-sframe option
+allows the glibc build to compile with SFrame stack track
+information. Thus, enabling glibc's backtrace to work within glibc.
+
+Signed-off-by: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
+Reviewed-by: DJ Delorie <dj@redhat.com>
+Reviewed-by: Sam James <sam@gentoo.org>
+---
+ INSTALL             |   5 ++
+ Makeconfig          |   8 ++-
+ NEWS                |   4 ++
+ config.make.in      |   1 +
+ configure           | 129 ++++++++++++++++++++++++++++++++++++++++++++
+ configure.ac        |  44 +++++++++++++++
+ manual/install.texi |   5 ++
+ 7 files changed, 195 insertions(+), 1 deletion(-)
+
+diff --git a/INSTALL b/INSTALL
+index a56179a9c9..113c3730b9 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -292,6 +292,11 @@ passed to 'configure'.  For example:
+ 
+      Default is to disable fortification.
+ 
++'--disable-sframe'
++     By default, the GNU C Library is built with '-Wa,--gsframe' if the
++     current GNU 'binutils' supports it.  You may want to use this
++     option if you don't plan to use SFrame stack tracer.
++
+    To build the library and related programs, type 'make'.  This will
+ produce a lot of output, some of which may look like errors from 'make'
+ but aren't.  Look for error messages from 'make' containing '***'.
+diff --git a/Makeconfig b/Makeconfig
+index aa547a443f..372a9d4e6c 100644
+--- a/Makeconfig
++++ b/Makeconfig
+@@ -1017,6 +1017,12 @@ endif
+ # Filter out 64 bit time_t flags if compiler defines it by default.
+ +cflags += $(no-time-bits-source)
+ 
++# Enable SFrame while compiling for stack backtracing.
++ifeq ($(enable-gsframe),yes)
++as-sframe = -Wa,--gsframe
++endif
+++cflags += $(as-sframe)
++
+ # Each sysdeps directory can contain header files that both will be
+ # used to compile and will be installed.  Each can also contain an
+ # include/ subdirectory, whose header files will be used to compile
+@@ -1165,7 +1171,7 @@ endif
+ ifndef ASFLAGS
+ ASFLAGS := $(filter -g% -fdebug-prefix-map=%,$(CFLAGS))
+ endif
+-override ASFLAGS += -Werror=undef $(ASFLAGS-config) $(asflags-cpu)
++override ASFLAGS += -Werror=undef $(ASFLAGS-config) $(asflags-cpu) $(as-sframe)
+ 
+ move-if-change = $(SHELL) $(..)scripts/move-if-change
+ 
+diff --git a/NEWS b/NEWS
+index 90d090ea77..4afb93710b 100644
+--- a/NEWS
++++ b/NEWS
+@@ -7,6 +7,10 @@ using `glibc' in the "product" field.
+ 
+ Version 2.41.1
+ 
++* New stack tracer using SFrame.  Introducing --disable-sframe a new
++  configuration flag.  Building glibc using sframe is automatically
++  enabled when the build system supports it.
++
+ Deprecated and removed features, and other changes affecting compatibility:
+ 
+ * The glibc.rtld.execstack now supports a compatibility mode to allow
+diff --git a/config.make.in b/config.make.in
+index 59897eaec2..382e003d87 100644
+--- a/config.make.in
++++ b/config.make.in
+@@ -51,6 +51,7 @@ c++-cstdlib-header = @CXX_CSTDLIB_HEADER@
+ c++-cmath-header = @CXX_CMATH_HEADER@
+ c++-bits-std_abs-h = @CXX_BITS_STD_ABS_H@
+ enable-werror = @enable_werror@
++enable-gsframe = @enable_gsframe@
+ 
+ have-z-execstack = @libc_cv_z_execstack@
+ have-no-error-execstack = @libc_cv_no_error_execstack@
+diff --git a/configure b/configure
+index 674d1d7e4a..44e4739959 100755
+--- a/configure
++++ b/configure
+@@ -620,6 +620,8 @@ DEFINES
+ static_nss
+ profile
+ libc_cv_multidir
++enable_gsframe
++READELF_SFRAME
+ libc_cv_test_x86_have_amx_tile
+ test_enable_cet
+ libc_cv_test_cc_mprefer_vector_width
+@@ -820,6 +822,7 @@ enable_mathvec
+ enable_cet
+ enable_scv
+ enable_fortify_source
++enable_sframe
+ with_cpu
+ '
+       ac_precious_vars='build_alias
+@@ -1505,6 +1508,8 @@ Optional Features:
+                           Use -D_FORTIFY_SOURCE=[1|2|3] to control code
+                           hardening, defaults to highest possible value
+                           supported by the build compiler.
++  --disable-sframe        Disable building with SFrame stack trace information
++                          [default=yes if GNU as is 2.41 or older]
+ 
+ Optional Packages:
+   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
+@@ -4883,6 +4888,16 @@ case "$enable_fortify_source" in
+ *) as_fn_error $? "Not a valid argument for --enable-fortify-source: \"$enable_fortify_source\"" "$LINENO" 5;;
+ esac
+ 
++# Check whether --enable-sframe was given.
++if test ${enable_sframe+y}
++then :
++  enableval=$enable_sframe; use_sframe=$enableval
++else case e in #(
++  e) use_sframe=notset ;;
++esac
++fi
++
++
+ # We keep the original values in `$config_*' and never modify them, so we
+ # can write them unchanged into config.make.  Everything else uses
+ # $machine, $vendor, and $os, and changes them whenever convenient.
+@@ -9140,6 +9155,120 @@ enable-static-pie = $libc_cv_static_pie"
+ 
+ 
+ 
++# Glibc stacktracer supports SFrame v2 or newer
++libc_cv_readelf_version_ok=yes
++# SFrame is supported from 2.41 or higher
++for ac_prog in $READELF
++do
++  # Extract the first word of "$ac_prog", so it can be a program name with args.
++set dummy $ac_prog; ac_word=$2
++{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
++printf %s "checking for $ac_word... " >&6; }
++if test ${ac_cv_prog_READELF_SFRAME+y}
++then :
++  printf %s "(cached) " >&6
++else case e in #(
++  e) if test -n "$READELF_SFRAME"; then
++  ac_cv_prog_READELF_SFRAME="$READELF_SFRAME" # Let the user override the test.
++else
++as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
++for as_dir in $PATH
++do
++  IFS=$as_save_IFS
++  case $as_dir in #(((
++    '') as_dir=./ ;;
++    */) ;;
++    *) as_dir=$as_dir/ ;;
++  esac
++    for ac_exec_ext in '' $ac_executable_extensions; do
++  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
++    ac_cv_prog_READELF_SFRAME="$ac_prog"
++    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
++    break 2
++  fi
++done
++  done
++IFS=$as_save_IFS
++
++fi ;;
++esac
++fi
++READELF_SFRAME=$ac_cv_prog_READELF_SFRAME
++if test -n "$READELF_SFRAME"; then
++  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $READELF_SFRAME" >&5
++printf "%s\n" "$READELF_SFRAME" >&6; }
++else
++  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
++printf "%s\n" "no" >&6; }
++fi
++
++
++  test -n "$READELF_SFRAME" && break
++done
++
++if test -z "$READELF_SFRAME"; then
++  ac_verc_fail=yes
++else
++  # Found it, now check the version.
++  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking version of $READELF_SFRAME" >&5
++printf %s "checking version of $READELF_SFRAME... " >&6; }
++  ac_prog_version=`$READELF_SFRAME --version 2>&1 | sed -n 's/^.*GNU readelf.* \([0-9][0-9]*\.[0-9.]*\).*$/\1/p'`
++  case $ac_prog_version in
++    '') ac_prog_version="v. ?.??, bad"; ac_verc_fail=yes;;
++    2.4[1-9]*|2.[5-9][0-9]*|[3-9].*|[1-9][0-9][0-9]*)
++       ac_prog_version="$ac_prog_version, ok"; ac_verc_fail=no;;
++    *) ac_prog_version="$ac_prog_version, bad"; ac_verc_fail=yes;;
++
++  esac
++  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_prog_version" >&5
++printf "%s\n" "$ac_prog_version" >&6; }
++fi
++if test $ac_verc_fail = yes; then
++  libc_cv_readelf_version_ok=no
++fi
++
++
++# Check the current toolchain for SFrame support
++if test $libc_cv_readelf_version_ok = yes; then
++  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for SFrame support" >&5
++printf %s "checking for SFrame support... " >&6; }
++if test ${libc_cv_default_sframe+y}
++then :
++  printf %s "(cached) " >&6
++else case e in #(
++  e) cat > conftest.c <<EOF
++int test_function(void)
++{
++  return 42;
++}
++EOF
++  libc_cv_default_sframe=no
++  if ${CC} -c conftest.c -o conftest.o -Wa,--gsframe >/dev/null 2>&1 && \
++     # Check if .sframe section is present and if version > 1
++     $READELF --sframe conftest.o | grep "SFRAME_VER" | grep -qv "VERSION_1"; then
++          libc_cv_default_sframe=yes
++  fi
++  rm -f conftest.c conftest.o
++   ;;
++esac
++fi
++{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $libc_cv_default_sframe" >&5
++printf "%s\n" "$libc_cv_default_sframe" >&6; }
++fi
++
++# Prevent enabling sframe on non-supporting toolchains
++enable_gsframe=no
++if test $use_sframe$libc_cv_default_sframe = yesyes || \
++   test $use_sframe$libc_cv_default_sframe = notsetyes; then
++  enable_gsframe=yes
++elif test $use_sframe = yes; then
++   { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: error: in '$ac_pwd':" >&5
++printf "%s\n" "$as_me: error: in '$ac_pwd':" >&2;}
++as_fn_error $? "toolchain doesn't support SFrame v2 or higher
++See 'config.log' for more details" "$LINENO" 5; }
++fi
++
++
+ # Set the `multidir' variable by grabbing the variable from the compiler.
+ # We do it once and save the result in a generated makefile.
+ libc_cv_multidir=`${CC-cc} $CFLAGS $CPPFLAGS -print-multi-directory`
+diff --git a/configure.ac b/configure.ac
+index 57cd24c87d..2099790d17 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -440,6 +440,12 @@ case "$enable_fortify_source" in
+ *) AC_MSG_ERROR([Not a valid argument for --enable-fortify-source: "$enable_fortify_source"]);;
+ esac
+ 
++AC_ARG_ENABLE([sframe],
++	      [AS_HELP_STRING([--disable-sframe],
++			     [Disable building with SFrame stack trace information @<:@default=yes if GNU as is 2.41 or older@:>@])],
++	      [use_sframe=$enableval],
++	      [use_sframe=notset])
++
+ # We keep the original values in `$config_*' and never modify them, so we
+ # can write them unchanged into config.make.  Everything else uses
+ # $machine, $vendor, and $os, and changes them whenever convenient.
+@@ -2066,6 +2072,44 @@ AC_SUBST(libc_cv_test_cc_mprefer_vector_width)
+ AC_SUBST(test_enable_cet)
+ AC_SUBST(libc_cv_test_x86_have_amx_tile)
+ 
++# Glibc stacktracer supports SFrame v2 or newer
++libc_cv_readelf_version_ok=yes
++# SFrame is supported from 2.41 or higher
++AC_CHECK_PROG_VER(READELF_SFRAME, $READELF, --version,
++  [GNU readelf.* \([0-9][0-9]*\.[0-9.]*\)],
++  [2.4[1-9]*|2.[5-9][0-9]*|[3-9].*|[1-9][0-9][0-9]*],
++  libc_cv_readelf_version_ok=no)
++
++# Check the current toolchain for SFrame support
++if test $libc_cv_readelf_version_ok = yes; then
++  AC_CACHE_CHECK([for SFrame support], libc_cv_default_sframe,
++  [dnl
++cat > conftest.c <<EOF
++int test_function(void)
++{
++  return 42;
++}
++EOF
++  libc_cv_default_sframe=no
++  if ${CC} -c conftest.c -o conftest.o -Wa,--gsframe >/dev/null 2>&1 && \
++     # Check if .sframe section is present and if version > 1
++     $READELF --sframe conftest.o | grep "SFRAME_VER" | grep -qv "VERSION_1"; then
++          libc_cv_default_sframe=yes
++  fi
++  rm -f conftest.c conftest.o
++  ])
++fi
++
++# Prevent enabling sframe on non-supporting toolchains
++enable_gsframe=no
++if test $use_sframe$libc_cv_default_sframe = yesyes || \
++   test $use_sframe$libc_cv_default_sframe = notsetyes; then
++  enable_gsframe=yes
++elif test $use_sframe = yes; then
++   AC_MSG_FAILURE([toolchain doesn't support SFrame v2 or higher])
++fi
++AC_SUBST(enable_gsframe)
++
+ # Set the `multidir' variable by grabbing the variable from the compiler.
+ # We do it once and save the result in a generated makefile.
+ libc_cv_multidir=`${CC-cc} $CFLAGS $CPPFLAGS -print-multi-directory`
+diff --git a/manual/install.texi b/manual/install.texi
+index d001e8220b..8f069b331d 100644
+--- a/manual/install.texi
++++ b/manual/install.texi
+@@ -320,6 +320,11 @@ If not provided, @option{LEVEL} defaults to highest possible value supported by
+ the build compiler.
+ 
+ Default is to disable fortification.
++
++@item --disable-sframe
++By default, the GNU C Library is built with @option{-Wa,--gsframe} if
++the current GNU @code{binutils} supports it. You may want to use this
++option if you don't plan to use SFrame stack tracer.
+ @end table
+ 
+ To build the library and related programs, type @code{make}.  This will
+-- 
+2.50.1
+

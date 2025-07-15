@@ -1,0 +1,202 @@
+From feb13d8b4de917fcf5fe2147c9124d459e83b11e Mon Sep 17 00:00:00 2001
+Message-ID: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+From: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
+Date: Mon, 14 Jul 2025 12:43:26 +0300
+Subject: [PATCH 1/6] elf: Add SFrame support to _dl_find_object function
+
+The SFrame provides information to be able to do stack trace is now
+well defined and implemented in Binutils 2.41.  The format simply
+contains enough information to be able to do stack trace given a
+program counter (PC) value, the stack pointer, and the frame pointer.
+The SFrame information is stored in a .sframe ELF section, which is
+loaded into its own PT_GNU_SFRAME segment. We consider for this support
+SFrame version 2.
+
+This patch adds the bits to _dl_find_object to recognize and store in
+struct dl_find_object the necessary info about SFrame section.
+
+Signed-off-by: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
+Reviewed-by: Florian Weimer <fweimer@redhat.com>
+---
+ dlfcn/dlfcn.h        | 10 +++++++--
+ elf/dl-find_object.h | 52 +++++++++++++++++++++++++++++++++-----------
+ manual/dynlink.texi  | 17 ++++++++++++++-
+ 3 files changed, 63 insertions(+), 16 deletions(-)
+
+diff --git a/dlfcn/dlfcn.h b/dlfcn/dlfcn.h
+index 4c2bdf9b64..bc73180a20 100644
+--- a/dlfcn/dlfcn.h
++++ b/dlfcn/dlfcn.h
+@@ -217,15 +217,21 @@ struct dl_find_object
+   int dlfo_eh_count;		/* Number of exception handling entries.  */
+   unsigned int __dlfo_eh_count_pad;
+ # endif
+-  __extension__ unsigned long long int __dflo_reserved[7];
++  void *dlfo_sframe;		/* SFrame stack trace data of the object.  */
++#if __WORDSIZE == 32
++  unsigned int __dlfo_sframe_pad;
++#endif
++  __extension__ unsigned long long int __dlfo_reserved[6];
+ };
+ 
+ /* If ADDRESS is found in an object, fill in *RESULT and return 0.
+    Otherwise, return -1.  */
+ int _dl_find_object (void *__address, struct dl_find_object *__result) __THROW;
+ 
+-#endif /* __USE_GNU */
++/* SFrame stack trace data is valid.  */
++#define DLFO_FLAG_SFRAME      (1ULL << 0)
+ 
++#endif /* __USE_GNU */
+ 
+ __END_DECLS
+ 
+diff --git a/elf/dl-find_object.h b/elf/dl-find_object.h
+index e433ff8740..9aa2439eaa 100644
+--- a/elf/dl-find_object.h
++++ b/elf/dl-find_object.h
+@@ -43,6 +43,7 @@ struct dl_find_object_internal
+ #if DLFO_STRUCT_HAS_EH_COUNT
+   int eh_count;
+ #endif
++  void *sframe;
+ };
+ 
+ /* Create a copy of *SOURCE in *COPY using relaxed MO loads and
+@@ -67,13 +68,14 @@ _dl_find_object_internal_copy (const struct dl_find_object_internal *source,
+   atomic_store_relaxed (&copy->eh_count,
+                         atomic_load_relaxed (&source->eh_count));
+ #endif
++  atomic_store_relaxed (&copy->sframe,
++                        atomic_load_relaxed (&source->sframe));
+ }
+ 
+ static inline void
+ _dl_find_object_to_external (struct dl_find_object_internal *internal,
+                              struct dl_find_object *external)
+ {
+-  external->dlfo_flags = 0;
+   external->dlfo_map_start = (void *) internal->map_start;
+   external->dlfo_map_end = (void *) internal->map_end;
+   external->dlfo_link_map = internal->map;
+@@ -84,6 +86,11 @@ _dl_find_object_to_external (struct dl_find_object_internal *internal,
+ # if DLFO_STRUCT_HAS_EH_COUNT
+   external->dlfo_eh_count = internal->eh_count;
+ # endif
++  external->dlfo_sframe = internal->sframe;
++  if (internal->sframe != NULL)
++    external->dlfo_flags = DLFO_FLAG_SFRAME;
++  else
++    external->dlfo_flags = 0;
+ }
+ 
+ /* Extract the object location data from a link map and writes it to
+@@ -92,6 +99,9 @@ static void __attribute__ ((unused))
+ _dl_find_object_from_map (struct link_map *l,
+                           struct dl_find_object_internal *result)
+ {
++  /* A mask to find out which segment has been read out.  */
++  unsigned int read_seg = 0;
++
+   atomic_store_relaxed (&result->map_start, (uintptr_t) l->l_map_start);
+   atomic_store_relaxed (&result->map_end, (uintptr_t) l->l_map_end);
+   atomic_store_relaxed (&result->map, l);
+@@ -100,23 +110,39 @@ _dl_find_object_from_map (struct link_map *l,
+   atomic_store_relaxed (&result->eh_dbase, (void *) l->l_info[DT_PLTGOT]);
+ #endif
+ 
+-  for (const ElfW(Phdr) *ph = l->l_phdr, *ph_end = l->l_phdr + l->l_phnum;
+-       ph < ph_end; ++ph)
+-    if (ph->p_type == DLFO_EH_SEGMENT_TYPE)
+-      {
+-        atomic_store_relaxed (&result->eh_frame,
+-                              (void *) (ph->p_vaddr + l->l_addr));
++  /* Initialize object's exception handling segment and SFrame segment
++     data.  */
++  atomic_store_relaxed (&result->sframe, NULL);
++  atomic_store_relaxed (&result->eh_frame, NULL);
+ #if DLFO_STRUCT_HAS_EH_COUNT
+-        atomic_store_relaxed (&result->eh_count, ph->p_memsz / 8);
++  atomic_store_relaxed (&result->eh_count, 0);
+ #endif
+-        return;
+-      }
+ 
+-  /* Object has no exception handling segment.  */
+-  atomic_store_relaxed (&result->eh_frame, NULL);
++  for (const ElfW(Phdr) *ph = l->l_phdr, *ph_end = l->l_phdr + l->l_phnum;
++       ph < ph_end; ++ph)
++    {
++      switch (ph->p_type)
++        {
++        case DLFO_EH_SEGMENT_TYPE:
++          atomic_store_relaxed (&result->eh_frame,
++                                (void *) (ph->p_vaddr + l->l_addr));
+ #if DLFO_STRUCT_HAS_EH_COUNT
+-  atomic_store_relaxed (&result->eh_count, 0);
++          atomic_store_relaxed (&result->eh_count, ph->p_memsz / 8);
+ #endif
++          read_seg |= 1;
++          break;
++
++        case PT_GNU_SFRAME:
++          atomic_store_relaxed (&result->sframe,
++                                (void *) (ph->p_vaddr + l->l_addr));
++          read_seg |= 2;
++          /* Fall through.  */
++        default:
++          break;
++        }
++      if (read_seg == 3)
++        return;
++   }
+ }
+ 
+ /* Called by the dynamic linker to set up the data structures for the
+diff --git a/manual/dynlink.texi b/manual/dynlink.texi
+index 3a4864f146..cd05107e6c 100644
+--- a/manual/dynlink.texi
++++ b/manual/dynlink.texi
+@@ -545,7 +545,8 @@ result data to the caller.
+ 
+ @table @code
+ @item unsigned long long int dlfo_flags
+-Currently unused and always 0.
++Bit zero signals if SFrame stack data is valid.  See
++@code{DLFO_FLAG_SFRAME} below.
+ 
+ @item void *dlfo_map_start
+ The start address of the inspected mapping.  This information comes from
+@@ -562,6 +563,11 @@ This member contains a pointer to the link map of the object.
+ This member contains a pointer to the exception handling data of the
+ object.  See @code{DLFO_EH_SEGMENT_TYPE} below.
+ 
++@item void *dlfo_sframe
++This member points to the SFrame stack trace data associated with the
++object.  It is valid only when @code{DLFO_FLAG_SFRAME} is set in
++@code{dlfo_flags}; otherwise, it may be null or undefined.
++
+ @end table
+ 
+ This structure is a GNU extension.
+@@ -639,6 +645,15 @@ information is processed.
+ This function is a GNU extension.
+ @end deftypefun
+ 
++The following flag masks are defined for use with @code{dlfo_flags}:
++
++@table @code
++@item DLFO_FLAG_SFRAME
++A bit mask used to signal that the object contains SFrame data.  See
++@code{dlfo_sframe} above.
++
++@end table
++
+ @node Dynamic Linker Hardening
+ @section Avoiding Unexpected Issues With Dynamic Linking
+ 
+
+base-commit: 6e489c17f827317bcf8544efefa65f13b5a079dc
+-- 
+2.50.1
+

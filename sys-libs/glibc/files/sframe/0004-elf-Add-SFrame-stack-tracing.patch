@@ -1,0 +1,1407 @@
+From 5fd80a1a4708ef7af91198b9bb44631dec2dc7d9 Mon Sep 17 00:00:00 2001
+Message-ID: <5fd80a1a4708ef7af91198b9bb44631dec2dc7d9.1752540326.git.sam@gentoo.org>
+In-Reply-To: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+References: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+From: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
+Date: Mon, 14 Jul 2025 12:43:29 +0300
+Subject: [PATCH 4/6] elf: Add SFrame stack tracing
+
+This patch adds the necessary bits to enable stack tracing using
+SFrame.  In the case the new SFrame stack tracing procedure doesn't
+find SFrame related info, the stack tracing falls back on default
+Dwarf implementation.
+
+The new SFrame stack tracing procedure is added to debug/backtrace.c
+file, the support functions are added in sysdeps folder, namely
+sframe.h, read-sframe.c and read-sfame.h.
+
+Signed-off-by: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
+Reviewed-by: DJ Delorie <dj@redhat.com>
+---
+ debug/backtrace.c             |  46 ++-
+ sysdeps/generic/Makefile      |   1 +
+ sysdeps/generic/sframe-read.c | 566 ++++++++++++++++++++++++++++++++++
+ sysdeps/generic/sframe-read.h | 106 +++++++
+ sysdeps/generic/sframe.c      | 187 +++++++++++
+ sysdeps/generic/sframe.h      | 367 ++++++++++++++++++++++
+ sysdeps/generic/uw-sigframe.h |  31 ++
+ 7 files changed, 1303 insertions(+), 1 deletion(-)
+ create mode 100644 sysdeps/generic/sframe-read.c
+ create mode 100644 sysdeps/generic/sframe-read.h
+ create mode 100644 sysdeps/generic/sframe.c
+ create mode 100644 sysdeps/generic/sframe.h
+ create mode 100644 sysdeps/generic/uw-sigframe.h
+
+diff --git a/debug/backtrace.c b/debug/backtrace.c
+index 05cdc84e8d..161999c17e 100644
+--- a/debug/backtrace.c
++++ b/debug/backtrace.c
+@@ -20,6 +20,7 @@
+ #include <stdlib.h>
+ #include <unwind.h>
+ #include <unwind-link.h>
++#include <sframe.h>
+ 
+ struct trace_arg
+ {
+@@ -30,6 +31,40 @@ struct trace_arg
+   int size;
+ };
+ 
++/* Initialize the SFrame backtrace routine and attempt to backtrace
++   the current stack using SFrame information.  For the SFrame
++   backtrace to be considered valid, the tracer must return more than
++   one frame.  If it doesn't, this could indicate a mixed
++   environment for example, glibc may have been compiled with SFrame
++   support, while the application was not.  An even more complex
++   scenario arises when the application uses shared objects compiled
++   with differing configurations.
++
++   Additionally, glibc includes certain callback paths that must be
++   considered.  For example: an application calls shared object A,
++   which calls shared object B, which in turn calls qsort() in
++   glibc.  qsort() then invokes a helper in shared object C, which
++   raises a SIGFPE signal, handled by object D, which requests a
++   backtrace.  Any of these components may or may not include SFrame
++   encoding.
++
++   In cases where a stack frame lacks SFrame information, the SFrame
++   backtracer can fall back to using the DWARF unwinder.
++
++   This function must be always inline.  Otherwise the
++   __builtin_frame_address and the __getXX helper functions will not
++   return the right addresses.  */
++
++static inline int __attribute__ ((always_inline))
++do_sframe_backtrace (void **array, int size)
++{
++  frame frame;
++  frame.pc = __getPC ();
++  frame.sp = __getSP ();
++  frame.fp = (_Unwind_Ptr) __builtin_frame_address (0);
++  return __stacktrace_sframe (array, size, &frame);
++}
++
+ static _Unwind_Reason_Code
+ backtrace_helper (struct _Unwind_Context *ctx, void *a)
+ {
+@@ -72,7 +107,16 @@ __backtrace (void **array, int size)
+      .cnt = -1
+     };
+ 
+-  if (size <= 0 || arg.unwind_link == NULL)
++  if (size <= 0)
++    return 0;
++
++  /* Try first the SFrame backtracer.  */
++  int cnt = do_sframe_backtrace (array, size);
++  if (cnt > 1)
++    return cnt;
++
++  /* Try the dwarf unwinder.  */
++  if (arg.unwind_link == NULL)
+     return 0;
+ 
+   UNWIND_LINK_PTR (arg.unwind_link, _Unwind_Backtrace)
+diff --git a/sysdeps/generic/Makefile b/sysdeps/generic/Makefile
+index 3ed75ddf89..c48e713eb3 100644
+--- a/sysdeps/generic/Makefile
++++ b/sysdeps/generic/Makefile
+@@ -21,6 +21,7 @@ CFLAGS-wordcopy.c += -Wno-uninitialized
+ endif
+ 
+ ifeq ($(subdir),elf)
++sysdep_routines += sframe-read sframe
+ ifeq (yes:yes,$(build-shared):$(unwind-find-fde))
+ # This is needed to support g++ v2 and v3.
+ sysdep_routines += framestate unwind-pe
+diff --git a/sysdeps/generic/sframe-read.c b/sysdeps/generic/sframe-read.c
+new file mode 100644
+index 0000000000..d536575b2d
+--- /dev/null
++++ b/sysdeps/generic/sframe-read.c
+@@ -0,0 +1,566 @@
++/* Copyright (C) 2025 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <stdarg.h>
++#include <string.h>
++#include <assert.h>
++#include <sframe-read.h>
++
++/* Get the SFrame header size.  */
++
++static inline uint32_t
++sframe_get_hdr_size (sframe_header *sfh)
++{
++  return SFRAME_V1_HDR_SIZE (*sfh);
++}
++
++/* Access functions for frame row entry data.  */
++
++static inline uint8_t
++sframe_fre_get_offset_count (uint8_t fre_info)
++{
++  return SFRAME_V1_FRE_OFFSET_COUNT (fre_info);
++}
++
++static inline uint8_t
++sframe_fre_get_offset_size (uint8_t fre_info)
++{
++  return SFRAME_V1_FRE_OFFSET_SIZE (fre_info);
++}
++
++static inline bool
++sframe_get_fre_ra_mangled_p (uint8_t fre_info)
++{
++  return SFRAME_V1_FRE_MANGLED_RA_P (fre_info);
++}
++
++/* Access functions for info from function descriptor entry.  */
++
++static uint32_t
++sframe_get_fre_type (sframe_func_desc_entry *fdep)
++{
++  uint32_t fre_type = 0;
++  if (fdep != NULL)
++    fre_type = SFRAME_V1_FUNC_FRE_TYPE (fdep->sfde_func_info);
++  return fre_type;
++}
++
++static uint32_t
++sframe_get_fde_type (sframe_func_desc_entry *fdep)
++{
++  uint32_t fde_type = 0;
++  if (fdep != NULL)
++    fde_type = SFRAME_V1_FUNC_FDE_TYPE (fdep->sfde_func_info);
++  return fde_type;
++}
++
++/* Check if SFrame header has valid data.  Only consider SFrame type
++   2.  */
++
++static bool
++sframe_header_sanity_check_p (sframe_header *hp)
++{
++  uint8_t all_flags = SFRAME_F_FDE_SORTED | SFRAME_F_FRAME_POINTER;
++  /* Check preamble is valid.  */
++  if ((hp->sfh_preamble.sfp_magic != SFRAME_MAGIC)
++      || (hp->sfh_preamble.sfp_version != SFRAME_VERSION_2)
++      || ((hp->sfh_preamble.sfp_flags | all_flags) != all_flags))
++    return false;
++
++  /* Check offsets are valid.  */
++  if (hp->sfh_fdeoff > hp->sfh_freoff)
++    return false;
++
++  return true;
++}
++
++/* Get the FRE start address size.  */
++
++static size_t
++sframe_fre_start_addr_size (uint32_t fre_type)
++{
++  size_t addr_size = 0;
++  switch (fre_type)
++    {
++    case SFRAME_FRE_TYPE_ADDR1:
++      addr_size = 1;
++      break;
++    case SFRAME_FRE_TYPE_ADDR2:
++      addr_size = 2;
++      break;
++    case SFRAME_FRE_TYPE_ADDR4:
++      addr_size = 4;
++      break;
++    default:
++      break;
++    }
++  return addr_size;
++}
++
++/* Check if the FREP has valid data.  */
++
++static bool
++sframe_fre_sanity_check_p (sframe_frame_row_entry *frep)
++{
++  uint8_t offset_size, offset_cnt;
++  uint8_t fre_info;
++
++  if (frep == NULL)
++    return false;
++
++  fre_info = frep->fre_info;
++  offset_size = sframe_fre_get_offset_size (fre_info);
++
++  if (offset_size != SFRAME_FRE_OFFSET_1B
++      && offset_size != SFRAME_FRE_OFFSET_2B
++      && offset_size != SFRAME_FRE_OFFSET_4B)
++    return false;
++
++  offset_cnt = sframe_fre_get_offset_count (fre_info);
++  if (offset_cnt > MAX_NUM_STACK_OFFSETS)
++    return false;
++
++  return true;
++}
++
++/* Get FRE_INFO's offset size in bytes.  */
++
++static size_t
++sframe_fre_offset_bytes_size (uint8_t fre_info)
++{
++  uint8_t offset_size, offset_cnt;
++
++  offset_size = sframe_fre_get_offset_size (fre_info);
++
++  offset_cnt = sframe_fre_get_offset_count (fre_info);
++
++  if (offset_size == SFRAME_FRE_OFFSET_2B
++      || offset_size == SFRAME_FRE_OFFSET_4B)	/* 2 or 4 bytes.  */
++    return (offset_cnt * (offset_size * 2));
++
++  return (offset_cnt);
++}
++
++/* Get total size in bytes to represent FREP in the binary format.  This
++   includes the starting address, FRE info, and all the offsets.  */
++
++static size_t
++sframe_fre_entry_size (sframe_frame_row_entry *frep, size_t addr_size)
++{
++  if (frep == NULL)
++    return 0;
++
++  uint8_t fre_info = frep->fre_info;
++
++  return (addr_size + sizeof (frep->fre_info)
++	  + sframe_fre_offset_bytes_size (fre_info));
++}
++
++/* Check whether for the given FDEP, the SFrame Frame Row Entry identified via
++   the START_IP_OFFSET and the END_IP_OFFSET, provides the stack trace
++   information for the PC.  */
++
++static bool
++sframe_fre_check_range_p (sframe_func_desc_entry *fdep,
++			  uint32_t start_ip_offset, uint32_t end_ip_offset,
++			  int32_t pc)
++{
++  int32_t func_start_addr;
++  uint8_t rep_block_size;
++  uint32_t fde_type;
++  uint32_t pc_offset;
++  bool mask_p;
++
++  if (fdep == NULL)
++    return false;
++
++  func_start_addr = fdep->sfde_func_start_address;
++  fde_type = sframe_get_fde_type (fdep);
++  mask_p = (fde_type == SFRAME_FDE_TYPE_PCMASK);
++  rep_block_size = fdep->sfde_func_rep_size;
++
++  if (func_start_addr > pc)
++    return false;
++
++  /* Given func_start_addr <= pc, pc - func_start_addr must be positive.  */
++  pc_offset = pc - func_start_addr;
++  /* For SFrame FDEs encoding information for repetitive pattern of insns,
++     masking with the rep_block_size is necessary to find the matching FRE.  */
++  if (mask_p)
++    pc_offset = pc_offset % rep_block_size;
++
++  return (start_ip_offset <= pc_offset) && (end_ip_offset >= pc_offset);
++}
++
++/* The SFrame Decoder.  */
++
++/* Get SFrame header from the given decoder context DCTX.  */
++
++static inline sframe_header *
++sframe_decoder_get_header (sframe_decoder_ctx *dctx)
++{
++  sframe_header *hp = NULL;
++  if (dctx != NULL)
++    hp = &dctx->sfd_header;
++  return hp;
++}
++
++/* Get IDX'th offset from FRE.  Set ERRP as applicable.  */
++
++static int32_t
++sframe_get_fre_offset (sframe_frame_row_entry *fre,
++		       int idx,
++		       _Unwind_Reason_Code *errp)
++{
++  uint8_t offset_cnt, offset_size;
++
++  if (!sframe_fre_sanity_check_p (fre))
++    {
++      *errp = _URC_END_OF_STACK;
++      return 0;
++    }
++
++  offset_cnt = sframe_fre_get_offset_count (fre->fre_info);
++  offset_size = sframe_fre_get_offset_size (fre->fre_info);
++
++  if (offset_cnt < (idx + 1))
++    {
++      *errp = _URC_END_OF_STACK;
++      return 0;
++    }
++  *errp = _URC_NO_REASON;
++
++  if (offset_size == SFRAME_FRE_OFFSET_1B)
++    {
++      int8_t *sp = (int8_t *)fre->fre_offsets;
++      return sp[idx];
++    }
++  else if (offset_size == SFRAME_FRE_OFFSET_2B)
++    {
++      int16_t *sp = (int16_t *)fre->fre_offsets;
++      return sp[idx];
++    }
++  else
++    {
++      int32_t *ip = (int32_t *)fre->fre_offsets;
++      return ip[idx];
++    }
++}
++
++/* Decode the SFrame FRE start address offset value from FRE_BUF in on-disk
++   binary format, given the FRE_TYPE.  Updates the FRE_START_ADDR.  */
++
++static void
++sframe_decode_fre_start_address (const char *fre_buf,
++				 uint32_t *fre_start_addr,
++				 uint32_t fre_type)
++{
++  uint32_t saddr = 0;
++
++  if (fre_type == SFRAME_FRE_TYPE_ADDR1)
++    {
++      uint8_t *uc = (uint8_t *)fre_buf;
++      saddr = (uint32_t)*uc;
++    }
++  else if (fre_type == SFRAME_FRE_TYPE_ADDR2)
++    {
++      uint16_t *ust = (uint16_t *)fre_buf;
++      saddr = (uint32_t)*ust;
++    }
++  else if (fre_type == SFRAME_FRE_TYPE_ADDR4)
++    {
++      uint32_t *uit = (uint32_t *)fre_buf;
++      saddr = (uint32_t)*uit;
++    }
++  else
++    return;
++
++  *fre_start_addr = saddr;
++}
++
++/* Find the function descriptor entry starting which contains the specified
++   address ADDR.  */
++
++static sframe_func_desc_entry *
++sframe_get_funcdesc_with_addr_internal (sframe_decoder_ctx *ctx, int32_t addr,
++					int *errp)
++{
++  sframe_header *dhp;
++  sframe_func_desc_entry *fdp;
++  int low, high;
++
++  if (ctx == NULL)
++    return NULL;
++
++  dhp = sframe_decoder_get_header (ctx);
++
++  if (dhp == NULL || dhp->sfh_num_fdes == 0 || ctx->sfd_funcdesc == NULL)
++    return NULL;
++  /* If the FDE sub-section is not sorted on PCs, skip the lookup because
++     binary search cannot be used.  */
++  if ((dhp->sfh_preamble.sfp_flags & SFRAME_F_FDE_SORTED) == 0)
++    return NULL;
++
++  /* Do the binary search.  */
++  fdp = (sframe_func_desc_entry *) ctx->sfd_funcdesc;
++  low = 0;
++  high = dhp->sfh_num_fdes;
++  while (low <= high)
++    {
++      int mid = low + (high - low) / 2;
++
++      /* Given sfde_func_start_address <= addr,
++	 addr - sfde_func_start_address must be positive.  */
++      if (fdp[mid].sfde_func_start_address <= addr
++	  && ((uint32_t)(addr - fdp[mid].sfde_func_start_address)
++	      < fdp[mid].sfde_func_size))
++	return fdp + mid;
++
++      if (fdp[mid].sfde_func_start_address < addr)
++	low = mid + 1;
++      else
++	high = mid - 1;
++    }
++
++  return NULL;
++}
++
++/* Get the end IP offset for the FRE at index i in the FDEP.  The buffer FRES
++   is the starting location for the FRE.  */
++
++static uint32_t
++sframe_fre_get_end_ip_offset (sframe_func_desc_entry *fdep, unsigned int i,
++			      const char *fres)
++{
++  uint32_t end_ip_offset = 0;
++  uint32_t fre_type;
++
++  fre_type = sframe_get_fre_type (fdep);
++
++  /* Get the start address of the next FRE in sequence.  */
++  if (i < fdep->sfde_func_num_fres - 1)
++    {
++      sframe_decode_fre_start_address (fres, &end_ip_offset, fre_type);
++      end_ip_offset -= 1;
++    }
++  else
++    /* The end IP offset for the FRE needs to be deduced from the function
++       size.  */
++    end_ip_offset = fdep->sfde_func_size - 1;
++
++  return end_ip_offset;
++}
++
++/* Get the SFrame's fixed FP offset given the decoder context CTX.  */
++
++static int8_t
++sframe_decoder_get_fixed_fp_offset (sframe_decoder_ctx *ctx)
++{
++  sframe_header *dhp;
++  dhp = sframe_decoder_get_header (ctx);
++  return dhp->sfh_cfa_fixed_fp_offset;
++}
++
++/* Get the SFrame's fixed RA offset given the decoder context CTX.  */
++
++static int8_t
++sframe_decoder_get_fixed_ra_offset (sframe_decoder_ctx *ctx)
++{
++  sframe_header *dhp;
++  dhp = sframe_decoder_get_header (ctx);
++  return dhp->sfh_cfa_fixed_ra_offset;
++}
++
++/* Get the base reg id from the FRE info.  Set errp if failure.  */
++
++uint8_t
++__sframe_fre_get_base_reg_id (sframe_frame_row_entry *fre)
++{
++  uint8_t fre_info = fre->fre_info;
++  return SFRAME_V1_FRE_CFA_BASE_REG_ID (fre_info);
++}
++
++/* Get the CFA offset from the FRE.  If the offset is unavailable,
++   sets errp.  */
++
++int32_t
++__sframe_fre_get_cfa_offset (sframe_decoder_ctx *dctx __attribute__ ((__unused__)),
++			     sframe_frame_row_entry *fre,
++			     _Unwind_Reason_Code *errp)
++{
++  return sframe_get_fre_offset (fre, SFRAME_FRE_CFA_OFFSET_IDX, errp);
++}
++
++/* Get the FP offset from the FRE.  If the offset is unavailable, sets
++   errp.  */
++
++int32_t
++__sframe_fre_get_fp_offset (sframe_decoder_ctx *dctx,
++			    sframe_frame_row_entry *fre,
++			    _Unwind_Reason_Code *errp)
++{
++  uint32_t fp_offset_idx = 0;
++  int8_t fp_offset = sframe_decoder_get_fixed_fp_offset (dctx);
++
++  *errp = _URC_NO_REASON;
++  /* If the FP offset is not being tracked, return the fixed FP offset
++     from the SFrame header.  */
++  if (fp_offset != SFRAME_CFA_FIXED_FP_INVALID)
++    return fp_offset;
++
++  /* In some ABIs, the stack offset to recover RA (using the CFA) from is
++     fixed (like AMD64).  In such cases, the stack offset to recover FP will
++     appear at the second index.  */
++  fp_offset_idx = ((sframe_decoder_get_fixed_ra_offset (dctx)
++		    != SFRAME_CFA_FIXED_RA_INVALID)
++		   ? SFRAME_FRE_RA_OFFSET_IDX
++		   : SFRAME_FRE_FP_OFFSET_IDX);
++  return sframe_get_fre_offset (fre, fp_offset_idx, errp);
++}
++
++/* Get the RA offset from the FRE.  If the offset is unavailable, sets
++   errp.  */
++
++int32_t
++__sframe_fre_get_ra_offset (sframe_decoder_ctx *dctx,
++			    sframe_frame_row_entry *fre,
++			    _Unwind_Reason_Code *errp)
++{
++  int8_t ra_offset = sframe_decoder_get_fixed_ra_offset (dctx);
++  *errp = _URC_NO_REASON;
++
++  /* If the RA offset was not being tracked, return the fixed RA offset
++     from the SFrame header.  */
++  if (ra_offset != SFRAME_CFA_FIXED_RA_INVALID)
++    return ra_offset;
++
++  /* Otherwise, get the RA offset from the FRE.  */
++  return sframe_get_fre_offset (fre, SFRAME_FRE_RA_OFFSET_IDX, errp);
++}
++
++/* Decode the specified SFrame buffer SF_BUF and return the new SFrame
++   decoder context.  */
++
++_Unwind_Reason_Code
++__sframe_decode (sframe_decoder_ctx *dctx, const char *sf_buf)
++{
++  const sframe_preamble *sfp;
++  size_t hdrsz;
++  sframe_header *sfheaderp;
++  char *frame_buf;
++
++  int fidx_size;
++  uint32_t fre_bytes;
++
++  if (sf_buf == NULL)
++    return _URC_END_OF_STACK;
++
++  sfp = (const sframe_preamble *) sf_buf;
++
++  /* Check for foreign endianness.  */
++  if (sfp->sfp_magic != SFRAME_MAGIC)
++    return _URC_END_OF_STACK;
++
++  frame_buf = (char *)sf_buf;
++
++  /* Handle the SFrame header.  */
++  dctx->sfd_header = *(sframe_header *) frame_buf;
++
++  /* Validate the contents of SFrame header.  */
++  sfheaderp = &dctx->sfd_header;
++  if (!sframe_header_sanity_check_p (sfheaderp))
++    return _URC_END_OF_STACK;
++
++  hdrsz = sframe_get_hdr_size (sfheaderp);
++  frame_buf += hdrsz;
++
++  /* Handle the SFrame Function Descriptor Entry section.  */
++  fidx_size
++    = sfheaderp->sfh_num_fdes * sizeof (sframe_func_desc_entry);
++  dctx->sfd_funcdesc = (sframe_func_desc_entry *)frame_buf;
++  frame_buf += (fidx_size);
++
++  dctx->sfd_fres = frame_buf;
++  fre_bytes = sfheaderp->sfh_fre_len;
++  dctx->sfd_fre_nbytes = fre_bytes;
++
++  return _URC_NO_REASON;
++}
++
++/* Find the SFrame Row Entry which contains the PC.  Returns
++   _URC_END_OF_STACK if failure.  */
++
++_Unwind_Reason_Code
++__sframe_find_fre (sframe_decoder_ctx *ctx, int32_t pc,
++		   sframe_frame_row_entry *frep)
++{
++  sframe_func_desc_entry *fdep;
++  uint32_t fre_type, i;
++  uint32_t start_ip_offset;
++  int32_t func_start_addr;
++  uint32_t end_ip_offset;
++  const char *fres;
++  size_t size = 0;
++  int err = 0;
++
++  if ((ctx == NULL) || (frep == NULL))
++    return _URC_END_OF_STACK;
++
++  /* Find the FDE which contains the PC, then scan its fre entries.  */
++  fdep = sframe_get_funcdesc_with_addr_internal (ctx, pc, &err);
++  if (fdep == NULL || ctx->sfd_fres == NULL)
++    return _URC_END_OF_STACK;
++
++  fre_type = sframe_get_fre_type (fdep);
++
++  fres = ctx->sfd_fres + fdep->sfde_func_start_fre_off;
++  func_start_addr = fdep->sfde_func_start_address;
++
++  for (i = 0; i < fdep->sfde_func_num_fres; i++)
++    {
++      size_t addr_size;
++
++      /* Partially decode the FRE.  */
++      sframe_decode_fre_start_address (fres, &frep->fre_start_addr, fre_type);
++
++      addr_size = sframe_fre_start_addr_size (fre_type);
++      if (addr_size == 0)
++	return _URC_END_OF_STACK;
++
++      frep->fre_info = *(uint8_t *)(fres + addr_size);
++      size = sframe_fre_entry_size (frep, addr_size);
++
++      start_ip_offset = frep->fre_start_addr;
++      end_ip_offset = sframe_fre_get_end_ip_offset (fdep, i, fres + size);
++
++      /* Stop search if FRE's start_ip is greater than pc.  Given
++	func_start_addr <= pc, pc - func_start_addr must be positive.  */
++      if (start_ip_offset > (uint32_t) (pc - func_start_addr))
++	return _URC_END_OF_STACK;
++
++      if (sframe_fre_check_range_p (fdep, start_ip_offset, end_ip_offset, pc))
++	{
++	  /* Decode last FRE bits: offsets size.  */
++	  frep->fre_offsets = fres + addr_size + sizeof (frep->fre_info);
++	  return _URC_NO_REASON;
++	}
++
++      fres += size;
++    }
++  return _URC_END_OF_STACK;
++}
+diff --git a/sysdeps/generic/sframe-read.h b/sysdeps/generic/sframe-read.h
+new file mode 100644
+index 0000000000..1db1886bce
+--- /dev/null
++++ b/sysdeps/generic/sframe-read.h
+@@ -0,0 +1,106 @@
++/* Copyright (C) 2025 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
++
++#ifndef _SFRAME_API_H
++#define _SFRAME_API_H
++
++#include <sframe.h>
++#include <stdbool.h>
++#include <unwind.h>
++
++#ifdef	__cplusplus
++extern "C"
++{
++#endif
++
++typedef struct sframe_decoder_ctx
++{
++
++  sframe_header sfd_header;
++
++  sframe_func_desc_entry *sfd_funcdesc;
++  /* SFrame FRE table.  */
++  char *sfd_fres;
++  /* Number of bytes needed for SFrame FREs.  */
++  int sfd_fre_nbytes;
++} sframe_decoder_ctx;
++
++#define MAX_NUM_STACK_OFFSETS	3
++
++/* User interfacing SFrame Row Entry.
++   An abstraction provided by libsframe so the consumer is decoupled from
++   the binary format representation of the same.
++
++   The members are best ordered such that they are aligned at their natural
++   boundaries.  This helps avoid usage of undesirable misaligned memory
++   accesses.  See PR libsframe/29856.  */
++
++typedef struct sframe_frame_row_entry
++{
++  uint32_t fre_start_addr;
++  const char *fre_offsets;
++  unsigned char fre_info;
++} sframe_frame_row_entry;
++
++/* The SFrame Decoder.  */
++
++/* Decode the specified SFrame buffer CF_BUF and return the new SFrame
++   decoder context.  */
++
++extern _Unwind_Reason_Code
++__sframe_decode (sframe_decoder_ctx *dctx, const char *cf_buf);
++
++/* Find the SFrame Frame Row Entry which contains the PC.  Returns
++   _URC_END_OF_STACK if failure.  */
++
++extern _Unwind_Reason_Code
++__sframe_find_fre (sframe_decoder_ctx *ctx, int32_t pc,
++		   sframe_frame_row_entry *frep);
++
++/* Get the base reg id from the FRE info.  */
++
++extern uint8_t
++__sframe_fre_get_base_reg_id (sframe_frame_row_entry *fre);
++
++/* Get the CFA offset from the FRE.  Sets ERRP if an error is
++   detected.  */
++
++extern int32_t
++__sframe_fre_get_cfa_offset (sframe_decoder_ctx *dtcx,
++			     sframe_frame_row_entry *fre,
++			     _Unwind_Reason_Code *errp);
++
++/* Get the FP offset from the FRE.  If the offset is unavailable, sets
++   ERRP.  */
++
++extern int32_t
++__sframe_fre_get_fp_offset (sframe_decoder_ctx *dctx,
++			    sframe_frame_row_entry *fre,
++			    _Unwind_Reason_Code *errp);
++
++/* Get the RA offset from the FRE.  Sets ERRP if ra offset is
++   unavailable.  */
++
++extern int32_t
++__sframe_fre_get_ra_offset (sframe_decoder_ctx *dctx,
++			    sframe_frame_row_entry *fre,
++			    _Unwind_Reason_Code *errp);
++
++#ifdef	__cplusplus
++}
++#endif
++
++#endif /* _SFRAME_API_H */
+diff --git a/sysdeps/generic/sframe.c b/sysdeps/generic/sframe.c
+new file mode 100644
+index 0000000000..ba0830da3d
+--- /dev/null
++++ b/sysdeps/generic/sframe.c
+@@ -0,0 +1,187 @@
++/* Copyright (C) 2025 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
++
++#include <sframe-read.h>
++#include <stdlib.h>
++#include <dlfcn.h>
++#include <unwind.h>
++#include <uw-sigframe.h>
++#include <ldsodefs.h>
++
++/* Some arches like s390x needs an offset to correct the value where
++   SP is located in relation to CFA.  */
++#ifndef SFRAME_SP_VAL_OFFSET
++#define SFRAME_SP_VAL_OFFSET 0
++#endif
++
++static inline _Unwind_Ptr
++read_stack_value (_Unwind_Ptr loc)
++{
++  _Unwind_Ptr value = *((_Unwind_Ptr *) loc);
++  return value;
++}
++
++/* Helper to avoid PLT call in libc.  Fixes elf/check-localplt
++   errors.  */
++
++static int
++_dl_find_object_helper (void *address, struct dl_find_object *result)
++{
++  return GLRO (dl_find_object) (address, result);
++}
++
++/* Backtrace the stack and collect the stacktrace given SFrame info.
++   If successful, store the return addresses in RA_LST.  The SIZE
++   argument specifies the maximum number of return addresses that can
++   be stored in RA_LST and contains the number of the addresses
++   collected.  */
++
++int
++__stacktrace_sframe (void **ra_lst, int count, frame *frame)
++{
++  _Unwind_Ptr sframe_vma, cfa, return_addr, ra_stack_loc, fp_stack_loc, pc,
++    frame_ptr;
++  int cfa_offset, fp_offset, ra_offset, i;
++  sframe_frame_row_entry fred, *frep = &fred;
++
++  if (!ra_lst || !count)
++    return 0;
++
++  for (i = 0; i < count; i++)
++    {
++      _Unwind_Reason_Code err;
++      struct dl_find_object data;
++      sframe_decoder_ctx decoder_context, *dctx = &decoder_context;
++
++      /* Clean decoder context.  */
++      memset (dctx, 0, sizeof (sframe_decoder_ctx));
++
++      /* Load and set up the SFrame stack trace info for pc.  */
++      if (_dl_find_object_helper ((void *) frame->pc, &data) < 0)
++	/* Force fallback to DWARF stacktracer.  */
++	return 0;
++
++      sframe_vma = (_Unwind_Ptr) data.dlfo_sframe;
++      if (!sframe_vma || !(data.dlfo_flags & DLFO_FLAG_SFRAME))
++	{
++#ifdef MD_DECODE_SIGNAL_FRAME
++	  /* If there is no valid SFrame section or SFrame section is
++	     corrupted then check if it is a signal frame.  */
++	  if (MD_DECODE_SIGNAL_FRAME (frame) == _URC_NO_REASON)
++	    {
++	      ra_lst[i] = (void *) frame->pc;
++	      continue;
++	    }
++#endif
++	  /* Force fallback to DWARF stacktracer.  */
++	  return 0;
++	}
++
++      /* Decode the specified SFrame buffer populate sframe's decoder
++	 context.  */
++      if (__sframe_decode (dctx, (char *) data.dlfo_sframe) != _URC_NO_REASON)
++	/* Force fallback to DWARF stacktracer.  */
++	return 0;
++
++      pc = frame->pc - sframe_vma;
++      /* Find the SFrame Row Entry which contains the PC.  */
++      if (__sframe_find_fre (dctx, pc, frep) == _URC_END_OF_STACK)
++	{
++#ifdef MD_DECODE_SIGNAL_FRAME
++	  /* If there are no valid FREs, check if it is a signal
++	     frame, and if so decode it.  */
++	  if (MD_DECODE_SIGNAL_FRAME (frame) == _URC_NO_REASON)
++	    {
++	      ra_lst[i] = (void *) frame->pc;
++	      continue;
++	    }
++#endif
++#ifdef MD_DETECT_OUTERMOST_FRAME
++	  if (MD_DETECT_OUTERMOST_FRAME (frame) == _URC_END_OF_STACK)
++	    return i;
++#endif
++	  /* Force fallback to DWARF stacktracer.  */
++	  return 0;
++	}
++
++      /* Get the CFA offset from the FRE.  If offset is unavailable,
++	 sets err.  */
++      cfa_offset = __sframe_fre_get_cfa_offset (dctx, frep, &err);
++      if (err != _URC_NO_REASON)
++	/* Force fallback to DWARF stacktracer.  */
++	return 0;
++
++      /* Get CFA using base reg id from the FRE info.  */
++      cfa = ((__sframe_fre_get_base_reg_id (frep)
++	      == SFRAME_BASE_REG_SP) ? frame->sp : frame->fp) + cfa_offset;
++
++      /* Get the RA offset from the FRE.  If the offset is
++	 unavailable, sets err.  */
++      ra_offset = __sframe_fre_get_ra_offset (dctx, frep, &err);
++      if (err != _URC_NO_REASON)
++	/* Force fallback to DWARF stacktracer.  */
++	return 0;
++
++      /* RA offset is available, get the value stored in the stack
++	 location.  */
++      ra_stack_loc = cfa + ra_offset;
++      return_addr = read_stack_value (ra_stack_loc);
++
++      ra_lst[i] = (void *) return_addr;
++
++      /* Get the FP offset from the FRE.  If the offset is
++	 unavailable, sets err.  */
++      fp_offset = __sframe_fre_get_fp_offset (dctx, frep, &err);
++      frame_ptr = frame->fp;
++      if (err == _URC_NO_REASON)
++	{
++	  /* FP offset is available, get the value stored in the stack
++	     location.  */
++	  fp_stack_loc = cfa + fp_offset;
++	  frame_ptr = read_stack_value (fp_stack_loc);
++	}
++
++      /* Set up for the next frame.  */
++      frame->fp = frame_ptr;
++      frame->sp = cfa + SFRAME_SP_VAL_OFFSET;
++      frame->pc = return_addr;
++    }
++  return i;
++}
++
++libc_hidden_def (__stacktrace_sframe);
++
++/* A noinline helper used to obtain the caller's current PC.  */
++
++_Unwind_Ptr  __attribute__ ((noinline))
++__getPC (void)
++{
++  return (_Unwind_Ptr)
++    __builtin_extract_return_addr (__builtin_return_address (0));
++}
++
++libc_hidden_def (__getPC);
++
++/* A noinline helper used to obtain the caller's current SP.  It
++   mimics gcc14's __builtin_stack_address() functionality.  */
++
++_Unwind_Ptr  __attribute__ ((noinline))
++__getSP (void)
++{
++  return (_Unwind_Ptr) __builtin_dwarf_cfa() + SFRAME_SP_VAL_OFFSET;
++}
++
++libc_hidden_def (__getSP);
+diff --git a/sysdeps/generic/sframe.h b/sysdeps/generic/sframe.h
+new file mode 100644
+index 0000000000..3f8ff1c80e
+--- /dev/null
++++ b/sysdeps/generic/sframe.h
+@@ -0,0 +1,367 @@
++/* SFrame format description.
++   Copyright (C) 2022-2025 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program; see the file COPYING.  If not see
++   <http://www.gnu.org/licenses/>.  */
++
++#ifndef	_SFRAME_H
++#define	_SFRAME_H
++
++#include <sys/types.h>
++#include <limits.h>
++#include <stdint.h>
++#include <unwind.h>
++
++#ifdef	__cplusplus
++extern "C"
++{
++#endif
++
++/* SFrame format.
++
++   SFrame format is a simple format to represent the information needed
++   for generating vanilla backtraces.  SFrame format keeps track of the
++   minimal necessary information needed for stack tracing:
++     - Canonical Frame Address (CFA)
++     - Frame Pointer (FP)
++     - Return Address (RA)
++
++   The SFrame section itself has the following structure:
++
++       +--------+------------+---------+
++       |  file  |  function  | frame   |
++       | header | descriptor |  row    |
++       |        |   entries  | entries |
++       +--------+------------+---------+
++
++   The file header stores a magic number and version information, flags, and
++   the byte offset of each of the sections relative to the end of the header
++   itself.  The file header also specifies the total number of Function
++   Descriptor Entries, Frame Row Entries and length of the FRE sub-section.
++
++   Following the header is a list of Function Descriptor Entries (FDEs).
++   This list may be sorted if the flags in the file header indicate it to be
++   so.  The sort order, if applicable, is the order of functions in the
++   .text.* sections in the resulting binary artifact.  Each Function
++   Descriptor Entry specifies the start PC of a function, the size in bytes
++   of the function and an offset to its first Frame Row Entry (FRE).  Each FDE
++   additionally also specifies the type of FRE it uses to encode the stack
++   trace information.
++
++   Next, the SFrame Frame Row Entry sub-section is a list of variable size
++   records.  Each entry represents stack trace information for a set of PCs
++   of the function.  A singular Frame Row Entry is a self-sufficient record
++   which contains information on how to generate stack trace from the
++   applicable set of PCs.
++
++   */
++
++
++/* SFrame format versions.  */
++#define SFRAME_VERSION_1	1
++#define SFRAME_VERSION_2	2
++/* SFrame magic number.  */
++#define SFRAME_MAGIC		0xdee2
++/* Current version of SFrame format.  */
++#define SFRAME_VERSION	SFRAME_VERSION_2
++
++/* Various flags for SFrame.  */
++
++/* Function Descriptor Entries are sorted on PC.  */
++#define SFRAME_F_FDE_SORTED	0x1
++/* Functions preserve frame pointer.  */
++#define SFRAME_F_FRAME_POINTER 0x2
++
++#define SFRAME_CFA_FIXED_FP_INVALID 0
++#define SFRAME_CFA_FIXED_RA_INVALID 0
++
++/* Supported ABIs/Arch.  */
++#define SFRAME_ABI_AARCH64_ENDIAN_BIG      1 /* AARCH64 big endian.  */
++#define SFRAME_ABI_AARCH64_ENDIAN_LITTLE   2 /* AARCH64 little endian.  */
++#define SFRAME_ABI_AMD64_ENDIAN_LITTLE     3 /* AMD64 little endian.  */
++
++/* SFrame FRE types.  */
++#define SFRAME_FRE_TYPE_ADDR1	0
++#define SFRAME_FRE_TYPE_ADDR2	1
++#define SFRAME_FRE_TYPE_ADDR4	2
++
++/* SFrame Function Descriptor Entry types.
++
++   The SFrame format has two possible representations for functions.  The
++   choice of which type to use is made according to the instruction patterns
++   in the relevant program stub.
++
++   An SFrame FDE of type SFRAME_FDE_TYPE_PCINC is an indication
++   that the PCs in the FREs should be treated as increments in bytes.  This is
++   used for a bulk of the executable code of a program, which contains
++   instructions with no specific pattern.
++
++   An SFrame FDE of type SFRAME_FDE_TYPE_PCMASK is an indication
++   that the PCs in the FREs should be treated as masks.  This type is useful
++   for the cases when a small pattern of instructions in a program stub is
++   repeatedly to cover a specific functionality.  Typical usescases are pltN
++   entries, trampolines etc.  */
++
++/* Unwinders perform a (PC >= FRE_START_ADDR) to look up a matching FRE.  */
++#define SFRAME_FDE_TYPE_PCINC   0
++/* Unwinders perform a (PC % REP_BLOCK_SIZE >= FRE_START_ADDR) to look up a
++   matching FRE.  */
++#define SFRAME_FDE_TYPE_PCMASK  1
++
++typedef struct sframe_preamble
++{
++  uint16_t sfp_magic;	/* Magic number (SFRAME_MAGIC).  */
++  uint8_t sfp_version;	/* Data format version number (SFRAME_VERSION).  */
++  uint8_t sfp_flags;	/* Flags.  */
++} __attribute__ ((packed)) sframe_preamble;
++
++typedef struct sframe_header
++{
++  sframe_preamble sfh_preamble;
++  /* Information about the arch (endianness) and ABI.  */
++  uint8_t sfh_abi_arch;
++  /* Offset for the Frame Pointer (FP) from CFA may be fixed for some
++     ABIs (e.g, in AMD64 when -fno-omit-frame-pointer is used).  When fixed,
++     this field specifies the fixed stack frame offset and the individual
++     FREs do not need to track it.  When not fixed, it is set to
++     SFRAME_CFA_FIXED_FP_INVALID, and the individual FREs may provide
++     the applicable stack frame offset, if any.  */
++  int8_t sfh_cfa_fixed_fp_offset;
++  /* Offset for the Return Address from CFA is fixed for some ABIs
++     (e.g., AMD64 has it as CFA-8).  When fixed, the header specifies the
++     fixed stack frame offset and the individual FREs do not track it.  When
++     not fixed, it is set to SFRAME_CFA_FIXED_RA_INVALID, and individual
++     FREs provide the applicable stack frame offset, if any.  */
++  int8_t sfh_cfa_fixed_ra_offset;
++  /* Number of bytes making up the auxiliary header, if any.
++     Some ABI/arch, in the future, may use this space for extending the
++     information in SFrame header.  Auxiliary header is contained in
++     bytes sequentially following the sframe_header.  */
++  uint8_t sfh_auxhdr_len;
++  /* Number of SFrame FDEs in this SFrame section.  */
++  uint32_t sfh_num_fdes;
++  /* Number of SFrame Frame Row Entries.  */
++  uint32_t sfh_num_fres;
++  /* Number of bytes in the SFrame Frame Row Entry section.  */
++  uint32_t sfh_fre_len;
++  /* Offset of SFrame Function Descriptor Entry section.  */
++  uint32_t sfh_fdeoff;
++  /* Offset of SFrame Frame Row Entry section.  */
++  uint32_t sfh_freoff;
++} __attribute__ ((packed)) sframe_header;
++
++#define SFRAME_V1_HDR_SIZE(sframe_hdr)	\
++  ((sizeof (sframe_header) + (sframe_hdr).sfh_auxhdr_len))
++
++/* Two possible keys for executable (instruction) pointers signing.  */
++#define SFRAME_AARCH64_PAUTH_KEY_A    0 /* Key A.  */
++#define SFRAME_AARCH64_PAUTH_KEY_B    1 /* Key B.  */
++
++typedef struct sframe_func_desc_entry
++{
++  /* Function start address.  Encoded as a signed offset, relative to the
++     beginning of the current FDE.  */
++  int32_t sfde_func_start_address;
++  /* Size of the function in bytes.  */
++  uint32_t sfde_func_size;
++  /* Offset of the first SFrame Frame Row Entry of the function, relative to the
++     beginning of the SFrame Frame Row Entry sub-section.  */
++  uint32_t sfde_func_start_fre_off;
++  /* Number of frame row entries for the function.  */
++  uint32_t sfde_func_num_fres;
++  /* Additional information for stack tracing from the function:
++     - 4-bits: Identify the FRE type used for the function.
++     - 1-bit: Identify the FDE type of the function - mask or inc.
++     - 1-bit: PAC authorization A/B key (aarch64).
++     - 2-bits: Unused.
++     ------------------------------------------------------------------------
++     |     Unused    |  PAC auth A/B key (aarch64) |  FDE type |   FRE type   |
++     |               |        Unused (amd64)       |           |              |
++     ------------------------------------------------------------------------
++     8               6                             5           4              0     */
++  uint8_t sfde_func_info;
++  /* Size of the block of repeating insns.  Used for SFrame FDEs of type
++     SFRAME_FDE_TYPE_PCMASK.  */
++  uint8_t sfde_func_rep_size;
++  uint16_t sfde_func_padding2;
++} __attribute__ ((packed)) sframe_func_desc_entry;
++
++/* Macros to compose and decompose function info in FDE.  */
++
++/* Note: Set PAC auth key to SFRAME_AARCH64_PAUTH_KEY_A by default.  */
++#define SFRAME_V1_FUNC_INFO(fde_type, fre_enc_type) \
++  (((SFRAME_AARCH64_PAUTH_KEY_A & 0x1) << 5) | \
++   (((fde_type) & 0x1) << 4) | ((fre_enc_type) & 0xf))
++
++#define SFRAME_V1_FUNC_FRE_TYPE(data)	  ((data) & 0xf)
++#define SFRAME_V1_FUNC_FDE_TYPE(data)	  (((data) >> 4) & 0x1)
++#define SFRAME_V1_FUNC_PAUTH_KEY(data)	  (((data) >> 5) & 0x1)
++
++/* Set the pauth key as indicated.  */
++#define SFRAME_V1_FUNC_INFO_UPDATE_PAUTH_KEY(pauth_key, fde_info) \
++  ((((pauth_key) & 0x1) << 5) | ((fde_info) & 0xdf))
++
++/* Size of stack frame offsets in an SFrame Frame Row Entry.  A single
++   SFrame FRE has all offsets of the same size.  Offset size may vary
++   across frame row entries.  */
++#define SFRAME_FRE_OFFSET_1B	  0
++#define SFRAME_FRE_OFFSET_2B	  1
++#define SFRAME_FRE_OFFSET_4B	  2
++
++/* An SFrame Frame Row Entry can be SP or FP based.  */
++#define SFRAME_BASE_REG_FP	0
++#define SFRAME_BASE_REG_SP	1
++
++/* The index at which a specific offset is presented in the variable length
++   bytes of an FRE.  */
++#define SFRAME_FRE_CFA_OFFSET_IDX   0
++/* The RA stack offset, if present, will always be at index 1 in the variable
++   length bytes of the FRE.  */
++#define SFRAME_FRE_RA_OFFSET_IDX    1
++/* The FP stack offset may appear at offset 1 or 2, depending on the ABI as RA
++   may or may not be tracked.  */
++#define SFRAME_FRE_FP_OFFSET_IDX    2
++
++typedef struct sframe_fre_info
++{
++  /* Information about
++     - 1 bit: base reg for CFA
++     - 4 bits: Number of offsets (N).  A value of upto 3 is allowed to track
++     all three of CFA, FP and RA (fixed implicit order).
++     - 2 bits: information about size of the offsets (S) in bytes.
++     Valid values are SFRAME_FRE_OFFSET_1B, SFRAME_FRE_OFFSET_2B,
++     SFRAME_FRE_OFFSET_4B
++     - 1 bit: Mangled RA state bit (aarch64 only).
++     ----------------------------------------------------------------------------------
++     | Mangled-RA (aarch64) |  Size of offsets   |   Number of offsets    |   base_reg |
++     |  Unused (amd64)      |                    |                        |            |
++     ----------------------------------------------------------------------------------
++     8                     7                    5                        1            0
++
++     */
++  uint8_t fre_info;
++} sframe_fre_info;
++
++/* Macros to compose and decompose FRE info.  */
++
++/* Note: Set mangled_ra_p to zero by default.  */
++#define SFRAME_V1_FRE_INFO(base_reg_id, offset_num, offset_size) \
++  (((0 & 0x1) << 7) | (((offset_size) & 0x3) << 5) | \
++   (((offset_num) & 0xf) << 1) | ((base_reg_id) & 0x1))
++
++/* Set the mangled_ra_p bit as indicated.  */
++#define SFRAME_V1_FRE_INFO_UPDATE_MANGLED_RA_P(mangled_ra_p, fre_info) \
++  ((((mangled_ra_p) & 0x1) << 7) | ((fre_info) & 0x7f))
++
++#define SFRAME_V1_FRE_CFA_BASE_REG_ID(data)	  ((data) & 0x1)
++#define SFRAME_V1_FRE_OFFSET_COUNT(data)	  (((data) >> 1) & 0xf)
++#define SFRAME_V1_FRE_OFFSET_SIZE(data)		  (((data) >> 5) & 0x3)
++#define SFRAME_V1_FRE_MANGLED_RA_P(data)	  (((data) >> 7) & 0x1)
++
++/* SFrame Frame Row Entry definitions.
++
++   Used for both AMD64 and AARCH64.
++
++   An SFrame Frame Row Entry is a self-sufficient record which contains
++   information on how to generate the stack trace for the specified range of
++   PCs.  Each SFrame Frame Row Entry is followed by S*N bytes, where:
++     S is the size of the stack frame offset for the FRE, and
++     N is the number of stack frame offsets in the FRE
++
++   The interpretation of FRE stack offsets is ABI-specific:
++
++   AMD64:
++     offset1 (interpreted as CFA = BASE_REG + offset1)
++      if FP is being tracked
++	offset2 (intrepreted as FP = CFA + offset2)
++      fi
++
++    AARCH64:
++     offset1 (interpreted as CFA = BASE_REG + offset1)
++     if FP is being tracked (in other words, if frame record created)
++       offset2 (interpreted as RA = CFA + offset2)
++       offset3 (intrepreted as FP = CFA + offset3)
++     fi
++     Note that in AAPCS64, a frame record, if created, will save both FP and
++     LR on stack.
++*/
++
++/* Used when SFRAME_FRE_TYPE_ADDR1 is specified as FRE type.  */
++typedef struct sframe_frame_row_entry_addr1
++{
++  /* Start address of the frame row entry.  Encoded as an 1-byte unsigned
++     offset, relative to the start address of the function.  */
++  uint8_t sfre_start_address;
++  sframe_fre_info sfre_info;
++} __attribute__ ((packed)) sframe_frame_row_entry_addr1;
++
++/* Upper limit of start address in sframe_frame_row_entry_addr1
++   is 0x100 (not inclusive).  */
++#define SFRAME_FRE_TYPE_ADDR1_LIMIT   \
++  (1ULL << ((SFRAME_FRE_TYPE_ADDR1 + 1) * 8))
++
++/* Used when SFRAME_FRE_TYPE_ADDR2 is specified as FRE type.  */
++typedef struct sframe_frame_row_entry_addr2
++{
++  /* Start address of the frame row entry.  Encoded as an 2-byte unsigned
++     offset, relative to the start address of the function.  */
++  uint16_t sfre_start_address;
++  sframe_fre_info sfre_info;
++} __attribute__ ((packed)) sframe_frame_row_entry_addr2;
++
++/* Upper limit of start address in sframe_frame_row_entry_addr2
++   is 0x10000 (not inclusive).  */
++#define SFRAME_FRE_TYPE_ADDR2_LIMIT   \
++  (1ULL << ((SFRAME_FRE_TYPE_ADDR2 * 2) * 8))
++
++/* Used when SFRAME_FRE_TYPE_ADDR4 is specified as FRE type.  */
++typedef struct sframe_frame_row_entry_addr4
++{
++  /* Start address of the frame row entry.  Encoded as a 4-byte unsigned
++     offset, relative to the start address of the function.  */
++  uint32_t sfre_start_address;
++  sframe_fre_info sfre_info;
++} __attribute__ ((packed)) sframe_frame_row_entry_addr4;
++
++/* Upper limit of start address in sframe_frame_row_entry_addr2
++   is 0x100000000 (not inclusive).  */
++#define SFRAME_FRE_TYPE_ADDR4_LIMIT   \
++  (1ULL << ((SFRAME_FRE_TYPE_ADDR4 * 2) * 8))
++
++/* Used to pass frame information to stack trace routine.  */
++typedef struct cframe
++{
++  _Unwind_Ptr pc;
++  _Unwind_Ptr sp;
++  _Unwind_Ptr fp;
++} frame;
++
++/* SFrame stack tracing support.  */
++int __stacktrace_sframe (void **, int, frame *);
++libc_hidden_proto (__stacktrace_sframe);
++
++/* Helper used by SFrame tracing algorithm.  */
++_Unwind_Ptr __getPC (void);
++libc_hidden_proto (__getPC);
++
++/* Helper used by SFrame tracing algorithm.  */
++_Unwind_Ptr __getSP (void);
++libc_hidden_proto (__getSP);
++
++#ifdef	__cplusplus
++}
++#endif
++
++#endif				/* _SFRAME_H */
+diff --git a/sysdeps/generic/uw-sigframe.h b/sysdeps/generic/uw-sigframe.h
+new file mode 100644
+index 0000000000..b357f8aa76
+--- /dev/null
++++ b/sysdeps/generic/uw-sigframe.h
+@@ -0,0 +1,31 @@
++/* Internal header file for handling signal frames.  Generic version.
++   Copyright (C) 2025 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* Each architecture that supports SFrame may need to define several
++   macros to handle exceptional cases during stack backtracing.
++
++   MD_DECODE_SIGNAL_FRAME(frame) should recover frame information when
++   a signal-related exception occurs.  The input frame must contain a
++   valid program counter (PC) field.  On success, the macro should
++   return _URC_NO_REASON.
++
++   MD_DETECT_OUTERMOST_FRAME(frame) is used to detect the outermost
++   stack frame.  It returns _URC_NO_REASON upon successful
++   detection.
++
++   The FRAME structure is defined in sysdeps/generic/sframe.h  */
+-- 
+2.50.1
+

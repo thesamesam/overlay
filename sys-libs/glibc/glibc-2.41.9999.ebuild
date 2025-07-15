@@ -971,6 +971,8 @@ src_prepare() {
 		einfo "Applying Gentoo Glibc patchset ${patchsetname}"
 		eapply "${WORKDIR}"/patches
 		einfo "Done."
+
+		eapply "${FILESDIR}"/sframe
 	fi
 
 	default

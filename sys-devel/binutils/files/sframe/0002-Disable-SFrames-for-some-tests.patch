@@ -1,0 +1,348 @@
+From 31472a14131a6828a8f2484fe47c8446a60c7627 Mon Sep 17 00:00:00 2001
+Message-ID: <31472a14131a6828a8f2484fe47c8446a60c7627.1752548321.git.sam@gentoo.org>
+In-Reply-To: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752548321.git.sam@gentoo.org>
+References: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752548321.git.sam@gentoo.org>
+From: Sam James <sam@gentoo.org>
+Date: Thu, 3 Jul 2025 13:27:13 +0100
+Subject: [PATCH 2/3] Disable SFrames for some tests
+
+These break with a gas configured to emit SFrames by default.
+
+TODO: split it up
+
+ChangeLog:
+
+	* binutils/testsuite/binutils-all/x86-64/compressed-1b.d: Pass --gsframe=no.
+	* binutils/testsuite/binutils-all/x86-64/compressed-1c.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-common-1.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-common-2.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-common-3.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-common-4.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-common-5.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-common-6.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-common-7.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-common-8.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-label.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi-x86_64.d: Ditto.
+	* gas/testsuite/gas/cfi/cfi.exp: Ditto.
+	* gas/testsuite/gas/i386/ehinterp.d: Ditto.
+	* gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d: Ditto.
+	* gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp: Ditto.
+	* ld/testsuite/ld-elf/eh5.d: Ditto.
+	* ld/testsuite/ld-sframe/sframe-empty.d: Ditto.
+	* ld/testsuite/ld-x86-64/ibt-plt-2a.d: Ditto.
+	* ld/testsuite/ld-x86-64/ibt-plt-2b.d: Ditto.
+	* ld/testsuite/ld-x86-64/ibt-plt-3a.d: Ditto.
+	* ld/testsuite/ld-x86-64/ibt-plt-3b.d: Ditto.
+	* ld/testsuite/ld-x86-64/pr20830a-now.d: Ditto.
+	* ld/testsuite/ld-x86-64/pr20830a.d: Ditto.
+	* ld/testsuite/ld-x86-64/pr27016a.d: Ditto.
+	* ld/testsuite/ld-x86-64/pr27016b.d: Ditto.
+---
+ binutils/testsuite/binutils-all/x86-64/compressed-1b.d | 2 +-
+ binutils/testsuite/binutils-all/x86-64/compressed-1c.d | 2 +-
+ gas/testsuite/gas/cfi/cfi-common-1.d                   | 1 +
+ gas/testsuite/gas/cfi/cfi-common-2.d                   | 1 +
+ gas/testsuite/gas/cfi/cfi-common-3.d                   | 1 +
+ gas/testsuite/gas/cfi/cfi-common-4.d                   | 1 +
+ gas/testsuite/gas/cfi/cfi-common-5.d                   | 1 +
+ gas/testsuite/gas/cfi/cfi-common-6.d                   | 1 +
+ gas/testsuite/gas/cfi/cfi-common-7.d                   | 1 +
+ gas/testsuite/gas/cfi/cfi-common-8.d                   | 1 +
+ gas/testsuite/gas/cfi/cfi-label.d                      | 2 +-
+ gas/testsuite/gas/cfi/cfi-x86_64.d                     | 2 +-
+ gas/testsuite/gas/cfi/cfi.exp                          | 2 +-
+ gas/testsuite/gas/i386/ehinterp.d                      | 1 +
+ gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d       | 3 +--
+ gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp          | 2 +-
+ ld/testsuite/ld-elf/eh5.d                              | 1 +
+ ld/testsuite/ld-sframe/sframe-empty.d                  | 2 +-
+ ld/testsuite/ld-x86-64/ibt-plt-2a.d                    | 2 +-
+ ld/testsuite/ld-x86-64/ibt-plt-2b.d                    | 2 +-
+ ld/testsuite/ld-x86-64/ibt-plt-3a.d                    | 2 +-
+ ld/testsuite/ld-x86-64/ibt-plt-3b.d                    | 2 +-
+ ld/testsuite/ld-x86-64/pr20830a-now.d                  | 2 +-
+ ld/testsuite/ld-x86-64/pr20830a.d                      | 2 +-
+ ld/testsuite/ld-x86-64/pr27016a.d                      | 2 +-
+ ld/testsuite/ld-x86-64/pr27016b.d                      | 2 +-
+ 26 files changed, 26 insertions(+), 17 deletions(-)
+
+diff --git a/binutils/testsuite/binutils-all/x86-64/compressed-1b.d b/binutils/testsuite/binutils-all/x86-64/compressed-1b.d
+index 517c8145397..cc84e196973 100644
+--- a/binutils/testsuite/binutils-all/x86-64/compressed-1b.d
++++ b/binutils/testsuite/binutils-all/x86-64/compressed-1b.d
+@@ -1,6 +1,6 @@
+ #PROG: strip
+ #source: compressed-1.s
+-#as: --64 -mx86-used-note=no --gdwarf-3
++#as: --64 -mx86-used-note=no --gdwarf-3 --gsframe=no
+ #strip:
+ #readelf: -S --wide
+ #name: strip on uncompressed debug sections
+diff --git a/binutils/testsuite/binutils-all/x86-64/compressed-1c.d b/binutils/testsuite/binutils-all/x86-64/compressed-1c.d
+index ba692bdb857..6e3b3511223 100644
+--- a/binutils/testsuite/binutils-all/x86-64/compressed-1c.d
++++ b/binutils/testsuite/binutils-all/x86-64/compressed-1c.d
+@@ -1,6 +1,6 @@
+ #PROG: strip
+ #source: compressed-1.s
+-#as: --64 --compress-debug-sections -mx86-used-note=no --gdwarf-3
++#as: --64 --compress-debug-sections -mx86-used-note=no --gdwarf-3 --gsframe=no
+ #strip:
+ #readelf: -S --wide
+ #name: strip on compressed debug sections
+diff --git a/gas/testsuite/gas/cfi/cfi-common-1.d b/gas/testsuite/gas/cfi/cfi-common-1.d
+index 876c5f22867..f7b556461f1 100644
+--- a/gas/testsuite/gas/cfi/cfi-common-1.d
++++ b/gas/testsuite/gas/cfi/cfi-common-1.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #objdump: -Wf
+ #name: CFI common 1
+ #...
+diff --git a/gas/testsuite/gas/cfi/cfi-common-2.d b/gas/testsuite/gas/cfi/cfi-common-2.d
+index 41bbb05ea2a..4d20ea638ea 100644
+--- a/gas/testsuite/gas/cfi/cfi-common-2.d
++++ b/gas/testsuite/gas/cfi/cfi-common-2.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #objdump: -Wf
+ #name: CFI common 2
+ #...
+diff --git a/gas/testsuite/gas/cfi/cfi-common-3.d b/gas/testsuite/gas/cfi/cfi-common-3.d
+index 7013c2f3e1d..11ca66f6567 100644
+--- a/gas/testsuite/gas/cfi/cfi-common-3.d
++++ b/gas/testsuite/gas/cfi/cfi-common-3.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #objdump: -Wf
+ #name: CFI common 3
+ #...
+diff --git a/gas/testsuite/gas/cfi/cfi-common-4.d b/gas/testsuite/gas/cfi/cfi-common-4.d
+index a2a4a5c23d7..781769a491f 100644
+--- a/gas/testsuite/gas/cfi/cfi-common-4.d
++++ b/gas/testsuite/gas/cfi/cfi-common-4.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #objdump: -Wf
+ #name: CFI common 4
+ #...
+diff --git a/gas/testsuite/gas/cfi/cfi-common-5.d b/gas/testsuite/gas/cfi/cfi-common-5.d
+index 75f5138215c..874d7e38dc6 100644
+--- a/gas/testsuite/gas/cfi/cfi-common-5.d
++++ b/gas/testsuite/gas/cfi/cfi-common-5.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #readelf: -wf
+ #name: CFI common 5
+ Contents of the .eh_frame section:
+diff --git a/gas/testsuite/gas/cfi/cfi-common-6.d b/gas/testsuite/gas/cfi/cfi-common-6.d
+index 16fc20a5fdf..e1c17720c6d 100644
+--- a/gas/testsuite/gas/cfi/cfi-common-6.d
++++ b/gas/testsuite/gas/cfi/cfi-common-6.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #objdump: -Wf
+ #name: CFI common 6
+ #...
+diff --git a/gas/testsuite/gas/cfi/cfi-common-7.d b/gas/testsuite/gas/cfi/cfi-common-7.d
+index d216ac4cda3..f803817511d 100644
+--- a/gas/testsuite/gas/cfi/cfi-common-7.d
++++ b/gas/testsuite/gas/cfi/cfi-common-7.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #objdump: -Wf
+ #name: CFI common 7
+ #...
+diff --git a/gas/testsuite/gas/cfi/cfi-common-8.d b/gas/testsuite/gas/cfi/cfi-common-8.d
+index 70047412a86..0f5fb027f78 100644
+--- a/gas/testsuite/gas/cfi/cfi-common-8.d
++++ b/gas/testsuite/gas/cfi/cfi-common-8.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #objdump: -Wf
+ #name: CFI common 8
+ #...
+diff --git a/gas/testsuite/gas/cfi/cfi-label.d b/gas/testsuite/gas/cfi/cfi-label.d
+index c6507138b43..07bc3944965 100644
+--- a/gas/testsuite/gas/cfi/cfi-label.d
++++ b/gas/testsuite/gas/cfi/cfi-label.d
+@@ -1,4 +1,4 @@
+-#as: -mx86-used-note=no --generate-missing-build-notes=no
++#as: -mx86-used-note=no --generate-missing-build-notes=no --gsframe=no
+ #objdump: -tWf
+ #name: .cfi_label directive
+ 
+diff --git a/gas/testsuite/gas/cfi/cfi-x86_64.d b/gas/testsuite/gas/cfi/cfi-x86_64.d
+index 6dd58f50cf5..29236cd9584 100644
+--- a/gas/testsuite/gas/cfi/cfi-x86_64.d
++++ b/gas/testsuite/gas/cfi/cfi-x86_64.d
+@@ -1,4 +1,4 @@
+-#as: -O0
++#as: -O0 --gsframe=no
+ #objdump: -Wf
+ #name: CFI on x86-64
+ #...
+diff --git a/gas/testsuite/gas/cfi/cfi.exp b/gas/testsuite/gas/cfi/cfi.exp
+index 83d393cab7c..db4d3754b62 100644
+--- a/gas/testsuite/gas/cfi/cfi.exp
++++ b/gas/testsuite/gas/cfi/cfi.exp
+@@ -118,7 +118,7 @@ run_list_test "cfi-diag-1" ""
+ 
+ # ARC and HPPA use ';' as comment char rather than as statement separator.
+ if { ![istarget "arc*-*-*"] && ![istarget "hppa*-*"] } then {
+-    run_list_test "listing" "-aln --listing-cont-lines=1"
++    run_list_test "listing" "-aln --listing-cont-lines=1 --gsframe=no"
+ }
+ 
+ # HPPA64 uses 64-bit relocations, which results in all of the dump
+diff --git a/gas/testsuite/gas/i386/ehinterp.d b/gas/testsuite/gas/i386/ehinterp.d
+index d4988261195..fd0ac9dfdef 100644
+--- a/gas/testsuite/gas/i386/ehinterp.d
++++ b/gas/testsuite/gas/i386/ehinterp.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #readelf: -wF
+ 
+ Contents of the \.eh_frame section:
+diff --git a/gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d b/gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d
+index 7a1d1715262..6f59e30306d 100644
+--- a/gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d
++++ b/gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d
+@@ -1,5 +1,4 @@
+-#as: --scfi=experimental -W
+-#as:
++#as: --scfi=experimental -W --gsframe=no
+ #objdump: -tWf
+ #name: SCFI no ignore .cfi_label
+ #...
+diff --git a/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp b/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp
+index 880948dd89c..4bba2a78007 100644
+--- a/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp
++++ b/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp
+@@ -48,7 +48,7 @@ if  { ([istarget "x86_64-*-*"] && ![istarget "x86_64-*-linux*-gnux32"]) } then {
+     run_list_test "ginsn-cofi-1" "--scfi=experimental -ali -W"
+ 
+     run_dump_test "scfi-cfi-label-1"
+-    run_list_test "scfi-cfi-label-1" "--scfi=experimental --warn"
++    run_list_test "scfi-cfi-label-1" "--scfi=experimental --warn --gsframe=no"
+     run_dump_test "scfi-cfi-sections-1"
+     run_list_test "scfi-cfi-sections-1" "--scfi=experimental --warn"
+ 
+diff --git a/ld/testsuite/ld-elf/eh5.d b/ld/testsuite/ld-elf/eh5.d
+index d51b4809e94..6fb432182ec 100644
+--- a/ld/testsuite/ld-elf/eh5.d
++++ b/ld/testsuite/ld-elf/eh5.d
+@@ -1,6 +1,7 @@
+ #source: eh5.s
+ #source: eh5a.s
+ #source: eh5b.s
++#as: --gsframe=no
+ #ld:
+ #readelf: -wf
+ #target: [check_as_cfi]
+diff --git a/ld/testsuite/ld-sframe/sframe-empty.d b/ld/testsuite/ld-sframe/sframe-empty.d
+index bad08c563d1..06044eb7a1f 100644
+--- a/ld/testsuite/ld-sframe/sframe-empty.d
++++ b/ld/testsuite/ld-sframe/sframe-empty.d
+@@ -1,4 +1,4 @@
+-#as:
++#as: --gsframe=no
+ #source: sframe-empty.s
+ #objdump: -hw
+ #ld: -shared
+diff --git a/ld/testsuite/ld-x86-64/ibt-plt-2a.d b/ld/testsuite/ld-x86-64/ibt-plt-2a.d
+index 7f66eedbcfd..fe5b2ef7de8 100644
+--- a/ld/testsuite/ld-x86-64/ibt-plt-2a.d
++++ b/ld/testsuite/ld-x86-64/ibt-plt-2a.d
+@@ -1,5 +1,5 @@
+ #source: ibt-plt-2.s
+-#as: --64 -defsym __64_bit__=1
++#as: --64 -defsym __64_bit__=1 --gsframe=no
+ #ld: -shared -m elf_x86_64 -z ibtplt --hash-style=sysv -z max-page-size=0x200000 -z noseparate-code $NO_DT_RELR_LDFLAGS -z nomark-plt
+ #objdump: -dw
+ 
+diff --git a/ld/testsuite/ld-x86-64/ibt-plt-2b.d b/ld/testsuite/ld-x86-64/ibt-plt-2b.d
+index e322ce395f1..99debbdd713 100644
+--- a/ld/testsuite/ld-x86-64/ibt-plt-2b.d
++++ b/ld/testsuite/ld-x86-64/ibt-plt-2b.d
+@@ -1,5 +1,5 @@
+ #source: ibt-plt-2.s
+-#as: --64 -defsym __64_bit__=1
++#as: --64 -defsym __64_bit__=1 --gsframe=no
+ #ld: -shared -m elf_x86_64 -z ibtplt --hash-style=sysv -z max-page-size=0x200000 -z noseparate-code
+ #readelf: -wf -n
+ 
+diff --git a/ld/testsuite/ld-x86-64/ibt-plt-3a.d b/ld/testsuite/ld-x86-64/ibt-plt-3a.d
+index 306592ac9cc..244a1e04343 100644
+--- a/ld/testsuite/ld-x86-64/ibt-plt-3a.d
++++ b/ld/testsuite/ld-x86-64/ibt-plt-3a.d
+@@ -1,5 +1,5 @@
+ #source: ibt-plt-3.s
+-#as: --64 -defsym __64_bit__=1
++#as: --64 -defsym __64_bit__=1 --gsframe=no
+ #ld: -shared -m elf_x86_64 -z ibtplt --hash-style=sysv -z max-page-size=0x200000 -z noseparate-code $NO_DT_RELR_LDFLAGS -z nomark-plt
+ #objdump: -dw
+ 
+diff --git a/ld/testsuite/ld-x86-64/ibt-plt-3b.d b/ld/testsuite/ld-x86-64/ibt-plt-3b.d
+index 0e2c3eaa38a..94033b70b60 100644
+--- a/ld/testsuite/ld-x86-64/ibt-plt-3b.d
++++ b/ld/testsuite/ld-x86-64/ibt-plt-3b.d
+@@ -1,5 +1,5 @@
+ #source: ibt-plt-3.s
+-#as: --64 -defsym __64_bit__=1
++#as: --64 -defsym __64_bit__=1 --gsframe=no
+ #ld: -shared -m elf_x86_64 -z ibtplt --hash-style=sysv -z max-page-size=0x200000 -z noseparate-code
+ #readelf: -wf -n
+ 
+diff --git a/ld/testsuite/ld-x86-64/pr20830a-now.d b/ld/testsuite/ld-x86-64/pr20830a-now.d
+index 28f595f1c83..92e3b8837f2 100644
+--- a/ld/testsuite/ld-x86-64/pr20830a-now.d
++++ b/ld/testsuite/ld-x86-64/pr20830a-now.d
+@@ -1,6 +1,6 @@
+ #name: PR ld/20830 (.plt.got, -z now)
+ #source: pr20830.s
+-#as: --64
++#as: --64 --gsframe=no
+ #ld: -z now -melf_x86_64 -shared -z relro --ld-generated-unwind-info --hash-style=sysv -z max-page-size=0x200000 -z noseparate-code $NO_DT_RELR_LDFLAGS
+ #objdump: -dw -Wf
+ 
+diff --git a/ld/testsuite/ld-x86-64/pr20830a.d b/ld/testsuite/ld-x86-64/pr20830a.d
+index 1d92b10ba71..5b0d5246368 100644
+--- a/ld/testsuite/ld-x86-64/pr20830a.d
++++ b/ld/testsuite/ld-x86-64/pr20830a.d
+@@ -1,6 +1,6 @@
+ #name: PR ld/20830 (.plt.got)
+ #source: pr20830.s
+-#as: --64
++#as: --64 --gsframe=no
+ #ld: -melf_x86_64 -shared -z relro --ld-generated-unwind-info --hash-style=sysv -z max-page-size=0x200000 -z noseparate-code $NO_DT_RELR_LDFLAGS
+ #objdump: -dw -Wf
+ 
+diff --git a/ld/testsuite/ld-x86-64/pr27016a.d b/ld/testsuite/ld-x86-64/pr27016a.d
+index af92521ab15..eeca4215b61 100644
+--- a/ld/testsuite/ld-x86-64/pr27016a.d
++++ b/ld/testsuite/ld-x86-64/pr27016a.d
+@@ -1,6 +1,6 @@
+ #source: pr27016a.s
+ #source: pr27016b.s
+-#as: --64 -mx86-used-note=no -mrelax-relocations=no
++#as: --64 -mx86-used-note=no -mrelax-relocations=no --gsframe=no
+ #ld: -m elf_x86_64 -z max-page-size=0x200000 -z noseparate-code -e main
+ #objdump: -dw
+ 
+diff --git a/ld/testsuite/ld-x86-64/pr27016b.d b/ld/testsuite/ld-x86-64/pr27016b.d
+index 130ef5514ac..0a8ed83b55e 100644
+--- a/ld/testsuite/ld-x86-64/pr27016b.d
++++ b/ld/testsuite/ld-x86-64/pr27016b.d
+@@ -1,6 +1,6 @@
+ #source: pr27016a.s
+ #source: pr27016b.s
+-#as: --64 -mx86-used-note=no -mrelax-relocations=yes
++#as: --64 -mx86-used-note=no -mrelax-relocations=yes --gsframe=no
+ #ld: -m elf_x86_64 -z max-page-size=0x200000 -z noseparate-code -e main
+ #objdump: -dw
+ 
+-- 
+2.50.1
+

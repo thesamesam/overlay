@@ -1,0 +1,95 @@
+From da61ed1c452e481030bc1145b7edd58146b673c5 Mon Sep 17 00:00:00 2001
+Message-ID: <da61ed1c452e481030bc1145b7edd58146b673c5.1752557640.git.sam@gentoo.org>
+In-Reply-To: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752557640.git.sam@gentoo.org>
+References: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752557640.git.sam@gentoo.org>
+From: Sam James <sam@gentoo.org>
+Date: Tue, 15 Jul 2025 06:33:23 +0100
+Subject: [PATCH 5/5] gas: XFAIL tests which need SFrame warnings
+
+I've temporarily disabled SFrame warnings but this breaks these testcases.
+
+ChangeLog:
+
+	* gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d: XFAIL.
+	* gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d: Ditto.
+	* gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d: Ditto.
+	* gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d: Ditto.
+	* gas/testsuite/gas/cfi-sframe/common-empty-1.d: Ditto.
+	* gas/testsuite/gas/cfi-sframe/common-empty-2.d: Ditto.
+	* gas/testsuite/gas/cfi-sframe/common-empty-3.d: Ditto.
+---
+ gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d | 1 +
+ gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d | 1 +
+ gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d | 1 +
+ gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d | 1 +
+ gas/testsuite/gas/cfi-sframe/common-empty-1.d            | 1 +
+ gas/testsuite/gas/cfi-sframe/common-empty-2.d            | 1 +
+ gas/testsuite/gas/cfi-sframe/common-empty-3.d            | 1 +
+ 7 files changed, 7 insertions(+)
+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d
+index a63231e6b87..f44cf362eb1 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d
+@@ -1,3 +1,4 @@
++#xfail: *-*-*
+ #as: --gsframe
+ #warning: \.cfi_escape DW\_CFA\_expression with SP reg 7
+ #objdump: --sframe=.sframe
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d
+index c3b4c4cea9f..a9f061bd9d2 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d
+@@ -1,3 +1,4 @@
++#xfail: *-*-*
+ #as: --gsframe
+ #warning: \.cfi\_escape DW\_CFA\_val\_offset with FP reg 6
+ #objdump: --sframe=.sframe
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d
+index 29a6d0c7595..edeaccc5c15 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d
+@@ -1,3 +1,4 @@
++#xfail: *-*-*
+ #as: --gsframe
+ #warning: \.cfi\_escape with op \(0x14\)
+ #objdump: --sframe=.sframe
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d
+index 1a718af9435..96c88c5ec84 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d
+@@ -1,3 +1,4 @@
++#xfail: *-*-*
+ #as: --gsframe
+ #warning: SP reg 7 in \.cfi\_undefined
+ #objdump: --sframe=.sframe
+diff --git a/gas/testsuite/gas/cfi-sframe/common-empty-1.d b/gas/testsuite/gas/cfi-sframe/common-empty-1.d
+index c64dd92e003..8acf79848a1 100644
+--- a/gas/testsuite/gas/cfi-sframe/common-empty-1.d
++++ b/gas/testsuite/gas/cfi-sframe/common-empty-1.d
+@@ -1,3 +1,4 @@
++#xfail: *-*-*
+ #as: --gsframe
+ #warning: \.cfi_remember_state without prior SFrame FRE state
+ #objdump: --sframe=.sframe
+diff --git a/gas/testsuite/gas/cfi-sframe/common-empty-2.d b/gas/testsuite/gas/cfi-sframe/common-empty-2.d
+index 8174b322920..96258f32545 100644
+--- a/gas/testsuite/gas/cfi-sframe/common-empty-2.d
++++ b/gas/testsuite/gas/cfi-sframe/common-empty-2.d
+@@ -1,3 +1,4 @@
++#xfail: *-*-*
+ #as: --gsframe
+ #warning: \.cfi_def_cfa_offset without CFA base register in effect
+ #objdump: --sframe=.sframe
+diff --git a/gas/testsuite/gas/cfi-sframe/common-empty-3.d b/gas/testsuite/gas/cfi-sframe/common-empty-3.d
+index c01498852e8..6405c92ad9d 100644
+--- a/gas/testsuite/gas/cfi-sframe/common-empty-3.d
++++ b/gas/testsuite/gas/cfi-sframe/common-empty-3.d
+@@ -1,3 +1,4 @@
++#xfail: *-*-*
+ #as: --gsframe
+ #warning: non-default RA register 0
+ #objdump: --sframe=.sframe
+-- 
+2.50.1
+

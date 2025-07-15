@@ -1,10 +1,10 @@
 From 1051b9027ab1514ffa8719d7c5fd33f192016a3c Mon Sep 17 00:00:00 2001
-Message-ID: <1051b9027ab1514ffa8719d7c5fd33f192016a3c.1752551497.git.sam@gentoo.org>
-In-Reply-To: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752551497.git.sam@gentoo.org>
-References: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752551497.git.sam@gentoo.org>
+Message-ID: <1051b9027ab1514ffa8719d7c5fd33f192016a3c.1752557640.git.sam@gentoo.org>
+In-Reply-To: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752557640.git.sam@gentoo.org>
+References: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752557640.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 04:50:21 +0100
-Subject: [PATCH 4/4] gas: disable SFrame warnings
+Subject: [PATCH 4/5] gas: disable SFrame warnings
 
 When bootstrapping Binutils in packaging, I saw:
 ```

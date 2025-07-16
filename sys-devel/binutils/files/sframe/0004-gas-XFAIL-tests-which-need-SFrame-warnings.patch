@@ -1,7 +1,7 @@
-From 68940043a82b9e3660bbc5c5b9d2f8648f8a4132 Mon Sep 17 00:00:00 2001
-Message-ID: <68940043a82b9e3660bbc5c5b9d2f8648f8a4132.1752643930.git.sam@gentoo.org>
-In-Reply-To: <2e378c8d797a8422cf21b3b89a53740972e221b5.1752643930.git.sam@gentoo.org>
-References: <2e378c8d797a8422cf21b3b89a53740972e221b5.1752643930.git.sam@gentoo.org>
+From 5b0df85a6e32f6d0affed9cf84202db8ea511481 Mon Sep 17 00:00:00 2001
+Message-ID: <5b0df85a6e32f6d0affed9cf84202db8ea511481.1752669183.git.sam@gentoo.org>
+In-Reply-To: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
+References: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 06:33:23 +0100
 Subject: [PATCH 4/4] gas: XFAIL tests which need SFrame warnings

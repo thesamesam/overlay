@@ -1,5 +1,5 @@
-From 2e378c8d797a8422cf21b3b89a53740972e221b5 Mon Sep 17 00:00:00 2001
-Message-ID: <2e378c8d797a8422cf21b3b89a53740972e221b5.1752643930.git.sam@gentoo.org>
+From 023bf5a7c304d113468217901401c80565240685 Mon Sep 17 00:00:00 2001
+Message-ID: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 11:08:59 +0100
 Subject: [PATCH 1/4] gas: add --enable-sframe configure option
@@ -39,15 +39,15 @@ In summary, combined with the new --gsframe=[yes|no] support:
 	* gas/dw2gencfi.c (cfi_finish): Don't warn if SFrames are enabled
 	by default but unavailable for this target.
 ---
- gas/as.c         |  6 +++++-
+ gas/as.c         |  4 +++-
  gas/config.in    |  3 +++
  gas/configure    | 28 ++++++++++++++++++++++++++--
  gas/configure.ac | 20 ++++++++++++++++++++
  gas/dw2gencfi.c  |  6 ++++--
- 5 files changed, 58 insertions(+), 5 deletions(-)
+ 5 files changed, 56 insertions(+), 5 deletions(-)
 
 diff --git a/gas/as.c b/gas/as.c
-index acdf6bb74fd..2a0f9d74eef 100644
+index bc38cdf93c4..c717a50add3 100644
 --- a/gas/as.c
 +++ b/gas/as.c
 @@ -113,6 +113,8 @@ int flag_use_elf_stt_common = DEFAULT_GENERATE_ELF_STT_COMMON;
@@ -59,14 +59,12 @@ index acdf6bb74fd..2a0f9d74eef 100644
  segT reg_section;
  segT expr_section;
  segT text_section;
-@@ -312,7 +314,9 @@ Options:\n\
+@@ -312,7 +314,7 @@ Options:\n\
                            generate GNU Build notes if none are present in the input\n"));
    fprintf (stream, _("\
-   --gsframe=[no|yes]      whether to generate SFrame stack trace information\n\
+   --gsframe[={no|yes}]    whether to generate SFrame stack trace information\n\
 -                          (default: no)\n"));
 +                          (default: %s)\n"), DEFAULT_SFRAME ? "yes" : "no");
-+  fprintf (stream, _("\
-+                          generate SFrame stack trace information\n"));
  # if defined (TARGET_USE_SCFI) && defined (TARGET_USE_GINSN)
    fprintf (stream, _("\
    --scfi=experimental     Synthesize DWARF CFI for hand-written asm\n\

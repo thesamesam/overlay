@@ -1,10 +1,10 @@
-From da61ed1c452e481030bc1145b7edd58146b673c5 Mon Sep 17 00:00:00 2001
-Message-ID: <da61ed1c452e481030bc1145b7edd58146b673c5.1752557640.git.sam@gentoo.org>
-In-Reply-To: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752557640.git.sam@gentoo.org>
-References: <0ed8c37d2b2fe86c3f125fb70e8e6b2b9769b807.1752557640.git.sam@gentoo.org>
+From 68940043a82b9e3660bbc5c5b9d2f8648f8a4132 Mon Sep 17 00:00:00 2001
+Message-ID: <68940043a82b9e3660bbc5c5b9d2f8648f8a4132.1752643930.git.sam@gentoo.org>
+In-Reply-To: <2e378c8d797a8422cf21b3b89a53740972e221b5.1752643930.git.sam@gentoo.org>
+References: <2e378c8d797a8422cf21b3b89a53740972e221b5.1752643930.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 06:33:23 +0100
-Subject: [PATCH 5/5] gas: XFAIL tests which need SFrame warnings
+Subject: [PATCH 4/4] gas: XFAIL tests which need SFrame warnings
 
 I've temporarily disabled SFrame warnings but this breaks these testcases.
 

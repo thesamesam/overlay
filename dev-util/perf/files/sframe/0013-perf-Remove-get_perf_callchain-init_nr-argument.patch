@@ -1,0 +1,120 @@
+From cc6966eefd7d07f2f19460da7d62028cfd525c1a Mon Sep 17 00:00:00 2001
+Message-ID: <cc6966eefd7d07f2f19460da7d62028cfd525c1a.1752722506.git.sam@gentoo.org>
+In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Wed, 25 Jun 2025 19:15:42 -0400
+Subject: [PATCH 13/34] perf: Remove get_perf_callchain() init_nr argument
+
+The 'init_nr' argument has double duty: it's used to initialize both the
+number of contexts and the number of stack entries.  That's confusing
+and the callers always pass zero anyway.  Hard code the zero.
+
+Cc: Masami Hiramatsu <mhiramat@kernel.org>
+Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Ingo Molnar <mingo@kernel.org>
+Cc: Jiri Olsa <jolsa@kernel.org>
+Cc: Namhyung Kim <namhyung@kernel.org>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: Andrii Nakryiko <andrii@kernel.org>
+Cc: Indu Bhagat <indu.bhagat@oracle.com>
+Cc: "Jose E. Marchesi" <jemarch@gnu.org>
+Cc: Beau Belgrave <beaub@linux.microsoft.com>
+Cc: Jens Remus <jremus@linux.ibm.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Andrew Morton <akpm@linux-foundation.org>
+Cc: Jens Axboe <axboe@kernel.dk>
+Link: https://lore.kernel.org/20250625231621.837156133@goodmis.org
+Acked-by: Namhyung Kim <Namhyung@kernel.org>
+Acked-by: Alexei Starovoitov <ast@kernel.org>
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ include/linux/perf_event.h |  2 +-
+ kernel/bpf/stackmap.c      |  4 ++--
+ kernel/events/callchain.c  | 12 ++++++------
+ kernel/events/core.c       |  2 +-
+ 4 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h
+index ec9d960256839..54e0d31afcad1 100644
+--- a/include/linux/perf_event.h
++++ b/include/linux/perf_event.h
+@@ -1719,7 +1719,7 @@ DECLARE_PER_CPU(struct perf_callchain_entry, perf_callchain_entry);
+ extern void perf_callchain_user(struct perf_callchain_entry_ctx *entry, struct pt_regs *regs);
+ extern void perf_callchain_kernel(struct perf_callchain_entry_ctx *entry, struct pt_regs *regs);
+ extern struct perf_callchain_entry *
+-get_perf_callchain(struct pt_regs *regs, u32 init_nr, bool kernel, bool user,
++get_perf_callchain(struct pt_regs *regs, bool kernel, bool user,
+ 		   u32 max_stack, bool crosstask, bool add_mark);
+ extern int get_callchain_buffers(int max_stack);
+ extern void put_callchain_buffers(void);
+diff --git a/kernel/bpf/stackmap.c b/kernel/bpf/stackmap.c
+index 3615c06b7dfa9..ec3a57a5fba1f 100644
+--- a/kernel/bpf/stackmap.c
++++ b/kernel/bpf/stackmap.c
+@@ -314,7 +314,7 @@ BPF_CALL_3(bpf_get_stackid, struct pt_regs *, regs, struct bpf_map *, map,
+ 	if (max_depth > sysctl_perf_event_max_stack)
+ 		max_depth = sysctl_perf_event_max_stack;
+ 
+-	trace = get_perf_callchain(regs, 0, kernel, user, max_depth,
++	trace = get_perf_callchain(regs, kernel, user, max_depth,
+ 				   false, false);
+ 
+ 	if (unlikely(!trace))
+@@ -451,7 +451,7 @@ static long __bpf_get_stack(struct pt_regs *regs, struct task_struct *task,
+ 	else if (kernel && task)
+ 		trace = get_callchain_entry_for_task(task, max_depth);
+ 	else
+-		trace = get_perf_callchain(regs, 0, kernel, user, max_depth,
++		trace = get_perf_callchain(regs, kernel, user, max_depth,
+ 					   crosstask, false);
+ 
+ 	if (unlikely(!trace) || trace->nr < skip) {
+diff --git a/kernel/events/callchain.c b/kernel/events/callchain.c
+index 6c83ad674d010..b0f5bd228cd8c 100644
+--- a/kernel/events/callchain.c
++++ b/kernel/events/callchain.c
+@@ -217,7 +217,7 @@ static void fixup_uretprobe_trampoline_entries(struct perf_callchain_entry *entr
+ }
+ 
+ struct perf_callchain_entry *
+-get_perf_callchain(struct pt_regs *regs, u32 init_nr, bool kernel, bool user,
++get_perf_callchain(struct pt_regs *regs, bool kernel, bool user,
+ 		   u32 max_stack, bool crosstask, bool add_mark)
+ {
+ 	struct perf_callchain_entry *entry;
+@@ -228,11 +228,11 @@ get_perf_callchain(struct pt_regs *regs, u32 init_nr, bool kernel, bool user,
+ 	if (!entry)
+ 		return NULL;
+ 
+-	ctx.entry     = entry;
+-	ctx.max_stack = max_stack;
+-	ctx.nr	      = entry->nr = init_nr;
+-	ctx.contexts       = 0;
+-	ctx.contexts_maxed = false;
++	ctx.entry		= entry;
++	ctx.max_stack		= max_stack;
++	ctx.nr			= entry->nr = 0;
++	ctx.contexts		= 0;
++	ctx.contexts_maxed	= false;
+ 
+ 	if (kernel && !user_mode(regs)) {
+ 		if (add_mark)
+diff --git a/kernel/events/core.c b/kernel/events/core.c
+index 22fdf0c187cd9..70f9ab70e6957 100644
+--- a/kernel/events/core.c
++++ b/kernel/events/core.c
+@@ -8178,7 +8178,7 @@ perf_callchain(struct perf_event *event, struct pt_regs *regs)
+ 	if (!kernel && !user)
+ 		return &__empty_callchain;
+ 
+-	callchain = get_perf_callchain(regs, 0, kernel, user,
++	callchain = get_perf_callchain(regs, kernel, user,
+ 				       max_stack, crosstask, true);
+ 	return callchain ?: &__empty_callchain;
+ }
+-- 
+2.50.1
+

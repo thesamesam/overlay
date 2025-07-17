@@ -1,0 +1,33 @@
+From 2681eceb07ed8a0de4fadb84ad02ec4c29522e58 Mon Sep 17 00:00:00 2001
+Message-ID: <2681eceb07ed8a0de4fadb84ad02ec4c29522e58.1752722506.git.sam@gentoo.org>
+In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Wed, 16 Jul 2025 21:28:55 -0400
+Subject: [PATCH 30/34] unwind_user/sframe/x86: Enable sframe unwinding on x86
+
+The x86 sframe 2.0 implementation works fairly well, starting with
+binutils 2.41 (though some bugs are getting fixed in later versions).
+Enable it.
+
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ arch/x86/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 7f46835238416..339fade187056 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -303,6 +303,7 @@ config X86
+ 	select HAVE_UACCESS_VALIDATION		if HAVE_OBJTOOL
+ 	select HAVE_UNSTABLE_SCHED_CLOCK
+ 	select HAVE_UNWIND_USER_FP		if X86_64
++	select HAVE_UNWIND_USER_SFRAME		if X86_64
+ 	select HAVE_USER_RETURN_NOTIFIER
+ 	select HAVE_GENERIC_VDSO
+ 	select VDSO_GETRANDOM			if X86_64
+-- 
+2.50.1
+

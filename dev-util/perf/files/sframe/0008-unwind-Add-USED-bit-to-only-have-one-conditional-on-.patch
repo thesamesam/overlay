@@ -1,0 +1,96 @@
+From b51fd065f787464a7bb8da06ffdaba810c2b2bc9 Mon Sep 17 00:00:00 2001
+Message-ID: <b51fd065f787464a7bb8da06ffdaba810c2b2bc9.1752722506.git.sam@gentoo.org>
+In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From: Steven Rostedt <rostedt@goodmis.org>
+Date: Wed, 16 Jul 2025 20:49:18 -0400
+Subject: [PATCH 08/34] unwind: Add USED bit to only have one conditional on
+ way back to user space
+
+On the way back to user space, the function unwind_reset_info() is called
+unconditionally (but always inlined). It currently has two conditionals.
+One that checks the unwind_mask which is set whenever a deferred trace is
+called and is used to know that the mask needs to be cleared. The other
+checks if the cache has been allocated, and if so, it resets the
+nr_entries so that the unwinder knows it needs to do the work to get a new
+user space stack trace again (it only does it once per entering the
+kernel).
+
+Use one of the bits in the unwind mask as a "USED" bit that gets set
+whenever a trace is created. This will make it possible to only check the
+unwind_mask in the unwind_reset_info() to know if it needs to do work or
+not and eliminates a conditional that happens every time the task goes
+back to user space.
+
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ include/linux/unwind_deferred.h | 18 +++++++++---------
+ kernel/unwind/deferred.c        |  5 ++++-
+ 2 files changed, 13 insertions(+), 10 deletions(-)
+
+diff --git a/include/linux/unwind_deferred.h b/include/linux/unwind_deferred.h
+index b9ec4c8515c74..2efbda01e959b 100644
+--- a/include/linux/unwind_deferred.h
++++ b/include/linux/unwind_deferred.h
+@@ -20,10 +20,14 @@ struct unwind_work {
+ 
+ enum {
+ 	UNWIND_PENDING_BIT = 0,
++	UNWIND_USED_BIT,
+ };
+ 
+ enum {
+ 	UNWIND_PENDING		= BIT(UNWIND_PENDING_BIT),
++
++	/* Set if the unwinding was used (directly or deferred) */
++	UNWIND_USED		= BIT(UNWIND_USED_BIT)
+ };
+ 
+ void unwind_task_init(struct task_struct *task);
+@@ -49,15 +53,11 @@ static __always_inline void unwind_reset_info(void)
+ 				return;
+ 		} while (!try_cmpxchg(&info->unwind_mask, &bits, 0UL));
+ 		current->unwind_info.id.id = 0;
+-	}
+-	/*
+-	 * As unwind_user_faultable() can be called directly and
+-	 * depends on nr_entries being cleared on exit to user,
+-	 * this needs to be a separate conditional.
+-	 */
+-	if (unlikely(info->cache)) {
+-		info->cache->nr_entries = 0;
+-		info->cache->unwind_completed = 0;
++
++		if (unlikely(info->cache)) {
++			info->cache->nr_entries = 0;
++			info->cache->unwind_completed = 0;
++		}
+ 	}
+ }
+ 
+diff --git a/kernel/unwind/deferred.c b/kernel/unwind/deferred.c
+index a3d26014a2e66..2311b725d6914 100644
+--- a/kernel/unwind/deferred.c
++++ b/kernel/unwind/deferred.c
+@@ -45,7 +45,7 @@ static inline bool try_assign_cnt(struct unwind_task_info *info, u32 cnt)
+ static DEFINE_MUTEX(callback_mutex);
+ static LIST_HEAD(callbacks);
+ 
+-#define RESERVED_BITS	(UNWIND_PENDING)
++#define RESERVED_BITS	(UNWIND_PENDING | UNWIND_USED)
+ 
+ /* Zero'd bits are available for assigning callback users */
+ static unsigned long unwind_mask = RESERVED_BITS;
+@@ -140,6 +140,9 @@ int unwind_user_faultable(struct unwind_stacktrace *trace)
+ 
+ 	cache->nr_entries = trace->nr;
+ 
++	/* Clear nr_entries on way back to user space */
++	set_bit(UNWIND_USED_BIT, &info->unwind_mask);
++
+ 	return 0;
+ }
+ 
+-- 
+2.50.1
+

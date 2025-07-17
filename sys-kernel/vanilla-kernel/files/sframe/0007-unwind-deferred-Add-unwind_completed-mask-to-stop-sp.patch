@@ -1,0 +1,147 @@
+From cbf24238bb55ea400a7d7fb20b51ab8fb958cf33 Mon Sep 17 00:00:00 2001
+Message-ID: <cbf24238bb55ea400a7d7fb20b51ab8fb958cf33.1752722506.git.sam@gentoo.org>
+In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From: Steven Rostedt <rostedt@goodmis.org>
+Date: Wed, 16 Jul 2025 20:49:17 -0400
+Subject: [PATCH 07/34] unwind deferred: Add unwind_completed mask to stop
+ spurious callbacks
+
+If there's more than one registered tracer to the unwind deferred
+infrastructure, it is currently possible that one tracer could cause extra
+callbacks to happen for another tracer if the former requests a deferred
+stacktrace after the latter's callback was executed and before the task
+went back to user space.
+
+Here's an example of how this could occur:
+
+  [Task enters kernel]
+    tracer 1 request -> add cookie to its buffer
+    tracer 1 request -> add cookie to its buffer
+    <..>
+    [ task work executes ]
+    tracer 1 callback -> add trace + cookie to its buffer
+
+    [tracer 2 requests and triggers the task work again]
+    [ task work executes again ]
+    tracer 1 callback -> add trace + cookie to its buffer
+    tracer 2 callback -> add trace + cookie to its buffer
+ [Task exits back to user space]
+
+This is because the bit for tracer 1 gets set in the task's unwind_mask
+when it did its request and does not get cleared until the task returns
+back to user space. But if another tracer were to request another deferred
+stacktrace, then the next task work will executed all tracer's callbacks
+that have their bits set in the task's unwind_mask.
+
+To fix this issue, add another mask called unwind_completed and place it
+into the task's info->cache structure. The cache structure is allocated
+on the first occurrence of a deferred stacktrace and this unwind_completed
+mask is not needed until then. It's better to have it in the cache than to
+permanently waste space in the task_struct.
+
+After a tracer's callback is executed, it's bit gets set in this
+unwind_completed mask. When the task_work enters, it will AND the task's
+unwind_mask with the inverse of the unwind_completed which will eliminate
+any work that already had its callback executed since the task entered the
+kernel.
+
+When the task leaves the kernel, it will reset this unwind_completed mask
+just like it resets the other values as it enters user space.
+
+Link: https://lore.kernel.org/all/20250716142609.47f0e4a5@batman.local.home/
+
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ include/linux/unwind_deferred.h       |  4 +++-
+ include/linux/unwind_deferred_types.h |  1 +
+ kernel/unwind/deferred.c              | 19 +++++++++++++++----
+ 3 files changed, 19 insertions(+), 5 deletions(-)
+
+diff --git a/include/linux/unwind_deferred.h b/include/linux/unwind_deferred.h
+index 337ead927d4dc..b9ec4c8515c74 100644
+--- a/include/linux/unwind_deferred.h
++++ b/include/linux/unwind_deferred.h
+@@ -55,8 +55,10 @@ static __always_inline void unwind_reset_info(void)
+ 	 * depends on nr_entries being cleared on exit to user,
+ 	 * this needs to be a separate conditional.
+ 	 */
+-	if (unlikely(info->cache))
++	if (unlikely(info->cache)) {
+ 		info->cache->nr_entries = 0;
++		info->cache->unwind_completed = 0;
++	}
+ }
+ 
+ #else /* !CONFIG_UNWIND_USER */
+diff --git a/include/linux/unwind_deferred_types.h b/include/linux/unwind_deferred_types.h
+index 5dc9cda141ffd..33b62ac25c863 100644
+--- a/include/linux/unwind_deferred_types.h
++++ b/include/linux/unwind_deferred_types.h
+@@ -3,6 +3,7 @@
+ #define _LINUX_UNWIND_USER_DEFERRED_TYPES_H
+ 
+ struct unwind_cache {
++	unsigned long		unwind_completed;
+ 	unsigned int		nr_entries;
+ 	unsigned long		entries[];
+ };
+diff --git a/kernel/unwind/deferred.c b/kernel/unwind/deferred.c
+index e19f02ef416da..a3d26014a2e66 100644
+--- a/kernel/unwind/deferred.c
++++ b/kernel/unwind/deferred.c
+@@ -166,12 +166,18 @@ static void unwind_deferred_task_work(struct callback_head *head)
+ 
+ 	unwind_user_faultable(&trace);
+ 
++	if (info->cache)
++		bits &= ~(info->cache->unwind_completed);
++
+ 	cookie = info->id.id;
+ 
+ 	guard(mutex)(&callback_mutex);
+ 	list_for_each_entry(work, &callbacks, list) {
+-		if (test_bit(work->bit, &bits))
++		if (test_bit(work->bit, &bits)) {
+ 			work->func(work, &trace, cookie);
++			if (info->cache)
++				info->cache->unwind_completed |= BIT(work->bit);
++		}
+ 	}
+ }
+ 
+@@ -260,23 +266,28 @@ int unwind_deferred_request(struct unwind_work *work, u64 *cookie)
+ void unwind_deferred_cancel(struct unwind_work *work)
+ {
+ 	struct task_struct *g, *t;
++	int bit;
+ 
+ 	if (!work)
+ 		return;
+ 
++	bit = work->bit;
++
+ 	/* No work should be using a reserved bit */
+-	if (WARN_ON_ONCE(BIT(work->bit) & RESERVED_BITS))
++	if (WARN_ON_ONCE(BIT(bit) & RESERVED_BITS))
+ 		return;
+ 
+ 	guard(mutex)(&callback_mutex);
+ 	list_del(&work->list);
+ 
+-	__clear_bit(work->bit, &unwind_mask);
++	__clear_bit(bit, &unwind_mask);
+ 
+ 	guard(rcu)();
+ 	/* Clear this bit from all threads */
+ 	for_each_process_thread(g, t) {
+-		clear_bit(work->bit, &t->unwind_info.unwind_mask);
++		clear_bit(bit, &t->unwind_info.unwind_mask);
++		if (t->unwind_info.cache)
++			clear_bit(bit, &t->unwind_info.cache->unwind_completed);
+ 	}
+ }
+ 
+-- 
+2.50.1
+

@@ -1,0 +1,82 @@
+From 50fbc3d1d2528399cc7716bd81229f78c7312d82 Mon Sep 17 00:00:00 2001
+Message-ID: <50fbc3d1d2528399cc7716bd81229f78c7312d82.1752722506.git.sam@gentoo.org>
+In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From: Steven Rostedt <rostedt@goodmis.org>
+Date: Wed, 16 Jul 2025 20:49:22 -0400
+Subject: [PATCH 12/34] unwind deferred/x86: Do not defer stack tracing for
+ compat tasks
+
+Currently compat tasks are not supported. If a deferred user space stack
+trace is requested on a compat task, it should fail and return an error so
+that the profiler can use an alternative approach (whatever it uses
+today).
+
+Add a arch_unwind_can_defer() macro that is called in
+unwind_deferred_request(). Have x86 define it to a function that makes
+sure that the current task is running in 64bit mode, and if it is not, it
+returns false. This will cause unwind_deferred_request() to error out and
+the caller can use the current method of user space stack tracing.
+
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ arch/x86/include/asm/unwind_user.h | 11 +++++++++++
+ include/linux/unwind_deferred.h    |  5 +++++
+ kernel/unwind/deferred.c           |  3 +++
+ 3 files changed, 19 insertions(+)
+
+diff --git a/arch/x86/include/asm/unwind_user.h b/arch/x86/include/asm/unwind_user.h
+index 8597857bf8965..220fd0a6e175e 100644
+--- a/arch/x86/include/asm/unwind_user.h
++++ b/arch/x86/include/asm/unwind_user.h
+@@ -2,6 +2,17 @@
+ #ifndef _ASM_X86_UNWIND_USER_H
+ #define _ASM_X86_UNWIND_USER_H
+ 
++#ifdef CONFIG_IA32_EMULATION
++/* Currently compat mode is not supported for deferred stack trace */
++static inline bool arch_unwind_can_defer(void)
++{
++	struct pt_regs *regs = task_pt_regs(current);
++
++	return user_64bit_mode(regs);
++}
++# define arch_unwind_can_defer	arch_unwind_can_defer
++#endif /* CONFIG_IA32_EMULATION */
++
+ #define ARCH_INIT_USER_FP_FRAME							\
+ 	.cfa_off	= (s32)sizeof(long) *  2,				\
+ 	.ra_off		= (s32)sizeof(long) * -1,				\
+diff --git a/include/linux/unwind_deferred.h b/include/linux/unwind_deferred.h
+index 26122d00708a2..0124865aaab4a 100644
+--- a/include/linux/unwind_deferred.h
++++ b/include/linux/unwind_deferred.h
+@@ -16,6 +16,11 @@ struct unwind_work {
+ 	int				bit;
+ };
+ 
++/* Architectures can add a test to not defer unwinding */
++#ifndef arch_unwind_can_defer
++# define arch_unwind_can_defer()	(true)
++#endif
++
+ #ifdef CONFIG_UNWIND_USER
+ 
+ enum {
+diff --git a/kernel/unwind/deferred.c b/kernel/unwind/deferred.c
+index 53a75f8f9b7ef..9972096e93e87 100644
+--- a/kernel/unwind/deferred.c
++++ b/kernel/unwind/deferred.c
+@@ -237,6 +237,9 @@ int unwind_deferred_request(struct unwind_work *work, u64 *cookie)
+ 
+ 	*cookie = 0;
+ 
++	if (!arch_unwind_can_defer())
++		return -EINVAL;
++
+ 	if ((current->flags & (PF_KTHREAD | PF_EXITING)) ||
+ 	    !user_mode(task_pt_regs(current)))
+ 		return -EINVAL;
+-- 
+2.50.1
+

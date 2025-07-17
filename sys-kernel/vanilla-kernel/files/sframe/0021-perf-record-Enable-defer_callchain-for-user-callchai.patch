@@ -1,0 +1,133 @@
+From 486892429353049dffafd61c78059387cc6fda7f Mon Sep 17 00:00:00 2001
+Message-ID: <486892429353049dffafd61c78059387cc6fda7f.1752722506.git.sam@gentoo.org>
+In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From: Namhyung Kim <namhyung@kernel.org>
+Date: Wed, 25 Jun 2025 19:15:50 -0400
+Subject: [PATCH 21/34] perf record: Enable defer_callchain for user callchains
+
+And add the missing feature detection logic to clear the flag on old
+kernels.
+
+  $ perf record -g -vv true
+  ...
+  ------------------------------------------------------------
+  perf_event_attr:
+    type                             0 (PERF_TYPE_HARDWARE)
+    size                             136
+    config                           0 (PERF_COUNT_HW_CPU_CYCLES)
+    { sample_period, sample_freq }   4000
+    sample_type                      IP|TID|TIME|CALLCHAIN|PERIOD
+    read_format                      ID|LOST
+    disabled                         1
+    inherit                          1
+    mmap                             1
+    comm                             1
+    freq                             1
+    enable_on_exec                   1
+    task                             1
+    sample_id_all                    1
+    mmap2                            1
+    comm_exec                        1
+    ksymbol                          1
+    bpf_event                        1
+    defer_callchain                  1
+  ------------------------------------------------------------
+  sys_perf_event_open: pid 162755  cpu 0  group_fd -1  flags 0x8
+  sys_perf_event_open failed, error -22
+  switching off deferred callchain support
+
+Cc: Masami Hiramatsu <mhiramat@kernel.org>
+Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Ingo Molnar <mingo@kernel.org>
+Cc: Jiri Olsa <jolsa@kernel.org>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: Andrii Nakryiko <andrii@kernel.org>
+Cc: Indu Bhagat <indu.bhagat@oracle.com>
+Cc: "Jose E. Marchesi" <jemarch@gnu.org>
+Cc: Beau Belgrave <beaub@linux.microsoft.com>
+Cc: Jens Remus <jremus@linux.ibm.com>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Andrew Morton <akpm@linux-foundation.org>
+Cc: Jens Axboe <axboe@kernel.dk>
+Link: https://lore.kernel.org/20250625231623.181524553@goodmis.org
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+---
+ tools/perf/util/evsel.c | 24 ++++++++++++++++++++++++
+ tools/perf/util/evsel.h |  1 +
+ 2 files changed, 25 insertions(+)
+
+diff --git a/tools/perf/util/evsel.c b/tools/perf/util/evsel.c
+index 6176c31b57eaf..c942983b870e0 100644
+--- a/tools/perf/util/evsel.c
++++ b/tools/perf/util/evsel.c
+@@ -1076,6 +1076,14 @@ static void __evsel__config_callchain(struct evsel *evsel, struct record_opts *o
+ 		}
+ 	}
+ 
++	if (param->record_mode == CALLCHAIN_FP && !attr->exclude_callchain_user) {
++		/*
++		 * Enable deferred callchains optimistically.  It'll be switched
++		 * off later if the kernel doesn't support it.
++		 */
++		attr->defer_callchain = 1;
++	}
++
+ 	if (function) {
+ 		pr_info("Disabling user space callchains for function trace event.\n");
+ 		attr->exclude_callchain_user = 1;
+@@ -2124,6 +2132,8 @@ static int __evsel__prepare_open(struct evsel *evsel, struct perf_cpu_map *cpus,
+ 
+ static void evsel__disable_missing_features(struct evsel *evsel)
+ {
++	if (perf_missing_features.defer_callchain)
++		evsel->core.attr.defer_callchain = 0;
+ 	if (perf_missing_features.inherit_sample_read && evsel->core.attr.inherit &&
+ 	    (evsel->core.attr.sample_type & PERF_SAMPLE_READ))
+ 		evsel->core.attr.inherit = 0;
+@@ -2398,6 +2408,15 @@ static bool evsel__detect_missing_features(struct evsel *evsel, struct perf_cpu
+ 
+ 	/* Please add new feature detection here. */
+ 
++	attr.defer_callchain = true;
++	attr.sample_type = PERF_SAMPLE_CALLCHAIN;
++	if (has_attr_feature(&attr, /*flags=*/0))
++		goto found;
++	perf_missing_features.defer_callchain = true;
++	pr_debug2("switching off deferred callchain support\n");
++	attr.defer_callchain = false;
++	attr.sample_type = 0;
++
+ 	attr.inherit = true;
+ 	attr.sample_type = PERF_SAMPLE_READ;
+ 	if (has_attr_feature(&attr, /*flags=*/0))
+@@ -2509,6 +2528,11 @@ static bool evsel__detect_missing_features(struct evsel *evsel, struct perf_cpu
+ 	errno = old_errno;
+ 
+ check:
++	if (evsel->core.attr.defer_callchain &&
++	    evsel->core.attr.sample_type & PERF_SAMPLE_CALLCHAIN &&
++	    perf_missing_features.defer_callchain)
++		return true;
++
+ 	if (evsel->core.attr.inherit &&
+ 	    (evsel->core.attr.sample_type & PERF_SAMPLE_READ) &&
+ 	    perf_missing_features.inherit_sample_read)
+diff --git a/tools/perf/util/evsel.h b/tools/perf/util/evsel.h
+index 6dbc9690e0c92..a01c1de8f95f2 100644
+--- a/tools/perf/util/evsel.h
++++ b/tools/perf/util/evsel.h
+@@ -221,6 +221,7 @@ struct perf_missing_features {
+ 	bool branch_counters;
+ 	bool aux_action;
+ 	bool inherit_sample_read;
++	bool defer_callchain;
+ };
+ 
+ extern struct perf_missing_features perf_missing_features;
+-- 
+2.50.1
+

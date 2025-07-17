@@ -1,10 +1,10 @@
-From 3fcb04fd014412c46b492df89a7f0468ebd75123 Mon Sep 17 00:00:00 2001
-Message-ID: <3fcb04fd014412c46b492df89a7f0468ebd75123.1752539563.git.sam@gentoo.org>
-In-Reply-To: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
-References: <69614a6c14b45ad4118d3fbc2a3bb6c45f3edef7.1752539563.git.sam@gentoo.org>
+From 86bf9801dc780c76d3d23c26845d9f8619e6e13d Mon Sep 17 00:00:00 2001
+Message-ID: <86bf9801dc780c76d3d23c26845d9f8619e6e13d.1752722506.git.sam@gentoo.org>
+In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
 From: Steven Rostedt <rostedt@goodmis.org>
-Date: Mon, 30 Jun 2025 20:53:30 -0400
-Subject: [PATCH 09/37] unwind deferred: Use SRCU unwind_deferred_task_work()
+Date: Wed, 16 Jul 2025 20:49:19 -0400
+Subject: [PATCH 09/34] unwind deferred: Use SRCU unwind_deferred_task_work()
 
 Instead of using the callback_mutex to protect the link list of callbacks
 in unwind_deferred_task_work(), use SRCU instead. This gets called every
@@ -19,34 +19,36 @@ callback_mutex.
 
 Link: https://lore.kernel.org/all/ca9bd83a-6c80-4ee0-a83c-224b9d60b755@efficios.com/
 
-Cc: Masami Hiramatsu <mhiramat@kernel.org>
-Cc: Josh Poimboeuf <jpoimboe@kernel.org>
-Cc: Peter Zijlstra <peterz@infradead.org>
-Cc: Ingo Molnar <mingo@kernel.org>
-Cc: Jiri Olsa <jolsa@kernel.org>
-Cc: Namhyung Kim <namhyung@kernel.org>
-Cc: Thomas Gleixner <tglx@linutronix.de>
-Cc: Andrii Nakryiko <andrii@kernel.org>
-Cc: Indu Bhagat <indu.bhagat@oracle.com>
-Cc: "Jose E. Marchesi" <jemarch@gnu.org>
-Cc: Beau Belgrave <beaub@linux.microsoft.com>
-Cc: Jens Remus <jremus@linux.ibm.com>
-Cc: Linus Torvalds <torvalds@linux-foundation.org>
-Cc: Andrew Morton <akpm@linux-foundation.org>
-Cc: Jens Axboe <axboe@kernel.dk>
-Cc: Florian Weimer <fweimer@redhat.com>
-Link: https://lore.kernel.org/20250701005452.075382262@goodmis.org
+Also added a new guard (srcu_lite) written by Peter Zilstra
+
+Link: https://lore.kernel.org/all/20250715102912.GQ1613200@noisy.programming.kicks-ass.net/
+
+Cc: Paul E. McKenney <paulmck@kernel.org>
 Suggested-by: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
 Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
 ---
- kernel/unwind/deferred.c | 35 ++++++++++++++++++++++++++---------
- 1 file changed, 26 insertions(+), 9 deletions(-)
+ include/linux/srcu.h     |  4 ++++
+ kernel/unwind/deferred.c | 27 +++++++++++++++++++++------
+ 2 files changed, 25 insertions(+), 6 deletions(-)
 
+diff --git a/include/linux/srcu.h b/include/linux/srcu.h
+index 900b0d5c05f54..879054b8bf875 100644
+--- a/include/linux/srcu.h
++++ b/include/linux/srcu.h
+@@ -524,4 +524,8 @@ DEFINE_LOCK_GUARD_1(srcu, struct srcu_struct,
+ 		    srcu_read_unlock(_T->lock, _T->idx),
+ 		    int idx)
+ 
++DEFINE_LOCK_GUARD_1(srcu_lite, struct srcu_struct,
++		    _T->idx = srcu_read_lock_lite(_T->lock),
++		    srcu_read_unlock_lite(_T->lock, _T->idx),
++		    int idx)
+ #endif
 diff --git a/kernel/unwind/deferred.c b/kernel/unwind/deferred.c
-index 5edb648b7de7..9aed9866f460 100644
+index 2311b725d6914..353f7af610bf7 100644
 --- a/kernel/unwind/deferred.c
 +++ b/kernel/unwind/deferred.c
-@@ -41,10 +41,11 @@ static inline bool try_assign_cnt(struct unwind_task_info *info, u32 cnt)
+@@ -41,7 +41,7 @@ static inline bool try_assign_cnt(struct unwind_task_info *info, u32 cnt)
  #define UNWIND_MAX_ENTRIES					\
  	((SZ_4K - sizeof(struct unwind_cache)) / sizeof(long))
  
@@ -54,47 +56,38 @@ index 5edb648b7de7..9aed9866f460 100644
 +/* Guards adding to or removing from the list of callbacks */
  static DEFINE_MUTEX(callback_mutex);
  static LIST_HEAD(callbacks);
- static unsigned long unwind_mask;
+ 
+@@ -49,6 +49,7 @@ static LIST_HEAD(callbacks);
+ 
+ /* Zero'd bits are available for assigning callback users */
+ static unsigned long unwind_mask = RESERVED_BITS;
 +DEFINE_STATIC_SRCU(unwind_srcu);
  
- /*
-  * This is a unique percpu identifier for a given task entry context.
-@@ -143,6 +144,7 @@ static void unwind_deferred_task_work(struct callback_head *head)
- 	struct unwind_stacktrace trace;
- 	struct unwind_work *work;
- 	u64 cookie;
-+	int idx;
- 
- 	if (WARN_ON_ONCE(!local_read(&info->pending)))
- 		return;
-@@ -161,13 +163,15 @@ static void unwind_deferred_task_work(struct callback_head *head)
+ static inline bool unwind_pending(struct unwind_task_info *info)
+ {
+@@ -174,8 +175,9 @@ static void unwind_deferred_task_work(struct callback_head *head)
  
  	cookie = info->id.id;
  
 -	guard(mutex)(&callback_mutex);
 -	list_for_each_entry(work, &callbacks, list) {
-+	idx = srcu_read_lock(&unwind_srcu);
++	guard(srcu_lite)(&unwind_srcu);
 +	list_for_each_entry_srcu(work, &callbacks, list,
 +				 srcu_read_lock_held(&unwind_srcu)) {
- 		if (test_bit(work->bit, &info->unwind_mask)) {
+ 		if (test_bit(work->bit, &bits)) {
  			work->func(work, &trace, cookie);
- 			clear_bit(work->bit, &info->unwind_mask);
- 		}
- 	}
-+	srcu_read_unlock(&unwind_srcu, idx);
- }
- 
- /**
-@@ -199,6 +203,7 @@ int unwind_deferred_request(struct unwind_work *work, u64 *cookie)
+ 			if (info->cache)
+@@ -213,7 +215,7 @@ int unwind_deferred_request(struct unwind_work *work, u64 *cookie)
  {
  	struct unwind_task_info *info = &current->unwind_info;
- 	long pending;
-+	int bit;
+ 	unsigned long old, bits;
+-	unsigned long bit = BIT(work->bit);
++	unsigned long bit;
  	int ret;
  
  	*cookie = 0;
-@@ -211,12 +216,17 @@ int unwind_deferred_request(struct unwind_work *work, u64 *cookie)
- 	if (!CAN_USE_IN_NMI && in_nmi())
+@@ -230,6 +232,14 @@ int unwind_deferred_request(struct unwind_work *work, u64 *cookie)
+ 	if (WARN_ON_ONCE(!CAN_USE_IN_NMI && in_nmi()))
  		return -EINVAL;
  
 +	/* Do not allow cancelled works to request again */
@@ -102,54 +95,30 @@ index 5edb648b7de7..9aed9866f460 100644
 +	if (WARN_ON_ONCE(bit < 0))
 +		return -EINVAL;
 +
++	/* Only need the mask now */
++	bit = BIT(bit);
++
  	guard(irqsave)();
  
  	*cookie = get_cookie(info);
- 
- 	/* This is already queued */
--	if (test_bit(work->bit, &info->unwind_mask))
-+	if (test_bit(bit, &info->unwind_mask))
- 		return 1;
- 
- 	/* callback already pending? */
-@@ -240,25 +250,32 @@ int unwind_deferred_request(struct unwind_work *work, u64 *cookie)
- 	}
- 
-  out:
--	return test_and_set_bit(work->bit, &info->unwind_mask);
-+	return test_and_set_bit(bit, &info->unwind_mask);
- }
- 
- void unwind_deferred_cancel(struct unwind_work *work)
- {
- 	struct task_struct *g, *t;
-+	int bit;
- 
- 	if (!work)
+@@ -281,10 +291,15 @@ void unwind_deferred_cancel(struct unwind_work *work)
  		return;
  
  	guard(mutex)(&callback_mutex);
 -	list_del(&work->list);
 +	list_del_rcu(&work->list);
-+	bit = work->bit;
 +
 +	/* Do not allow any more requests and prevent callbacks */
 +	work->bit = -1;
-+
-+	__clear_bit(bit, &unwind_mask);
  
--	__clear_bit(work->bit, &unwind_mask);
+ 	__clear_bit(bit, &unwind_mask);
+ 
 +	synchronize_srcu(&unwind_srcu);
- 
++
  	guard(rcu)();
  	/* Clear this bit from all threads */
  	for_each_process_thread(g, t) {
--		clear_bit(work->bit, &t->unwind_info.unwind_mask);
-+		clear_bit(bit, &t->unwind_info.unwind_mask);
- 	}
- }
- 
-@@ -275,7 +292,7 @@ int unwind_deferred_init(struct unwind_work *work, unwind_callback_t func)
+@@ -307,7 +322,7 @@ int unwind_deferred_init(struct unwind_work *work, unwind_callback_t func)
  	work->bit = ffz(unwind_mask);
  	__set_bit(work->bit, &unwind_mask);
  

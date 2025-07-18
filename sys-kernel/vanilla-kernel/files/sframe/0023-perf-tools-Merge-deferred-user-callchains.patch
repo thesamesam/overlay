@@ -1,9 +1,9 @@
-From 0ebc2a0b116e743d7f84d3c471adf097b636b23d Mon Sep 17 00:00:00 2001
-Message-ID: <0ebc2a0b116e743d7f84d3c471adf097b636b23d.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From 080b66bc9df04cff58ecf0aca100c5ee2a1e0370 Mon Sep 17 00:00:00 2001
+Message-ID: <080b66bc9df04cff58ecf0aca100c5ee2a1e0370.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Namhyung Kim <namhyung@kernel.org>
-Date: Thu, 26 Jun 2025 10:51:21 -0400
+Date: Fri, 18 Jul 2025 12:41:30 -0400
 Subject: [PATCH 23/34] perf tools: Merge deferred user callchains
 
 Save samples with deferred callchains in a separate list and deliver
@@ -53,21 +53,6 @@ Also perf report can get the user callchain entry at the end.
                  entry_SYSCALL_64
                  __GI___ioctl
 
-Cc: Masami Hiramatsu <mhiramat@kernel.org>
-Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
-Cc: Peter Zijlstra <peterz@infradead.org>
-Cc: Ingo Molnar <mingo@kernel.org>
-Cc: Jiri Olsa <jolsa@kernel.org>
-Cc: Thomas Gleixner <tglx@linutronix.de>
-Cc: Andrii Nakryiko <andrii@kernel.org>
-Cc: Indu Bhagat <indu.bhagat@oracle.com>
-Cc: "Jose E. Marchesi" <jemarch@gnu.org>
-Cc: Beau Belgrave <beaub@linux.microsoft.com>
-Cc: Jens Remus <jremus@linux.ibm.com>
-Cc: Linus Torvalds <torvalds@linux-foundation.org>
-Cc: Andrew Morton <akpm@linux-foundation.org>
-Cc: Jens Axboe <axboe@kernel.dk>
-Link: https://lore.kernel.org/20250626105121.7500c722@gandalf.local.home
 Signed-off-by: Namhyung Kim <namhyung@kernel.org>
 Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
 Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
@@ -198,10 +183,10 @@ index 85859708393ef..d2895c8be167b 100644
  
  struct evsel_str_handler {
 diff --git a/tools/perf/util/session.c b/tools/perf/util/session.c
-index e6be01459352e..21b0958e8229c 100644
+index 32154d230f6c1..70dca8be72de0 100644
 --- a/tools/perf/util/session.c
 +++ b/tools/perf/util/session.c
-@@ -1277,6 +1277,56 @@ static int evlist__deliver_sample(struct evlist *evlist, const struct perf_tool
+@@ -1278,6 +1278,56 @@ static int evlist__deliver_sample(struct evlist *evlist, const struct perf_tool
  					    per_thread);
  }
  
@@ -258,7 +243,7 @@ index e6be01459352e..21b0958e8229c 100644
  static int machines__deliver_event(struct machines *machines,
  				   struct evlist *evlist,
  				   union perf_event *event,
-@@ -1305,6 +1355,16 @@ static int machines__deliver_event(struct machines *machines,
+@@ -1306,6 +1356,16 @@ static int machines__deliver_event(struct machines *machines,
  			return 0;
  		}
  		dump_sample(evsel, event, sample, perf_env__arch(machine->env));
@@ -275,7 +260,7 @@ index e6be01459352e..21b0958e8229c 100644
  		return evlist__deliver_sample(evlist, tool, event, sample, evsel, machine);
  	case PERF_RECORD_MMAP:
  		return tool->mmap(tool, event, sample, machine);
-@@ -1364,7 +1424,8 @@ static int machines__deliver_event(struct machines *machines,
+@@ -1365,7 +1425,8 @@ static int machines__deliver_event(struct machines *machines,
  		return tool->aux_output_hw_id(tool, event, sample, machine);
  	case PERF_RECORD_CALLCHAIN_DEFERRED:
  		dump_deferred_callchain(evsel, event, sample);

@@ -1,9 +1,9 @@
-From fdbe0e16ce42ddded0db7c0f9150669f3e49d421 Mon Sep 17 00:00:00 2001
-Message-ID: <fdbe0e16ce42ddded0db7c0f9150669f3e49d421.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From aed6cbadc8953bc842d220233c8a71b0069190d2 Mon Sep 17 00:00:00 2001
+Message-ID: <aed6cbadc8953bc842d220233c8a71b0069190d2.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Steven Rostedt <rostedt@goodmis.org>
-Date: Wed, 25 Jun 2025 19:15:48 -0400
+Date: Fri, 18 Jul 2025 12:41:26 -0400
 Subject: [PATCH 19/34] perf: Support deferred user callchains for per CPU
  events
 
@@ -62,17 +62,12 @@ requested it. That is, the task may migrate and its user stack trace will
 be recorded on the CPU event of the CPU that it exits back to user space
 on.
 
-Changes since v12: https://lore.kernel.org/20250625231622.846993672@goodmis.org
-
-- Removed use of timestamp. The deferred unwind has gone back to using
-  cookies, and perf doesn't use the cookie. This means the
-  struct perf_callchain_deferred_event is not modified.
-
 Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
 ---
- include/linux/perf_event.h |   4 +
- kernel/events/core.c       | 303 +++++++++++++++++++++++++++++++++----
- 2 files changed, 281 insertions(+), 26 deletions(-)
+ include/linux/perf_event.h      |   4 +
+ include/uapi/linux/perf_event.h |   1 +
+ kernel/events/core.c            | 319 +++++++++++++++++++++++++++++---
+ 3 files changed, 296 insertions(+), 28 deletions(-)
 
 diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h
 index c7d474391e518..546a7f81be96d 100644
@@ -96,11 +91,23 @@ index c7d474391e518..546a7f81be96d 100644
  	atomic_t			event_limit;
  
  	/* address range filters */
+diff --git a/include/uapi/linux/perf_event.h b/include/uapi/linux/perf_event.h
+index 184740d1e79d2..20b8f890113be 100644
+--- a/include/uapi/linux/perf_event.h
++++ b/include/uapi/linux/perf_event.h
+@@ -1248,6 +1248,7 @@ enum perf_event_type {
+ 	 *
+ 	 * struct {
+ 	 *	struct perf_event_header	header;
++	 *	u64				cookie;
+ 	 *	u64				nr;
+ 	 *	u64				ips[nr];
+ 	 *	struct sample_id		sample_id;
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index edefedc312a45..83f789c7d3daa 100644
+index 0d3230cba847c..0c41d5fd2064f 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
-@@ -5582,10 +5582,185 @@ static bool exclusive_event_installable(struct perf_event *event,
+@@ -5582,10 +5582,192 @@ static bool exclusive_event_installable(struct perf_event *event,
  	return true;
  }
  
@@ -203,6 +210,12 @@ index edefedc312a45..83f789c7d3daa 100644
 +	cpu_events = rcu_dereference_protected(defer->cpu_events,
 +				lockdep_is_held(&unwind_deferred_mutex));
 +
++	/*
++	 * The defer->nr_cpu_events is the count of the number
++	 * of non-empty lists in the cpu_events array. If the list
++	 * being added to is already occupied, the nr_cpu_events does
++	 * not need to get incremented.
++	 */
 +	if (list_empty(&cpu_events[event->cpu].list))
 +		defer->nr_cpu_events++;
 +	list_add_tail_rcu(&event->unwind_list, &cpu_events[event->cpu].list);
@@ -225,11 +238,12 @@ index edefedc312a45..83f789c7d3daa 100644
 +	struct perf_unwind_deferred *defer =
 +		container_of(head, struct perf_unwind_deferred, rcu_head);
 +
++	WARN_ON_ONCE(defer->nr_cpu_events);
 +	/*
 +	 * This is called by call_rcu() and there are no more
 +	 * references to cpu_events.
 +	 */
-+	cpu_events = rcu_dereference_protected(defer->cpu_events, 1);
++	cpu_events = rcu_dereference_protected(defer->cpu_events, true);
 +	kfree(cpu_events);
 +	kfree(defer);
 +}
@@ -286,13 +300,19 @@ index edefedc312a45..83f789c7d3daa 100644
  	if (!event->pending_unwind_callback)
  		return;
  
-@@ -5613,33 +5788,19 @@ struct perf_callchain_deferred_event {
+@@ -5609,66 +5791,123 @@ static void perf_pending_unwind_sync(struct perf_event *event)
+ 
+ struct perf_callchain_deferred_event {
+ 	struct perf_event_header	header;
++	u64				cookie;
+ 	u64				nr;
  	u64				ips[];
  };
  
 -static void perf_event_callchain_deferred(struct callback_head *work)
 +static void perf_event_callchain_deferred(struct perf_event *event,
-+					  struct unwind_stacktrace *trace)
++					  struct unwind_stacktrace *trace,
++					  u64 cookie)
  {
 -	struct perf_event *event = container_of(work, struct perf_event, pending_unwind_work);
  	struct perf_callchain_deferred_event deferred_event;
@@ -305,7 +325,7 @@ index edefedc312a45..83f789c7d3daa 100644
 -	if (!event->pending_unwind_callback)
 -		return;
 -
--	if (unwind_deferred_trace(&trace) < 0)
+-	if (unwind_user_faultable(&trace) < 0)
 -		goto out;
 -
 -	/*
@@ -324,7 +344,11 @@ index edefedc312a45..83f789c7d3daa 100644
  
  	deferred_event.header.type = PERF_RECORD_CALLCHAIN_DEFERRED;
  	deferred_event.header.misc = PERF_RECORD_MISC_USER;
-@@ -5650,21 +5811,89 @@ static void perf_event_callchain_deferred(struct callback_head *work)
+ 	deferred_event.header.size = sizeof(deferred_event) + (nr * sizeof(u64));
+ 
++	deferred_event.cookie = cookie;
+ 	deferred_event.nr = nr;
+ 
  	perf_event_header__init_id(&deferred_event.header, &data, event);
  
  	if (perf_output_begin(&handle, &data, event, deferred_event.header.size))
@@ -333,8 +357,14 @@ index edefedc312a45..83f789c7d3daa 100644
  
  	perf_output_put(&handle, deferred_event);
  	perf_output_put(&handle, callchain_context);
--	perf_output_copy(&handle, trace.entries, trace.nr * sizeof(u64));
-+	perf_output_copy(&handle, trace->entries, trace->nr * sizeof(u64));
+-	/* trace.entries[] are not guaranteed to be 64bit */
+-	for (int i = 0; i < trace.nr; i++) {
+-		u64 entry = trace.entries[i];
++	/* trace->entries[] are not guaranteed to be 64bit */
++	for (int i = 0; i < trace->nr; i++) {
++		u64 entry = trace->entries[i];
+ 		perf_output_put(&handle, entry);
+ 	}
  	perf_event__output_id_sample(event, &handle, &data);
  
  	perf_output_end(&handle);
@@ -357,7 +387,7 @@ index edefedc312a45..83f789c7d3daa 100644
 +		 * See comment in perf_pending_unwind_sync().
 +		 */
 +		guard(rcu)();
-+		perf_event_callchain_deferred(event, &trace);
++		perf_event_callchain_deferred(event, &trace, 0);
 +	}
  
 -out:
@@ -399,7 +429,7 @@ index edefedc312a45..83f789c7d3daa 100644
 +		/* If unwind_deferred is NULL the event is going away */
 +		if (unlikely(!event->unwind_deferred))
 +			continue;
-+		perf_event_callchain_deferred(event, trace);
++		perf_event_callchain_deferred(event, trace, cookie);
 +		/* Only the first CPU event gets the trace */
 +		break;
 +	}
@@ -417,7 +447,7 @@ index edefedc312a45..83f789c7d3daa 100644
  static void perf_free_addr_filters(struct perf_event *event);
  
  /* vs perf_event_alloc() error */
-@@ -8246,6 +8475,16 @@ static u64 perf_get_page_size(unsigned long addr)
+@@ -8250,6 +8489,18 @@ static u64 perf_get_page_size(unsigned long addr)
  
  static struct perf_callchain_entry __empty_callchain = { .nr = 0, };
  
@@ -425,16 +455,18 @@ index edefedc312a45..83f789c7d3daa 100644
 +static int deferred_unwind_request(struct perf_unwind_deferred *defer)
 +{
 +	u64 cookie; /* ignored */
-+	int ret;
 +
-+	ret = unwind_deferred_request(&defer->unwind_work, &cookie);
-+	return ret < 0 ? ret : 0;
++	/*
++	 * Returns 0 for queued, 1 for already queued or executed,
++	 * and negative on error.
++	 */
++	return unwind_deferred_request(&defer->unwind_work, &cookie);
 +}
 +
  /*
   * Returns:
  *     > 0 : if already queued.
-@@ -8255,17 +8494,22 @@ static struct perf_callchain_entry __empty_callchain = { .nr = 0, };
+@@ -8259,17 +8510,22 @@ static struct perf_callchain_entry __empty_callchain = { .nr = 0, };
  static int deferred_request(struct perf_event *event)
  {
  	struct callback_head *work = &event->pending_unwind_work;
@@ -461,7 +493,7 @@ index edefedc312a45..83f789c7d3daa 100644
  	guard(irqsave)();
  
  	/* callback already pending? */
-@@ -13155,13 +13399,20 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
+@@ -13160,13 +13416,20 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
  		}
  	}
  

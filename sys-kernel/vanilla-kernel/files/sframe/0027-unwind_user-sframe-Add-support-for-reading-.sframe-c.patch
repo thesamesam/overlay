@@ -1,7 +1,7 @@
-From 39c6ace33b717f0ae147e3973c13df3d65472359 Mon Sep 17 00:00:00 2001
-Message-ID: <39c6ace33b717f0ae147e3973c13df3d65472359.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From c259f4c43305e2554642656f9a9831feacdb57b1 Mon Sep 17 00:00:00 2001
+Message-ID: <c259f4c43305e2554642656f9a9831feacdb57b1.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Josh Poimboeuf <jpoimboe@kernel.org>
 Date: Wed, 16 Jul 2025 21:28:52 -0400
 Subject: [PATCH 27/34] unwind_user/sframe: Add support for reading .sframe

@@ -1,29 +1,14 @@
-From 0edf954e721e4e6f9646686955deaf2551f7fd73 Mon Sep 17 00:00:00 2001
-Message-ID: <0edf954e721e4e6f9646686955deaf2551f7fd73.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From 782c7ad0308d83e0176bcc56e77439f21e7647e7 Mon Sep 17 00:00:00 2001
+Message-ID: <782c7ad0308d83e0176bcc56e77439f21e7647e7.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Josh Poimboeuf <jpoimboe@kernel.org>
-Date: Wed, 25 Jun 2025 19:15:45 -0400
+Date: Fri, 18 Jul 2025 12:41:23 -0400
 Subject: [PATCH 16/34] perf: Simplify get_perf_callchain() user logic
 
 Simplify the get_perf_callchain() user logic a bit.  task_pt_regs()
 should never be NULL.
 
-Cc: Masami Hiramatsu <mhiramat@kernel.org>
-Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
-Cc: Peter Zijlstra <peterz@infradead.org>
-Cc: Ingo Molnar <mingo@kernel.org>
-Cc: Jiri Olsa <jolsa@kernel.org>
-Cc: Thomas Gleixner <tglx@linutronix.de>
-Cc: Andrii Nakryiko <andrii@kernel.org>
-Cc: Indu Bhagat <indu.bhagat@oracle.com>
-Cc: "Jose E. Marchesi" <jemarch@gnu.org>
-Cc: Beau Belgrave <beaub@linux.microsoft.com>
-Cc: Jens Remus <jremus@linux.ibm.com>
-Cc: Linus Torvalds <torvalds@linux-foundation.org>
-Cc: Andrew Morton <akpm@linux-foundation.org>
-Cc: Jens Axboe <axboe@kernel.dk>
-Link: https://lore.kernel.org/20250625231622.343362222@goodmis.org
 Acked-by: Namhyung Kim <namhyung@kernel.org>
 Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
 Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>

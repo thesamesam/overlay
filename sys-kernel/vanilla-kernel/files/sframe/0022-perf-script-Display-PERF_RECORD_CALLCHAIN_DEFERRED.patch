@@ -1,9 +1,9 @@
-From fd807f95a516e37ff56047b85e299906ea822aab Mon Sep 17 00:00:00 2001
-Message-ID: <fd807f95a516e37ff56047b85e299906ea822aab.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From 194973dec25978f39aebeda85c427ab2e526f790 Mon Sep 17 00:00:00 2001
+Message-ID: <194973dec25978f39aebeda85c427ab2e526f790.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Namhyung Kim <namhyung@kernel.org>
-Date: Thu, 26 Jun 2025 10:50:41 -0400
+Date: Fri, 18 Jul 2025 12:41:29 -0400
 Subject: [PATCH 22/34] perf script: Display PERF_RECORD_CALLCHAIN_DEFERRED
 
 Handle the deferred callchains in the script output.
@@ -27,21 +27,6 @@ Handle the deferred callchains in the script output.
   perf     801 [000]    18.031814: DEFERRED CALLCHAIN
               7fb5fc22034b __GI___ioctl+0x3b (/usr/lib/x86_64-linux-gnu/libc.so.6)
 
-Cc: Masami Hiramatsu <mhiramat@kernel.org>
-Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
-Cc: Peter Zijlstra <peterz@infradead.org>
-Cc: Ingo Molnar <mingo@kernel.org>
-Cc: Jiri Olsa <jolsa@kernel.org>
-Cc: Thomas Gleixner <tglx@linutronix.de>
-Cc: Andrii Nakryiko <andrii@kernel.org>
-Cc: Indu Bhagat <indu.bhagat@oracle.com>
-Cc: "Jose E. Marchesi" <jemarch@gnu.org>
-Cc: Beau Belgrave <beaub@linux.microsoft.com>
-Cc: Jens Remus <jremus@linux.ibm.com>
-Cc: Linus Torvalds <torvalds@linux-foundation.org>
-Cc: Andrew Morton <akpm@linux-foundation.org>
-Cc: Jens Axboe <axboe@kernel.dk>
-Link: https://lore.kernel.org/20250626105041.31e2d403@gandalf.local.home
 Signed-off-by: Namhyung Kim <namhyung@kernel.org>
 Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
 Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>

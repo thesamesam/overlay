@@ -1,9 +1,9 @@
-From 0ad240da426eed22186a9295b9b5de16074af028 Mon Sep 17 00:00:00 2001
-Message-ID: <0ad240da426eed22186a9295b9b5de16074af028.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From b54447996cff80148c8040bdf44585e88cf8fecb Mon Sep 17 00:00:00 2001
+Message-ID: <b54447996cff80148c8040bdf44585e88cf8fecb.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Namhyung Kim <namhyung@kernel.org>
-Date: Wed, 25 Jun 2025 19:15:49 -0400
+Date: Fri, 18 Jul 2025 12:41:27 -0400
 Subject: [PATCH 20/34] perf tools: Minimal CALLCHAIN_DEFERRED support
 
 Add a new event type for deferred callchains and a new callback for the
@@ -25,52 +25,38 @@ already have a data file, it'll show the following result.
   .  0020:  21 03 00 00 21 03 00 00 43 02 12 ab 05 00 00 00  !...!...C.......
   .  0030:  00 00 00 00 00 00 00 00 09 00 00 00 00 00 00 00  ................
 
-  0 24344920643 0x5fe0 [0x40]: PERF_RECORD_CALLCHAIN_DEFERRED(IP, 0x2): 801/801: 0
+  0 24344920643 0x5fe0 [0x40]: PERF_RECORD_CALLCHAIN_DEFERRED(IP, 0x2): 801/801: 0 [300000001]
   ... FP chain: nr:2
   .....  0: fffffffffffffe00
   .....  1: 00007f45253fd34b
   : unhandled!
 
-Cc: Masami Hiramatsu <mhiramat@kernel.org>
-Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
-Cc: Peter Zijlstra <peterz@infradead.org>
-Cc: Ingo Molnar <mingo@kernel.org>
-Cc: Jiri Olsa <jolsa@kernel.org>
-Cc: Thomas Gleixner <tglx@linutronix.de>
-Cc: Andrii Nakryiko <andrii@kernel.org>
-Cc: Indu Bhagat <indu.bhagat@oracle.com>
-Cc: "Jose E. Marchesi" <jemarch@gnu.org>
-Cc: Beau Belgrave <beaub@linux.microsoft.com>
-Cc: Jens Remus <jremus@linux.ibm.com>
-Cc: Linus Torvalds <torvalds@linux-foundation.org>
-Cc: Andrew Morton <akpm@linux-foundation.org>
-Cc: Jens Axboe <axboe@kernel.dk>
-Link: https://lore.kernel.org/20250625231623.018727649@goodmis.org
 Signed-off-by: Namhyung Kim <namhyung@kernel.org>
 Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
 Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
 ---
- tools/lib/perf/include/perf/event.h       |  7 +++++++
+ tools/lib/perf/include/perf/event.h       |  8 ++++++++
  tools/perf/util/event.c                   |  1 +
  tools/perf/util/evsel.c                   | 15 +++++++++++++++
  tools/perf/util/machine.c                 |  1 +
  tools/perf/util/perf_event_attr_fprintf.c |  1 +
  tools/perf/util/sample.h                  |  3 ++-
- tools/perf/util/session.c                 | 17 +++++++++++++++++
+ tools/perf/util/session.c                 | 18 ++++++++++++++++++
  tools/perf/util/tool.c                    |  1 +
  tools/perf/util/tool.h                    |  3 ++-
- 9 files changed, 47 insertions(+), 2 deletions(-)
+ 9 files changed, 49 insertions(+), 2 deletions(-)
 
 diff --git a/tools/lib/perf/include/perf/event.h b/tools/lib/perf/include/perf/event.h
-index 09b7c643ddac1..4590d62ca9133 100644
+index 09b7c643ddac1..5801b0124067a 100644
 --- a/tools/lib/perf/include/perf/event.h
 +++ b/tools/lib/perf/include/perf/event.h
-@@ -151,6 +151,12 @@ struct perf_record_switch {
+@@ -151,6 +151,13 @@ struct perf_record_switch {
  	__u32			 next_prev_tid;
  };
  
 +struct perf_record_callchain_deferred {
 +	struct perf_event_header header;
++	__u64			 cookie;
 +	__u64			 nr;
 +	__u64			 ips[];
 +};
@@ -78,7 +64,7 @@ index 09b7c643ddac1..4590d62ca9133 100644
  struct perf_record_header_attr {
  	struct perf_event_header header;
  	struct perf_event_attr	 attr;
-@@ -505,6 +511,7 @@ union perf_event {
+@@ -505,6 +512,7 @@ union perf_event {
  	struct perf_record_read			read;
  	struct perf_record_throttle		throttle;
  	struct perf_record_sample		sample;
@@ -170,7 +156,7 @@ index 0e96240052e9e..9d6e2f14551cb 100644
  	void *raw_data;
  	struct ip_callchain *callchain;
 diff --git a/tools/perf/util/session.c b/tools/perf/util/session.c
-index a320672c264e7..e6be01459352e 100644
+index a320672c264e7..32154d230f6c1 100644
 --- a/tools/perf/util/session.c
 +++ b/tools/perf/util/session.c
 @@ -715,6 +715,7 @@ static perf_event__swap_op perf_event__swap_ops[] = {
@@ -181,7 +167,7 @@ index a320672c264e7..e6be01459352e 100644
  	[PERF_RECORD_HEADER_ATTR]	  = perf_event__hdr_attr_swap,
  	[PERF_RECORD_HEADER_EVENT_TYPE]	  = perf_event__event_type_swap,
  	[PERF_RECORD_HEADER_TRACING_DATA] = perf_event__tracing_data_swap,
-@@ -1118,6 +1119,19 @@ static void dump_sample(struct evsel *evsel, union perf_event *event,
+@@ -1118,6 +1119,20 @@ static void dump_sample(struct evsel *evsel, union perf_event *event,
  		sample_read__printf(sample, evsel->core.attr.read_format);
  }
  
@@ -191,8 +177,9 @@ index a320672c264e7..e6be01459352e 100644
 +	if (!dump_trace)
 +		return;
 +
-+	printf("(IP, 0x%x): %d/%d: %#" PRIx64 "\n",
-+	       event->header.misc, sample->pid, sample->tid, sample->ip);
++	printf("(IP, 0x%x): %d/%d: %#" PRIx64 " [%llx]\n",
++	       event->header.misc, sample->pid, sample->tid, sample->ip,
++		event->callchain_deferred.cookie);
 +
 +	if (evsel__has_callchain(evsel))
 +		callchain__printf(evsel, sample);
@@ -201,7 +188,7 @@ index a320672c264e7..e6be01459352e 100644
  static void dump_read(struct evsel *evsel, union perf_event *event)
  {
  	struct perf_record_read *read_event = &event->read;
-@@ -1348,6 +1362,9 @@ static int machines__deliver_event(struct machines *machines,
+@@ -1348,6 +1363,9 @@ static int machines__deliver_event(struct machines *machines,
  		return tool->text_poke(tool, event, sample, machine);
  	case PERF_RECORD_AUX_OUTPUT_HW_ID:
  		return tool->aux_output_hw_id(tool, event, sample, machine);

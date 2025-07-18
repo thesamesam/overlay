@@ -1,7 +1,7 @@
-From 30700242c05cccc8983cee625b7c154207142533 Mon Sep 17 00:00:00 2001
-Message-ID: <30700242c05cccc8983cee625b7c154207142533.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From 7782a297ee28f694e07a21514a55bd2a27ea517b Mon Sep 17 00:00:00 2001
+Message-ID: <7782a297ee28f694e07a21514a55bd2a27ea517b.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Josh Poimboeuf <jpoimboe@kernel.org>
 Date: Wed, 16 Jul 2025 21:28:53 -0400
 Subject: [PATCH 28/34] unwind_user/sframe: Detect .sframe sections in

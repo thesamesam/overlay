@@ -1,10 +1,10 @@
-From 5fd80a1a4708ef7af91198b9bb44631dec2dc7d9 Mon Sep 17 00:00:00 2001
-Message-ID: <5fd80a1a4708ef7af91198b9bb44631dec2dc7d9.1752540326.git.sam@gentoo.org>
-In-Reply-To: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
-References: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+From f7790b10a24b4ee9be1bf496f7fee3af6013f02f Mon Sep 17 00:00:00 2001
+Message-ID: <f7790b10a24b4ee9be1bf496f7fee3af6013f02f.1752879783.git.sam@gentoo.org>
+In-Reply-To: <cca06d1e46af7098c05a417746e57aaef6d17cd0.1752879783.git.sam@gentoo.org>
+References: <cca06d1e46af7098c05a417746e57aaef6d17cd0.1752879783.git.sam@gentoo.org>
 From: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Date: Mon, 14 Jul 2025 12:43:29 +0300
-Subject: [PATCH 4/6] elf: Add SFrame stack tracing
+Subject: [PATCH 4/8] elf: Add SFrame stack tracing
 
 This patch adds the necessary bits to enable stack tracing using
 SFrame.  In the case the new SFrame stack tracing procedure doesn't
@@ -17,6 +17,7 @@ sframe.h, read-sframe.c and read-sfame.h.
 
 Signed-off-by: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Reviewed-by: DJ Delorie <dj@redhat.com>
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  debug/backtrace.c             |  46 ++-
  sysdeps/generic/Makefile      |   1 +

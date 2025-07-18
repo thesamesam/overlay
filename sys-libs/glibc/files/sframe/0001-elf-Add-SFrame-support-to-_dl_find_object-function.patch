@@ -1,8 +1,8 @@
-From feb13d8b4de917fcf5fe2147c9124d459e83b11e Mon Sep 17 00:00:00 2001
-Message-ID: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+From cca06d1e46af7098c05a417746e57aaef6d17cd0 Mon Sep 17 00:00:00 2001
+Message-ID: <cca06d1e46af7098c05a417746e57aaef6d17cd0.1752879783.git.sam@gentoo.org>
 From: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Date: Mon, 14 Jul 2025 12:43:26 +0300
-Subject: [PATCH 1/6] elf: Add SFrame support to _dl_find_object function
+Subject: [PATCH 1/8] elf: Add SFrame support to _dl_find_object function
 
 The SFrame provides information to be able to do stack trace is now
 well defined and implemented in Binutils 2.41.  The format simply
@@ -17,6 +17,7 @@ struct dl_find_object the necessary info about SFrame section.
 
 Signed-off-by: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Reviewed-by: Florian Weimer <fweimer@redhat.com>
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  dlfcn/dlfcn.h        | 10 +++++++--
  elf/dl-find_object.h | 52 +++++++++++++++++++++++++++++++++-----------

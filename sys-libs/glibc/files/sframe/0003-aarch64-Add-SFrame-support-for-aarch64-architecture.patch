@@ -1,16 +1,17 @@
-From 933521080087a373bc04c85412291a9c7a1c882b Mon Sep 17 00:00:00 2001
-Message-ID: <933521080087a373bc04c85412291a9c7a1c882b.1752540326.git.sam@gentoo.org>
-In-Reply-To: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
-References: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+From 5234972844983dbc55cef393ee88784994a61207 Mon Sep 17 00:00:00 2001
+Message-ID: <5234972844983dbc55cef393ee88784994a61207.1752879783.git.sam@gentoo.org>
+In-Reply-To: <cca06d1e46af7098c05a417746e57aaef6d17cd0.1752879783.git.sam@gentoo.org>
+References: <cca06d1e46af7098c05a417746e57aaef6d17cd0.1752879783.git.sam@gentoo.org>
 From: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Date: Mon, 14 Jul 2025 12:43:28 +0300
-Subject: [PATCH 3/6] aarch64: Add SFrame support for aarch64 architecture
+Subject: [PATCH 3/8] aarch64: Add SFrame support for aarch64 architecture
 
     The SFrame is supported for AArch64 architecture.
     Enable SFrame stack tracer for AArch64 too.
 
 Signed-off-by: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Reviewed-by: DJ Delorie <dj@redhat.com>
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  sysdeps/unix/sysv/linux/aarch64/uw-sigframe.h | 78 +++++++++++++++++++
  1 file changed, 78 insertions(+)

@@ -1,10 +1,10 @@
-From b73944d46c3c911b998ee5f610ddaa1a1df3bada Mon Sep 17 00:00:00 2001
-Message-ID: <b73944d46c3c911b998ee5f610ddaa1a1df3bada.1752540326.git.sam@gentoo.org>
-In-Reply-To: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
-References: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+From ec659f7a2a6a9c36b083c5a94d0312d743ebb4bc Mon Sep 17 00:00:00 2001
+Message-ID: <ec659f7a2a6a9c36b083c5a94d0312d743ebb4bc.1752879783.git.sam@gentoo.org>
+In-Reply-To: <cca06d1e46af7098c05a417746e57aaef6d17cd0.1752879783.git.sam@gentoo.org>
+References: <cca06d1e46af7098c05a417746e57aaef6d17cd0.1752879783.git.sam@gentoo.org>
 From: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Date: Mon, 14 Jul 2025 12:43:30 +0300
-Subject: [PATCH 5/6] configure: Add --enable-sframe option
+Subject: [PATCH 5/8] configure: Add --enable-sframe option
 
 Enable SFrame stack track information. The --enable-sframe option
 allows the glibc build to compile with SFrame stack track
@@ -13,6 +13,7 @@ information. Thus, enabling glibc's backtrace to work within glibc.
 Signed-off-by: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Reviewed-by: DJ Delorie <dj@redhat.com>
 Reviewed-by: Sam James <sam@gentoo.org>
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  INSTALL             |   5 ++
  Makeconfig          |   8 ++-

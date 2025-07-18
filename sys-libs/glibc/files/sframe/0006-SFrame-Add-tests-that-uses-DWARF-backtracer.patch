@@ -1,10 +1,10 @@
-From 82137f9298254fe0c5919116a9b31ba1a65cc457 Mon Sep 17 00:00:00 2001
-Message-ID: <82137f9298254fe0c5919116a9b31ba1a65cc457.1752540326.git.sam@gentoo.org>
-In-Reply-To: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
-References: <feb13d8b4de917fcf5fe2147c9124d459e83b11e.1752540326.git.sam@gentoo.org>
+From 03196f3606fff11a0e0022df0395dc7afe50f4e5 Mon Sep 17 00:00:00 2001
+Message-ID: <03196f3606fff11a0e0022df0395dc7afe50f4e5.1752879783.git.sam@gentoo.org>
+In-Reply-To: <cca06d1e46af7098c05a417746e57aaef6d17cd0.1752879783.git.sam@gentoo.org>
+References: <cca06d1e46af7098c05a417746e57aaef6d17cd0.1752879783.git.sam@gentoo.org>
 From: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Date: Mon, 14 Jul 2025 12:43:31 +0300
-Subject: [PATCH 6/6] SFrame: Add tests that uses DWARF backtracer
+Subject: [PATCH 6/8] SFrame: Add tests that uses DWARF backtracer
 
 When SFrame is enabled, we need to tests DW backtracer as well. Do
 this by executing the same backtrace tests with .sframe section
@@ -12,6 +12,7 @@ stripped.
 
 Signed-off-by: Claudiu Zissulescu <claudiu.zissulescu-ianculescu@oracle.com>
 Reviewed-by: DJ Delorie <dj@redhat.com>
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  debug/Makefile | 28 ++++++++++++++++++++++++++++
  1 file changed, 28 insertions(+)

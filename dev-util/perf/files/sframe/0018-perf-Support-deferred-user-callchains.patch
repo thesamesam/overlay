@@ -1,22 +1,18 @@
-From 5d66178f3fa3e77e326e1c9165dd1e2505b14e8e Mon Sep 17 00:00:00 2001
-Message-ID: <5d66178f3fa3e77e326e1c9165dd1e2505b14e8e.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From dccb1a845fa94b6cbb0940d7e62be93fce9d9759 Mon Sep 17 00:00:00 2001
+Message-ID: <dccb1a845fa94b6cbb0940d7e62be93fce9d9759.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Josh Poimboeuf <jpoimboe@kernel.org>
-Date: Wed, 25 Jun 2025 19:15:47 -0400
+Date: Fri, 18 Jul 2025 12:41:25 -0400
 Subject: [PATCH 18/34] perf: Support deferred user callchains
 
 Use the new unwind_deferred_trace() interface (if available) to defer
 unwinds to task context.  This will allow the use of .sframe (when it
 becomes available) and also prevents duplicate userspace unwinds.
 
-Changes since v11: https://lore.kernel.org/20250625231622.678033124@goodmis.org
-
-- Removed deferred_request_nmi() and have NMIs just use the normal
-  deferred_request() function. As Peter Zijlstra has stated, in_nmi() can
-  nest because some exceptions set in_nmi() and another NMI could come in.
-
-- Added test against PF_USER_WORKER as well as PF_KTHREAD
+As the struct unwind_stacktrace has its entries as "unsigned long", and it
+is used to copy directly into struct perf_callchain_entry which its "ip"
+field is defined as u64, only allow deferred callchains for 64bit architectures.
 
 Suggested-by: Peter Zijlstra <peterz@infradead.org>
 Co-developed-by: Steven Rostedt (Google) <rostedt@goodmis.org>
@@ -27,9 +23,9 @@ Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
  include/uapi/linux/perf_event.h       |  19 +++-
  kernel/bpf/stackmap.c                 |   4 +-
  kernel/events/callchain.c             |  11 +-
- kernel/events/core.c                  | 149 +++++++++++++++++++++++++-
+ kernel/events/core.c                  | 154 +++++++++++++++++++++++++-
  tools/include/uapi/linux/perf_event.h |  19 +++-
- 6 files changed, 201 insertions(+), 8 deletions(-)
+ 6 files changed, 206 insertions(+), 8 deletions(-)
 
 diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h
 index 54e0d31afcad1..c7d474391e518 100644
@@ -159,10 +155,10 @@ index 808c0d7a31faf..d0e0da66a164e 100644
  			perf_callchain_store_context(&ctx, PERF_CONTEXT_USER);
  
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index 4a45c33b3e24c..edefedc312a45 100644
+index 2572cb8f01fba..0d3230cba847c 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
-@@ -5582,6 +5582,89 @@ static bool exclusive_event_installable(struct perf_event *event,
+@@ -5582,6 +5582,93 @@ static bool exclusive_event_installable(struct perf_event *event,
  	return true;
  }
  
@@ -210,7 +206,7 @@ index 4a45c33b3e24c..edefedc312a45 100644
 +	if (!event->pending_unwind_callback)
 +		return;
 +
-+	if (unwind_deferred_trace(&trace) < 0)
++	if (unwind_user_faultable(&trace) < 0)
 +		goto out;
 +
 +	/*
@@ -238,7 +234,11 @@ index 4a45c33b3e24c..edefedc312a45 100644
 +
 +	perf_output_put(&handle, deferred_event);
 +	perf_output_put(&handle, callchain_context);
-+	perf_output_copy(&handle, trace.entries, trace.nr * sizeof(u64));
++	/* trace.entries[] are not guaranteed to be 64bit */
++	for (int i = 0; i < trace.nr; i++) {
++		u64 entry = trace.entries[i];
++		perf_output_put(&handle, entry);
++	}
 +	perf_event__output_id_sample(event, &handle, &data);
 +
 +	perf_output_end(&handle);
@@ -252,7 +252,7 @@ index 4a45c33b3e24c..edefedc312a45 100644
  static void perf_free_addr_filters(struct perf_event *event);
  
  /* vs perf_event_alloc() error */
-@@ -5649,6 +5732,7 @@ static void _free_event(struct perf_event *event)
+@@ -5649,6 +5736,7 @@ static void _free_event(struct perf_event *event)
  {
  	irq_work_sync(&event->pending_irq);
  	irq_work_sync(&event->pending_disable_irq);
@@ -260,7 +260,7 @@ index 4a45c33b3e24c..edefedc312a45 100644
  
  	unaccount_event(event);
  
-@@ -8162,6 +8246,46 @@ static u64 perf_get_page_size(unsigned long addr)
+@@ -8162,6 +8250,46 @@ static u64 perf_get_page_size(unsigned long addr)
  
  static struct perf_callchain_entry __empty_callchain = { .nr = 0, };
  
@@ -307,16 +307,17 @@ index 4a45c33b3e24c..edefedc312a45 100644
  struct perf_callchain_entry *
  perf_callchain(struct perf_event *event, struct pt_regs *regs)
  {
-@@ -8172,6 +8296,8 @@ perf_callchain(struct perf_event *event, struct pt_regs *regs)
+@@ -8172,6 +8300,9 @@ perf_callchain(struct perf_event *event, struct pt_regs *regs)
  	bool crosstask = event->ctx->task && event->ctx->task != current;
  	const u32 max_stack = event->attr.sample_max_stack;
  	struct perf_callchain_entry *callchain;
++	/* perf currently only supports deferred in 64bit */
 +	bool defer_user = IS_ENABLED(CONFIG_UNWIND_USER) && user &&
 +			  event->attr.defer_callchain;
  
  	if (!current->mm)
  		user = false;
-@@ -8179,8 +8305,21 @@ perf_callchain(struct perf_event *event, struct pt_regs *regs)
+@@ -8179,8 +8310,21 @@ perf_callchain(struct perf_event *event, struct pt_regs *regs)
  	if (!kernel && !user)
  		return &__empty_callchain;
  
@@ -340,7 +341,7 @@ index 4a45c33b3e24c..edefedc312a45 100644
  	return callchain ?: &__empty_callchain;
  }
  
-@@ -12850,6 +12989,8 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
+@@ -12850,6 +12994,8 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
  	event->pending_disable_irq = IRQ_WORK_INIT_HARD(perf_pending_disable);
  	init_task_work(&event->pending_task, perf_pending_task);
  
@@ -349,7 +350,7 @@ index 4a45c33b3e24c..edefedc312a45 100644
  	mutex_init(&event->mmap_mutex);
  	raw_spin_lock_init(&event->addr_filters.lock);
  
-@@ -13018,6 +13159,10 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
+@@ -13018,6 +13164,10 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
  	if (err)
  		return ERR_PTR(err);
  

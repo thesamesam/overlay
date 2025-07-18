@@ -1,9 +1,9 @@
-From 7f89cb07c9e76587a8a2b89973a2f2831e117f59 Mon Sep 17 00:00:00 2001
-Message-ID: <7f89cb07c9e76587a8a2b89973a2f2831e117f59.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From b4e8bdabadc9f104f7f22c01dc902cac02d78b38 Mon Sep 17 00:00:00 2001
+Message-ID: <b4e8bdabadc9f104f7f22c01dc902cac02d78b38.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Josh Poimboeuf <jpoimboe@kernel.org>
-Date: Wed, 25 Jun 2025 19:15:43 -0400
+Date: Fri, 18 Jul 2025 12:41:21 -0400
 Subject: [PATCH 14/34] perf: Have get_perf_callchain() return NULL if
  crosstask and user are set
 
@@ -11,22 +11,6 @@ get_perf_callchain() doesn't support cross-task unwinding for user space
 stacks, have it return NULL if both the crosstask and user arguments are
 set.
 
-Cc: Masami Hiramatsu <mhiramat@kernel.org>
-Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
-Cc: Peter Zijlstra <peterz@infradead.org>
-Cc: Ingo Molnar <mingo@kernel.org>
-Cc: Jiri Olsa <jolsa@kernel.org>
-Cc: Namhyung Kim <namhyung@kernel.org>
-Cc: Thomas Gleixner <tglx@linutronix.de>
-Cc: Andrii Nakryiko <andrii@kernel.org>
-Cc: Indu Bhagat <indu.bhagat@oracle.com>
-Cc: "Jose E. Marchesi" <jemarch@gnu.org>
-Cc: Beau Belgrave <beaub@linux.microsoft.com>
-Cc: Jens Remus <jremus@linux.ibm.com>
-Cc: Linus Torvalds <torvalds@linux-foundation.org>
-Cc: Andrew Morton <akpm@linux-foundation.org>
-Cc: Jens Axboe <axboe@kernel.dk>
-Link: https://lore.kernel.org/20250625231622.002316317@goodmis.org
 Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
 Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
 ---

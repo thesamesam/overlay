@@ -1,9 +1,9 @@
-From a5e8fa2681fe23e74bba7704dbb349a3e652bfdc Mon Sep 17 00:00:00 2001
-Message-ID: <a5e8fa2681fe23e74bba7704dbb349a3e652bfdc.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From cd6fc5329db4053bac57d39710c03267dfd9b50c Mon Sep 17 00:00:00 2001
+Message-ID: <cd6fc5329db4053bac57d39710c03267dfd9b50c.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Steven Rostedt <rostedt@goodmis.org>
-Date: Wed, 25 Jun 2025 19:15:44 -0400
+Date: Fri, 18 Jul 2025 12:41:22 -0400
 Subject: [PATCH 15/34] perf: Use current->flags & PF_KTHREAD|PF_USER_WORKER
  instead of current->mm == NULL
 
@@ -14,11 +14,6 @@ helpers) may have a mm field.
 
 Link: https://lore.kernel.org/linux-trace-kernel/20250424163607.GE18306@noisy.programming.kicks-ass.net/
 Link: https://lore.kernel.org/all/20250624130744.602c5b5f@batman.local.home/
-
-Changes since v11: https://lore.kernel.org/20250625231622.172100822@goodmis.org
-
-- Also check against PF_USER_WORKER as io workers do not have PF_KTHREAD
-  set.
 
 Signed-off-by: Steven Rostedt (Google) <rostedt@goodmis.org>
 ---
@@ -45,7 +40,7 @@ index cd0e3fc7ed05a..5982d18f169bd 100644
  
  		if (regs) {
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index 70f9ab70e6957..96fed6decf225 100644
+index 70f9ab70e6957..f6c9ba1cffeaf 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
 @@ -7414,7 +7414,7 @@ static void perf_sample_regs_user(struct perf_regs *regs_user,
@@ -62,7 +57,7 @@ index 70f9ab70e6957..96fed6decf225 100644
  		 * If failed, leave phys_addr as 0.
  		 */
 -		if (current->mm != NULL) {
-+		if (!(current->flags & PF_KTHREAD)) {
++		if (!(current->flags & (PF_KTHREAD | PF_USER_WORKER))) {
  			struct page *p;
  
  			pagefault_disable();

@@ -1,31 +1,15 @@
-From cc6966eefd7d07f2f19460da7d62028cfd525c1a Mon Sep 17 00:00:00 2001
-Message-ID: <cc6966eefd7d07f2f19460da7d62028cfd525c1a.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From 4ebad8cbab25cc50f1a18c170e541490cab7808e Mon Sep 17 00:00:00 2001
+Message-ID: <4ebad8cbab25cc50f1a18c170e541490cab7808e.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Josh Poimboeuf <jpoimboe@kernel.org>
-Date: Wed, 25 Jun 2025 19:15:42 -0400
+Date: Fri, 18 Jul 2025 12:41:20 -0400
 Subject: [PATCH 13/34] perf: Remove get_perf_callchain() init_nr argument
 
 The 'init_nr' argument has double duty: it's used to initialize both the
 number of contexts and the number of stack entries.  That's confusing
 and the callers always pass zero anyway.  Hard code the zero.
 
-Cc: Masami Hiramatsu <mhiramat@kernel.org>
-Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
-Cc: Peter Zijlstra <peterz@infradead.org>
-Cc: Ingo Molnar <mingo@kernel.org>
-Cc: Jiri Olsa <jolsa@kernel.org>
-Cc: Namhyung Kim <namhyung@kernel.org>
-Cc: Thomas Gleixner <tglx@linutronix.de>
-Cc: Andrii Nakryiko <andrii@kernel.org>
-Cc: Indu Bhagat <indu.bhagat@oracle.com>
-Cc: "Jose E. Marchesi" <jemarch@gnu.org>
-Cc: Beau Belgrave <beaub@linux.microsoft.com>
-Cc: Jens Remus <jremus@linux.ibm.com>
-Cc: Linus Torvalds <torvalds@linux-foundation.org>
-Cc: Andrew Morton <akpm@linux-foundation.org>
-Cc: Jens Axboe <axboe@kernel.dk>
-Link: https://lore.kernel.org/20250625231621.837156133@goodmis.org
 Acked-by: Namhyung Kim <Namhyung@kernel.org>
 Acked-by: Alexei Starovoitov <ast@kernel.org>
 Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>

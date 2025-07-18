@@ -303,6 +303,7 @@ perf_make() {
 		LIBDIR="/usr/libexec/perf-core"
 		libdir="${EPREFIX}/usr/$(get_libdir)"
 		plugindir="${EPREFIX}/usr/$(get_libdir)/perf/plugins"
+		LIBBPF_DYNAMIC=1
 		"$@"
 	)
 	emake "${emakeargs[@]}"

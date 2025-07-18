@@ -1,7 +1,7 @@
-From 08d0ec478e2a186b6588d98b06fdeb761d89579d Mon Sep 17 00:00:00 2001
-Message-ID: <08d0ec478e2a186b6588d98b06fdeb761d89579d.1752722506.git.sam@gentoo.org>
-In-Reply-To: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
-References: <0ab7679f4429d6ee357d7f1fdf8b515043f6c9c0.1752722506.git.sam@gentoo.org>
+From 4cdedd2a4f03ecb3ea9abbe3d3d957bf41cf5499 Mon Sep 17 00:00:00 2001
+Message-ID: <4cdedd2a4f03ecb3ea9abbe3d3d957bf41cf5499.1752857321.git.sam@gentoo.org>
+In-Reply-To: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
+References: <7f56d9ee24976d45babdc3856c85d47df2ae8a13.1752857321.git.sam@gentoo.org>
 From: Josh Poimboeuf <jpoimboe@kernel.org>
 Date: Wed, 16 Jul 2025 21:28:51 -0400
 Subject: [PATCH 26/34] x86/uaccess: Add unsafe_copy_from_user() implementation

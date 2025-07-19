@@ -1,8 +1,8 @@
-From 023bf5a7c304d113468217901401c80565240685 Mon Sep 17 00:00:00 2001
-Message-ID: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
+From e75d31b69e3465703d969f11748ddbd012e8c12a Mon Sep 17 00:00:00 2001
+Message-ID: <e75d31b69e3465703d969f11748ddbd012e8c12a.1752954252.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 11:08:59 +0100
-Subject: [PATCH 1/4] gas: add --enable-sframe configure option
+Subject: [PATCH 1/4] gas: add --enable-default-sframe configure option
 
 The primary motivation is that we don't support SFrame for 32-bit x86 but our
 packaging uses the same flags (with some added on top) for multilib builds
@@ -13,38 +13,40 @@ it gets added to those builds too and then we hit the
 Enabled by default on x86_64. (TODO: Invert this, just here for testing)
 
 In summary, combined with the new --gsframe=[yes|no] support:
-* Configured with --enable-sframe and nothing is passed
+* Configured with --enable-default-sframe and nothing is passed
   => SFrames (previously no SFrames)
-* Configured with --enable-sframe and --gsframe=yes is passed
+* Configured with --enable-default-sframe and --gsframe=yes is passed
   => SFrames (no change from before)
-* Configured with --enable-sframe and --gsframe=no is passed
+* Configured with --enable-default-sframe and --gsframe=no is passed
   => No SFrames (no change from before)
-* Configured with --enable-sframe and --gsframe is passed
+* Configured with --enable-default-sframe and --gsframe is passed
   => SFrames (no change from before)
 
-* Configured with --disable-sframe and nothing is passed
+* Configured with --disable-default-sframe and nothing is passed
   => No SFrames (no change from before)
-* Configured with --disable-sframe and --gsframe=yes is passed
+* Configured with --disable-default-sframe and --gsframe=yes is passed
   => SFrames (no change from before)
-* Configured with --disable-sframe and --gsframe=no is passed
+* Configured with --disable-default-sframe and --gsframe=no is passed
   => No SFrames (no change from before)
-* Configured with --disable-sframe and --gsframe is passed
+* Configured with --disable-default-sframe and --gsframe is passed
   => SFrames (no change from before)
 
 	PR gas/33126
 	* gas/as.c (flag_gen_sframe): New.
 	* gas/config.in (DEFAULT_SFRAME): New.
 	* gas/configure: Regenerate.
-	* gas/configure.ac: Add --enable-sframe.
+	* gas/configure.ac: Add --enable-default-sframe.
 	* gas/dw2gencfi.c (cfi_finish): Don't warn if SFrames are enabled
 	by default but unavailable for this target.
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/as.c         |  4 +++-
  gas/config.in    |  3 +++
- gas/configure    | 28 ++++++++++++++++++++++++++--
- gas/configure.ac | 20 ++++++++++++++++++++
+ gas/configure    | 30 ++++++++++++++++++++++++++++--
+ gas/configure.ac | 22 ++++++++++++++++++++++
  gas/dw2gencfi.c  |  6 ++++--
- 5 files changed, 56 insertions(+), 5 deletions(-)
+ 5 files changed, 60 insertions(+), 5 deletions(-)
 
 diff --git a/gas/as.c b/gas/as.c
 index bc38cdf93c4..c717a50add3 100644
@@ -83,7 +85,7 @@ index bb896244640..ba042ca44eb 100644
  #undef DEFAULT_X86_TLS_CHECK
  
 diff --git a/gas/configure b/gas/configure
-index 97340444b72..3e7c9683fa3 100755
+index 97340444b72..a7f2cc1f25c 100755
 --- a/gas/configure
 +++ b/gas/configure
 @@ -820,6 +820,7 @@ enable_default_compressed_debug_sections_algorithm
@@ -98,7 +100,7 @@ index 97340444b72..3e7c9683fa3 100755
    --enable-x86-tls-check  check x86 TLS relocation by default
    --enable-elf-stt-common generate ELF common symbols with STT_COMMON type by
                            default
-+  --enable-sframe         generate SFrame by default
++  --enable-default-sframe generate SFrame by default
    --enable-generate-build-notes
                            generate GNU Build notes if none are provided by the
                            input
@@ -120,26 +122,28 @@ index 97340444b72..3e7c9683fa3 100755
  #include "confdefs.h"
  
  #if HAVE_DLFCN_H
-@@ -11599,6 +11601,14 @@ if test "${enable_elf_stt_common+set}" = set; then :
+@@ -11599,6 +11601,15 @@ if test "${enable_elf_stt_common+set}" = set; then :
  esac
  fi
  
 +ac_default_sframe=unset
 +# Provide a configure time option to override our default.
-+# Check whether --enable-default_sframe was given.
++# Check whether --enable-default-sframe was given.
 +if test "${enable_default_sframe+set}" = set; then :
 +  enableval=$enable_default_sframe; case "${enableval}" in
++  yes) ac_default_sframe=1 ;;
 +  no)  ac_default_sframe=0 ;;
 +esac
 +fi
  
  # Decide if the ELF assembler should default to generating
  # GNU Build notes if none are provided by the input.
-@@ -12153,6 +12163,11 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
+@@ -12153,6 +12164,12 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
  	   && test ${ac_default_generate_x86_used_note} = unset; then
  	  ac_default_generate_x86_used_note=1
  	fi
 +
++        # If unset on x86_64-*-linux-*, let's enable it.
 +        if test ${this_target} = $target \
 +	   && test ${ac_default_sframe} = unset; then
 +	  ac_default_sframe=1
@@ -147,7 +151,7 @@ index 97340444b72..3e7c9683fa3 100755
  	;;
  
        i386-*-solaris2 \
-@@ -12723,6 +12738,15 @@ cat >>confdefs.h <<_ACEOF
+@@ -12723,6 +12740,15 @@ cat >>confdefs.h <<_ACEOF
  _ACEOF
  
  
@@ -164,29 +168,31 @@ index 97340444b72..3e7c9683fa3 100755
  cat >>confdefs.h <<_ACEOF
  #define DEFAULT_GENERATE_BUILD_NOTES $ac_default_generate_build_notes
 diff --git a/gas/configure.ac b/gas/configure.ac
-index c65797fdf0a..d938ed8086e 100644
+index c65797fdf0a..a91f671827c 100644
 --- a/gas/configure.ac
 +++ b/gas/configure.ac
-@@ -117,6 +117,14 @@ AC_ARG_ENABLE(elf_stt_common,
+@@ -117,6 +117,15 @@ AC_ARG_ENABLE(elf_stt_common,
    yes)  ac_default_elf_stt_common=1 ;;
  esac])dnl
  
 +ac_default_sframe=unset
 +# Provide a configure time option to override our default.
-+AC_ARG_ENABLE(default_sframe,
-+	      AS_HELP_STRING([--enable-sframe],
++AC_ARG_ENABLE(default-sframe,
++	      AS_HELP_STRING([--enable-default-sframe],
 +	      [generate SFrame by default]),
 +[case "${enableval}" in
++  yes) ac_default_sframe=1 ;;
 +  no)  ac_default_sframe=0 ;;
 +esac])dnl
  
  # Decide if the ELF assembler should default to generating
  # GNU Build notes if none are provided by the input.
-@@ -265,6 +273,11 @@ for this_target in $target $canon_targets ; do
+@@ -265,6 +274,12 @@ for this_target in $target $canon_targets ; do
  	   && test ${ac_default_generate_x86_used_note} = unset; then
  	  ac_default_generate_x86_used_note=1
  	fi
 +
++        # If unset on x86_64-*-linux-*, let's enable it.
 +        if test ${this_target} = $target \
 +	   && test ${ac_default_sframe} = unset; then
 +	  ac_default_sframe=1
@@ -194,7 +200,7 @@ index c65797fdf0a..d938ed8086e 100644
  	;;
  
        i386-*-solaris2 \
-@@ -757,6 +770,13 @@ AC_DEFINE_UNQUOTED(DEFAULT_GENERATE_ELF_STT_COMMON,
+@@ -757,6 +772,13 @@ AC_DEFINE_UNQUOTED(DEFAULT_GENERATE_ELF_STT_COMMON,
    [Define to 1 if you want to generate ELF common symbols with the
     STT_COMMON type by default.])
  

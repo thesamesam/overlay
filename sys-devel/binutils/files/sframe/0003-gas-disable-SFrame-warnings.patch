@@ -1,7 +1,7 @@
-From e6c0dfac96246343b80d35bc698b0018f740554a Mon Sep 17 00:00:00 2001
-Message-ID: <e6c0dfac96246343b80d35bc698b0018f740554a.1752669183.git.sam@gentoo.org>
-In-Reply-To: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
-References: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
+From fe73c98fc1bdec672309f66cc8501e679becfbf3 Mon Sep 17 00:00:00 2001
+Message-ID: <fe73c98fc1bdec672309f66cc8501e679becfbf3.1752954252.git.sam@gentoo.org>
+In-Reply-To: <e75d31b69e3465703d969f11748ddbd012e8c12a.1752954252.git.sam@gentoo.org>
+References: <e75d31b69e3465703d969f11748ddbd012e8c12a.1752954252.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 04:50:21 +0100
 Subject: [PATCH 3/4] gas: disable SFrame warnings
@@ -32,6 +32,8 @@ ChangeLog:
         (sframe_xlate_do_cfi_undefined): Ditto.
         (sframe_do_cfi_insn): Ditto.
         (sframe_do_fde): Ditto.
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/gen-sframe.c | 29 -----------------------------
  1 file changed, 29 deletions(-)

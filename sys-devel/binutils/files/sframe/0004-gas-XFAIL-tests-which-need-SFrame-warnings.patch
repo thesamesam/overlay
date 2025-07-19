@@ -1,7 +1,7 @@
-From 5b0df85a6e32f6d0affed9cf84202db8ea511481 Mon Sep 17 00:00:00 2001
-Message-ID: <5b0df85a6e32f6d0affed9cf84202db8ea511481.1752669183.git.sam@gentoo.org>
-In-Reply-To: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
-References: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
+From 903e74759412d78e4c912baa8bd7f0e5e63b1a1d Mon Sep 17 00:00:00 2001
+Message-ID: <903e74759412d78e4c912baa8bd7f0e5e63b1a1d.1752954252.git.sam@gentoo.org>
+In-Reply-To: <e75d31b69e3465703d969f11748ddbd012e8c12a.1752954252.git.sam@gentoo.org>
+References: <e75d31b69e3465703d969f11748ddbd012e8c12a.1752954252.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 06:33:23 +0100
 Subject: [PATCH 4/4] gas: XFAIL tests which need SFrame warnings
@@ -17,6 +17,8 @@ ChangeLog:
 	* gas/testsuite/gas/cfi-sframe/common-empty-1.d: Ditto.
 	* gas/testsuite/gas/cfi-sframe/common-empty-2.d: Ditto.
 	* gas/testsuite/gas/cfi-sframe/common-empty-3.d: Ditto.
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d | 1 +
  gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d | 1 +

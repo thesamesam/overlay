@@ -1,7 +1,7 @@
-From a15bfce20ad5b73de63596f0d2a72b59684b9ad9 Mon Sep 17 00:00:00 2001
-Message-ID: <a15bfce20ad5b73de63596f0d2a72b59684b9ad9.1752669183.git.sam@gentoo.org>
-In-Reply-To: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
-References: <023bf5a7c304d113468217901401c80565240685.1752669183.git.sam@gentoo.org>
+From 38caefc309efa18817cc35e8881225b6eea867a1 Mon Sep 17 00:00:00 2001
+Message-ID: <38caefc309efa18817cc35e8881225b6eea867a1.1752954252.git.sam@gentoo.org>
+In-Reply-To: <e75d31b69e3465703d969f11748ddbd012e8c12a.1752954252.git.sam@gentoo.org>
+References: <e75d31b69e3465703d969f11748ddbd012e8c12a.1752954252.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
 Subject: [PATCH 2/4] Disable SFrames for some tests
@@ -38,6 +38,8 @@ ChangeLog:
 	* ld/testsuite/ld-x86-64/pr20830a.d: Ditto.
 	* ld/testsuite/ld-x86-64/pr27016a.d: Ditto.
 	* ld/testsuite/ld-x86-64/pr27016b.d: Ditto.
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  binutils/testsuite/binutils-all/x86-64/compressed-1b.d | 2 +-
  binutils/testsuite/binutils-all/x86-64/compressed-1c.d | 2 +-

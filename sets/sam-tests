@@ -1,5 +1,6 @@
 # Packages which may not be pulled in otherwise but I want to run their testsuites
 app-arch/libdeflate
+dev-cpp/highway
 dev-libs/botan:3
 dev-libs/libtomcrypt
 dev-libs/libtommath

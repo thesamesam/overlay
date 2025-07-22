@@ -37,6 +37,10 @@ BDEPEND="
 	!clang? ( sys-devel/bpf-toolchain )
 "
 
+PATCHES=(
+	"${FILESDIR}"/add-init-script.patch
+)
+
 pkg_setup() {
 	CONFIG_CHECK="DEBUG_INFO_BTF"
 	check_extra_config

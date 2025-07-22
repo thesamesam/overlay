@@ -1,0 +1,68 @@
+https://github.com/oracle/bpftune/pull/187
+
+From 5a34539d4e7fb41d1e9518eed729870db64cdf77 Mon Sep 17 00:00:00 2001
+From: Sam James <sam@gentoo.org>
+Date: Tue, 22 Jul 2025 11:32:34 +0100
+Subject: [PATCH] src: add OpenRC init scripts
+
+Based on the initial submission by Forza on the bug but reworked a bit.
+
+Closes: https://github.com/oracle/bpftune/issues/184
+Signed-off-by: Sam James <sam@gentoo.org>
+---
+ src/Makefile      |  4 ++++
+ src/bpftune.confd |  2 ++
+ src/bpftune.initd | 20 ++++++++++++++++++++
+ 3 files changed, 26 insertions(+)
+ create mode 100644 src/bpftune.confd
+ create mode 100644 src/bpftune.initd
+
+diff --git a/src/Makefile b/src/Makefile
+index f32d2ca..8d9205d 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -156,6 +156,10 @@ install: $(OPATH)libbpftune.so $(OPATH)bpftune bpftune.service
+ 	$(INSTALL) $(TUNER_LIBS) $(INSTALLPATH)/$(libdir)/bpftune
+ 	$(INSTALL) -m 0755 -d $(CONF)
+ 	$(INSTALL) -m 0755 -d $(CONFPATH)
++	$(INSTALL) -m 0755 -d $(CONF)/conf.d
++	$(INSTALL) -m 0755 -d $(CONF)/init.d
++	$(INSTALL) -m 0644 bpftune.confd $(CONF)/conf.d/bpftune
++	$(INSTALL) -m 0755 bpftune.initd $(CONF)/init.d/bpftune
+ 	echo $(prefix)/$(libdir) > $(CONFPATH)/libbpftune.conf
+ 	if [ $(DESTDIR) =  / ]; then ldconfig; fi
+ 
+diff --git a/src/bpftune.confd b/src/bpftune.confd
+new file mode 100644
+index 0000000..ee790c2
+--- /dev/null
++++ b/src/bpftune.confd
+@@ -0,0 +1,2 @@
++# Optional: Override arguments passed to bpftune.
++#command_args="-R -c /sys/fs/cgroup -d"
+diff --git a/src/bpftune.initd b/src/bpftune.initd
+new file mode 100644
+index 0000000..f1ee453
+--- /dev/null
++++ b/src/bpftune.initd
+@@ -0,0 +1,20 @@
++#!/sbin/openrc-run
++# SPDX-License-Identifier: GPL-2.0-or-later
++
++description="BPF-based auto-tuning of system parameters"
++command="/usr/sbin/bpftune"
++: "${command_args:=-R -c /sys/fs/cgroup}"
++extra_commands="checkconf"
++supervisor=supervise-daemon
++
++depend() {
++	need cgroups sysctl net
++}
++
++checkconf() {
++	"${command}" -S "${command_args}" 2>&1
++}
++
++start_pre() {
++	checkconf > /dev/null 2>&1
++}

@@ -1019,6 +1019,11 @@ glibc_do_configure() {
 		*) ;;
 	esac
 
+	case ${ABI}-${CTARGET} in
+		amd64-x86_64-*) myconf+=( --enable-sframe ) ;;
+		*) ;;
+	esac
+
 	[[ $(tc-is-softfloat) == "yes" ]] && myconf+=( --without-fp )
 
 	myconf+=( --enable-kernel=${MIN_KERN_VER} )

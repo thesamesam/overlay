@@ -971,8 +971,6 @@ src_prepare() {
 		einfo "Applying Gentoo Glibc patchset ${patchsetname}"
 		eapply "${WORKDIR}"/patches
 		einfo "Done."
-
-		eapply "${FILESDIR}"/sframe
 	fi
 
 	default
@@ -1089,10 +1087,6 @@ glibc_do_configure() {
 
 	# We rely on sys-libs/timezone-data for timezone tools normally.
 	myconf+=( $(use_enable vanilla timezone-tools) )
-
-	if use amd64 ; then
-		myconf+=( --enable-sframe )
-	fi
 
 	# These libs don't have configure flags.
 	ac_cv_lib_audit_audit_log_user_avc_message=$(usex audit || echo no)

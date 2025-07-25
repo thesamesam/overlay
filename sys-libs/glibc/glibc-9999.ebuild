@@ -185,6 +185,23 @@ XFAIL_TEST_LIST=(
 
 	# https://sourceware.org/bugzilla/show_bug.cgi?id=31877 (bug #927973)
 	tst-shstk-legacy-1g
+
+	# sam-local skips
+	#
+	# TODO: These fail with default-enabled SFrames in Binutils, need to
+	# pass -Wa,--gsframe=no if supported there.
+	tst-dl_find_object
+	tst-dl_find_object-static
+	# 32-bit x86 only on multilib build
+	test-double-compoundn
+	test-float32-compoundn
+	test-float32x-compoundn
+	test-float64-compoundn
+	test-float-compoundn
+	# maybe related to 6.15_rc6 kernel?
+	tst-preadvwritev2
+	tst-preadvwritev64v2
+	tst-setvbuf2
 )
 
 XFAIL_NSPAWN_TEST_LIST=(

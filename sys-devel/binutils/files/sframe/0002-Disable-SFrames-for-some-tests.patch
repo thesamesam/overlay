@@ -1,10 +1,10 @@
-From 38caefc309efa18817cc35e8881225b6eea867a1 Mon Sep 17 00:00:00 2001
-Message-ID: <38caefc309efa18817cc35e8881225b6eea867a1.1752954252.git.sam@gentoo.org>
-In-Reply-To: <e75d31b69e3465703d969f11748ddbd012e8c12a.1752954252.git.sam@gentoo.org>
-References: <e75d31b69e3465703d969f11748ddbd012e8c12a.1752954252.git.sam@gentoo.org>
+From 03a1927a5369db931f47fd4d51db757f8c9791ec Mon Sep 17 00:00:00 2001
+Message-ID: <03a1927a5369db931f47fd4d51db757f8c9791ec.1753485285.git.sam@gentoo.org>
+In-Reply-To: <5c6839137bd3e5bcfc212577ca8a0fa32106d907.1753485285.git.sam@gentoo.org>
+References: <5c6839137bd3e5bcfc212577ca8a0fa32106d907.1753485285.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
-Subject: [PATCH 2/4] Disable SFrames for some tests
+Subject: [PATCH 2/3] Disable SFrames for some tests
 
 These break with a gas configured to emit SFrames by default.
 
@@ -38,8 +38,6 @@ ChangeLog:
 	* ld/testsuite/ld-x86-64/pr20830a.d: Ditto.
 	* ld/testsuite/ld-x86-64/pr27016a.d: Ditto.
 	* ld/testsuite/ld-x86-64/pr27016b.d: Ditto.
-
-Signed-off-by: Sam James <sam@gentoo.org>
 ---
  binutils/testsuite/binutils-all/x86-64/compressed-1b.d | 2 +-
  binutils/testsuite/binutils-all/x86-64/compressed-1c.d | 2 +-

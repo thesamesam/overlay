@@ -1,10 +1,10 @@
-From 03a1927a5369db931f47fd4d51db757f8c9791ec Mon Sep 17 00:00:00 2001
-Message-ID: <03a1927a5369db931f47fd4d51db757f8c9791ec.1753485285.git.sam@gentoo.org>
-In-Reply-To: <5c6839137bd3e5bcfc212577ca8a0fa32106d907.1753485285.git.sam@gentoo.org>
-References: <5c6839137bd3e5bcfc212577ca8a0fa32106d907.1753485285.git.sam@gentoo.org>
+From 518573e2f485b45c63304c12f5b258501523748f Mon Sep 17 00:00:00 2001
+Message-ID: <518573e2f485b45c63304c12f5b258501523748f.1753487185.git.sam@gentoo.org>
+In-Reply-To: <5c6839137bd3e5bcfc212577ca8a0fa32106d907.1753487185.git.sam@gentoo.org>
+References: <5c6839137bd3e5bcfc212577ca8a0fa32106d907.1753487185.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
-Subject: [PATCH 2/3] Disable SFrames for some tests
+Subject: [PATCH 3/4] Disable SFrames for some tests
 
 These break with a gas configured to emit SFrames by default.
 

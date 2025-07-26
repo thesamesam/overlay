@@ -1,5 +1,5 @@
-From 5c6839137bd3e5bcfc212577ca8a0fa32106d907 Mon Sep 17 00:00:00 2001
-Message-ID: <5c6839137bd3e5bcfc212577ca8a0fa32106d907.1753487185.git.sam@gentoo.org>
+From 0d07430c615a7c5fcbbe390a5c4de67d3e364378 Mon Sep 17 00:00:00 2001
+Message-ID: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 11:08:59 +0100
 Subject: [PATCH 1/4] gas: add --enable-default-sframe configure option
@@ -55,16 +55,16 @@ In summary, combined with the recent --gsframe=[yes|no] support:
  5 files changed, 54 insertions(+), 6 deletions(-)
 
 diff --git a/gas/as.c b/gas/as.c
-index 58ed0a59e21..506e37a9820 100644
+index 58ed0a59e21..efcc80deef1 100644
 --- a/gas/as.c
 +++ b/gas/as.c
 @@ -113,6 +113,12 @@ int flag_use_elf_stt_common = DEFAULT_GENERATE_ELF_STT_COMMON;
  bool flag_generate_build_notes = DEFAULT_GENERATE_BUILD_NOTES;
  #endif
  
-+/* If DEFAULT_SFRAME is unset, flag_gen_sframe gets the default
++/* If DEFAULT_SFRAME is 0 instead, flag_gen_sframe gets the default
 +   enum value GEN_SFRAME_DEFAULT_NONE.  */
-+#ifdef DEFAULT_SFRAME
++#if DEFAULT_SFRAME
 +enum gen_sframe_option flag_gen_sframe = GEN_SFRAME_CONFIG_ENABLED;
 +#endif
 +

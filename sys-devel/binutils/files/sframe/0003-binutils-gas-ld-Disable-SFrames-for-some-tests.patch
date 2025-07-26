@@ -1,14 +1,14 @@
-From 518573e2f485b45c63304c12f5b258501523748f Mon Sep 17 00:00:00 2001
-Message-ID: <518573e2f485b45c63304c12f5b258501523748f.1753487185.git.sam@gentoo.org>
-In-Reply-To: <5c6839137bd3e5bcfc212577ca8a0fa32106d907.1753487185.git.sam@gentoo.org>
-References: <5c6839137bd3e5bcfc212577ca8a0fa32106d907.1753487185.git.sam@gentoo.org>
+From 017d6942050d36ce3009a05134d497ed31755dee Mon Sep 17 00:00:00 2001
+Message-ID: <017d6942050d36ce3009a05134d497ed31755dee.1753490122.git.sam@gentoo.org>
+In-Reply-To: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
+References: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
-Subject: [PATCH 3/4] Disable SFrames for some tests
+Subject: [PATCH 3/4] binutils, gas, ld: Disable SFrames for some tests
 
 These break with a gas configured to emit SFrames by default.
 
-TODO: split it up
+(TODO: split it up?)
 
 ChangeLog:
 

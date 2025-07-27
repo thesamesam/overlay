@@ -26,8 +26,9 @@ else
 fi
 
 if [[ ${PV} != *_rc* ]] ; then
-	SRC_URI+=" https://www.kernel.org/pub/linux/kernel/v${LINUX_V}/${LINUX_SOURCES}"
-	LINUX_SOURCES="linux-${LINUX_VER}.tar.xz"
+	LINUX_SOURCES="linux-${LINUX_VER}.tar.gz"
+	#SRC_URI+=" https://www.kernel.org/pub/linux/kernel/v${LINUX_V}/${LINUX_SOURCES}"
+	SRC_URI="https://git.kernel.org/torvalds/t/linux-${PV/_/-}.tar.gz"
 	S_K="${WORKDIR}/linux-${LINUX_VER}"
 else
 	S_K="${WORKDIR}/linux-${PV/_/-}"

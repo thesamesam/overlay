@@ -1,0 +1,91 @@
+https://inbox.sourceware.org/libc-alpha/lhuy0s8pjr3.fsf@oldenburg.str.redhat.com/
+
+From 085fb99a9ec497839f29f537dbc05ed7cb7ad875 Mon Sep 17 00:00:00 2001
+Message-ID: <085fb99a9ec497839f29f537dbc05ed7cb7ad875.1753706837.git.sam@gentoo.org>
+From: Florian Weimer <fweimer@redhat.com>
+Date: Mon, 28 Jul 2025 14:44:48 +0200
+Subject: [PATCH] elf: Compile _dl_debug_state separately (bug 33224)
+
+This ensures that the compiler will not inline it, so that
+debuggers which do not use the Systemtap probes can reliably
+set a breakpoint on it.
+
+Regression-tested on powerpc64le-linux-gnu and x86_64-linux-gnu.
+---
+ elf/Makefile         |  1 +
+ elf/dl-debug.c       | 11 -----------
+ elf/dl-debug_state.c | 30 ++++++++++++++++++++++++++++++
+ 3 files changed, 31 insertions(+), 11 deletions(-)
+ create mode 100644 elf/dl-debug_state.c
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 44b9f192f2..48aa0b57e5 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -57,6 +57,7 @@ dl-routines = \
+   dl-close \
+   dl-debug \
+   dl-debug-symbols \
++  dl-debug_state \
+   dl-deps \
+   dl-exception \
+   dl-execstack \
+diff --git a/elf/dl-debug.c b/elf/dl-debug.c
+index 38a5b9a718..7052f4a3c1 100644
+--- a/elf/dl-debug.c
++++ b/elf/dl-debug.c
+@@ -167,14 +167,3 @@ _dl_debug_initialize (ElfW(Addr) ldbase, Lmid_t ns)
+ 
+   return &r->base;
+ }
+-
+-
+-/* This function exists solely to have a breakpoint set on it by the
+-   debugger.  The debugger is supposed to find this function's address by
+-   examining the r_brk member of struct r_debug, but GDB 4.15 in fact looks
+-   for this particular symbol name in the PT_INTERP file.  */
+-void
+-_dl_debug_state (void)
+-{
+-}
+-rtld_hidden_def (_dl_debug_state)
+diff --git a/elf/dl-debug_state.c b/elf/dl-debug_state.c
+new file mode 100644
+index 0000000000..40c134a49e
+--- /dev/null
++++ b/elf/dl-debug_state.c
+@@ -0,0 +1,30 @@
++/* Debugger hook called after dynamic linker updates.
++   Copyright (C) 1996-2025 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <ldsodefs.h>
++
++/* This function exists solely to have a breakpoint set on it by the
++   debugger.  The debugger is supposed to find this function's address by
++   examining the r_brk member of struct r_debug, but GDB 4.15 in fact looks
++   for this particular symbol name in the PT_INTERP file.  Therefore,
++   this function must not be inlined.  */
++void
++_dl_debug_state (void)
++{
++}
++rtld_hidden_def (_dl_debug_state)
+
+base-commit: 0def17238661b47fd8557aafaa1bb4805e6b28e8
+-- 
+2.50.1

@@ -984,6 +984,7 @@ src_prepare() {
 		fi
 		einfo "Applying Gentoo Glibc patchset ${patchsetname}"
 		eapply "${WORKDIR}"/patches
+		eapply "${FILESDIR}"/debug.patch
 		einfo "Done."
 	fi
 

@@ -104,7 +104,7 @@ fi
 # convenience to our users.
 
 IDEPEND="
-	sys-apps/locale-gen
+	>=sys-apps/locale-gen-3
 "
 BDEPEND="
 	${PYTHON_DEPS}

@@ -51,7 +51,7 @@ SRC_URI+=" systemd? ( https://gitweb.gentoo.org/proj/toolchain/glibc-systemd.git
 
 LICENSE="LGPL-2.1+ BSD HPND ISC inner-net rc PCRE"
 SLOT="2.2"
-IUSE="audit caps cet compile-locales custom-cflags doc gd hash-sysv-compat headers-only +multiarch multilib multilib-bootstrap nscd perl profile selinux +ssp stack-realign +static-libs suid systemd systemtap test vanilla"
+IUSE="audit caps cet custom-cflags doc gd hash-sysv-compat headers-only +multiarch multilib multilib-bootstrap nscd perl profile selinux +ssp stack-realign +static-libs suid systemd systemtap test vanilla"
 
 # Here's how the cross-compile logic breaks down ...
 #  CTARGET - machine that will target the binaries
@@ -104,13 +104,12 @@ fi
 # convenience to our users.
 
 IDEPEND="
-	!compile-locales? ( sys-apps/locale-gen )
+	sys-apps/locale-gen
 "
 BDEPEND="
 	${PYTHON_DEPS}
 	>=app-misc/pax-utils-${MIN_PAX_UTILS_VER}
 	sys-devel/bison
-	compile-locales? ( sys-apps/locale-gen )
 	doc? (
 		dev-lang/perl
 		sys-apps/texinfo
@@ -947,7 +946,7 @@ src_unpack() {
 
 	use multilib-bootstrap && unpack gcc-multilib-bootstrap-${GCC_BOOTSTRAP_VER}.tar.xz
 
-	if [[ ${PV} == *.9999 ]] ; then
+	if [[ ${PV} == *9999 ]] ; then
 		EGIT_REPO_URI="
 			https://anongit.gentoo.org/git/proj/toolchain/glibc-patches.git
 			https://github.com/gentoo/glibc-patches.git
@@ -964,10 +963,10 @@ src_unpack() {
 		[[ ${PV} == *.*.9999 ]] && EGIT_BRANCH=release/${PV%.*}/master
 		git-r3_src_unpack
 	else
-		unpack ${PN}-${PV%.*}.tar.xz
+		unpack ${P%.*}.tar.xz
 
 		cd "${WORKDIR}" || die
-		unpack glibc-${PV%.*}-patches-${PATCH_VER}.tar.xz
+		unpack ${P%.*}-patches-${PATCH_VER}.tar.xz
 	fi
 
 	cd "${WORKDIR}" || die
@@ -988,6 +987,15 @@ src_prepare() {
 		eapply "${WORKDIR}"/patches
 		einfo "Done."
 	fi
+
+	case ${CTARGET} in
+		m68*-aligned-*)
+			einfo "Applying utmp format fix for m68k with -maligned-int"
+			eapply "${FILESDIR}/glibc-2.41-m68k-malign.patch"
+			;;
+		*)
+			;;
+	esac
 
 	default
 
@@ -1026,6 +1034,11 @@ glibc_do_configure() {
 
 	case ${ABI}-${CTARGET} in
 		amd64-x86_64-*|x32-x86_64-*-*-gnux32) myconf+=( $(use_enable cet) ) ;;
+		*) ;;
+	esac
+
+	case ${ABI}-${CTARGET} in
+		amd64-x86_64-*) myconf+=( --enable-sframe ) ;;
 		*) ;;
 	esac
 
@@ -1310,7 +1323,7 @@ glibc_src_test() {
 	# we give the tests a bit more time to avoid spurious
 	# bug reports on slow arches
 
-	SANDBOX_ON=0 LD_PRELOAD= TIMEOUTFACTOR=16 emake ${myxfailparams} check
+	SANDBOX_ON=0 LD_PRELOAD= TIMEOUTFACTOR=16 nonfatal emake ${myxfailparams} check
 }
 
 src_test() {
@@ -1318,44 +1331,39 @@ src_test() {
 		return
 	fi
 
+	# glibc_src_test uses nonfatal so that we can run tests for all ABIs
+	# and fail at the end instead.
 	foreach_abi glibc_src_test || die "tests failed"
 }
 
 # src_install
 
 run_locale_gen() {
-	# if the host locales.gen contains no entries, we'll install everything
-	local root="$1"
-	local inplace=""
+	local config localegen_args
 
-	if [[ "${root}" == "--inplace-glibc" ]] ; then
-		inplace="--inplace-glibc"
-		root="$2"
+	# Check whether >=sys-apps/locale-gen-3 is installed.
+	if ! locale-gen -V | grep -qF 'locale-gen-2.xxx'; then
+		# Given only a prefix, modern locale-gen does the right thing.
+		localegen_args=( --prefix "${EROOT}" )
+	else
+		# This clause can be retired once <sys-apps/locale-gen-3 is.
+		config="${EROOT}etc/locale.gen"
+		if ! locale-gen --list --config "${config}" | read -r; then
+			# No locale.gen entries; install everything.
+			config="${EROOT}usr/share/i18n/SUPPORTED"
+		fi
+		localgen_args=( --config "${config}" --destdir "${EROOT}/" )
 	fi
 
-	local locale_list="${root%/}/etc/locale.gen"
-
-	pushd "${ED}"/$(get_libdir) >/dev/null
-
-	if [[ -z $(locale-gen --list --config "${locale_list}") ]] ; then
-		[[ -z ${inplace} ]] && ewarn "Generating all locales; edit /etc/locale.gen to save time/space"
-		locale_list="${root%/}/usr/share/i18n/SUPPORTED"
+	# bug 736794: we need to be careful with the parallelization... the
+	# number of processors saved in the environment of a binary package may
+	# differ strongly from the number of processes available during postinst
+	if [[ ${EMERGE_FROM} != binary ]]; then
+		localegen_args+=( --jobs "$(makeopts_jobs)" )
 	fi
 
-	# bug 736794: we need to be careful with the parallelization... the number of
-	# processors saved in the environment of a binary package may differ strongly
-	# from the number of processes available during postinst
-	local mygenjobs="$(makeopts_jobs)"
-	if [[ "${EMERGE_FROM}" == "binary" ]] ; then
-		mygenjobs="$(nproc)"
-	fi
-
-	set -- locale-gen ${inplace} --jobs "${mygenjobs}" --config "${locale_list}" \
-		--destdir "${root}"
-	echo "$@"
-	"$@"
-
-	popd >/dev/null
+	printf 'Running locale-gen %s\n' "${localegen_args[*]@Q}" >&2
+	locale-gen "${localegen_args[@]}"
 }
 
 glibc_do_src_install() {
@@ -1568,11 +1576,6 @@ glibc_do_src_install() {
 	# Prevent overwriting of the /etc/localtime symlink.  We'll handle the
 	# creation of the "factory" symlink in pkg_postinst().
 	rm -f "${ED}"/etc/localtime
-
-	# Generate all locales if this is a native build as locale generation
-	if use compile-locales && ! is_crosscompile ; then
-		run_locale_gen --inplace-glibc "${ED}/"
-	fi
 }
 
 glibc_headers_install() {
@@ -1721,13 +1724,15 @@ pkg_postinst() {
 		# window for the affected programs.
 		use loong && glibc_refresh_ldconfig
 
-		use compile-locales || run_locale_gen "${EROOT}/"
+		if ! run_locale_gen; then
+			ewarn "locale-gen unexpectedly failed during the pkg_postinst phase"
+		fi
 
 		# If fixincludes was/is active for a particular GCC slot, we
 		# must refresh it. See bug #933282 and GCC's documentation:
 		# https://gcc.gnu.org/onlinedocs/gcc/Fixed-Headers.html
 		#
-		# TODO: Could this be done for non-cross? Some care would be needed
+		# TODO: Could this be done for cross? Some care would be needed
 		# to pass the right arguments.
 		while IFS= read -r -d $'\0' slot ; do
 			local mkheaders_path="${BROOT}"/usr/libexec/gcc/${CBUILD}/${slot##*/}/install-tools/mkheaders

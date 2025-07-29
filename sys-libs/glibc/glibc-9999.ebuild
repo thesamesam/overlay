@@ -963,10 +963,10 @@ src_unpack() {
 		[[ ${PV} == *.*.9999 ]] && EGIT_BRANCH=release/${PV%.*}/master
 		git-r3_src_unpack
 	else
-		unpack ${P%.*}.tar.xz
+		unpack ${P}.tar.xz
 
 		cd "${WORKDIR}" || die
-		unpack ${P%.*}-patches-${PATCH_VER}.tar.xz
+		unpack ${P}-patches-${PATCH_VER}.tar.xz
 	fi
 
 	cd "${WORKDIR}" || die

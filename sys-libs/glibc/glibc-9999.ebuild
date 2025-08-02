@@ -51,7 +51,7 @@ SRC_URI+=" systemd? ( https://gitweb.gentoo.org/proj/toolchain/glibc-systemd.git
 
 LICENSE="LGPL-2.1+ BSD HPND ISC inner-net rc PCRE"
 SLOT="2.2"
-IUSE="audit caps cet custom-cflags doc gd hash-sysv-compat headers-only +multiarch multilib multilib-bootstrap nscd perl profile selinux +ssp stack-realign +static-libs suid systemd systemtap test vanilla"
+IUSE="audit caps cet compile-locales custom-cflags doc gd hash-sysv-compat headers-only +multiarch multilib multilib-bootstrap nscd perl profile selinux +ssp stack-realign +static-libs suid systemd systemtap test vanilla"
 
 # Here's how the cross-compile logic breaks down ...
 #  CTARGET - machine that will target the binaries
@@ -104,12 +104,13 @@ fi
 # convenience to our users.
 
 IDEPEND="
-	>=sys-apps/locale-gen-3
+	!compile-locales? ( sys-apps/locale-gen )
 "
 BDEPEND="
 	${PYTHON_DEPS}
 	>=app-misc/pax-utils-${MIN_PAX_UTILS_VER}
 	sys-devel/bison
+	compile-locales? ( sys-apps/locale-gen )
 	doc? (
 		dev-lang/perl
 		sys-apps/texinfo
@@ -1339,20 +1340,25 @@ src_test() {
 # src_install
 
 run_locale_gen() {
-	local config localegen_args
+	local prefix=$1 user_config config
+	local -a hasversion_opts localegen_args
 
-	# Check whether >=sys-apps/locale-gen-3 is installed.
-	if ! locale-gen -V | grep -qF 'locale-gen-2.xxx'; then
-		# Given only a prefix, modern locale-gen does the right thing.
-		localegen_args=( --prefix "${EROOT}" )
+	if [[ ${EBUILD_PHASE_FUNC} == src_install ]]; then
+		hasversion_opts=( -b )
+	fi
+
+	if has_version "${hasversion_opts[@]}" '>=sys-apps/locale-gen-3'; then
+		localegen_args=( --prefix "${prefix}" )
 	else
-		# This clause can be retired once <sys-apps/locale-gen-3 is.
-		config="${EROOT}etc/locale.gen"
-		if ! locale-gen --list --config "${config}" | read -r; then
-			# No locale.gen entries; install everything.
-			config="${EROOT}usr/share/i18n/SUPPORTED"
+		config="${prefix}/usr/share/i18n/SUPPORTED"
+		user_config="${prefix}/etc/locale.gen"
+		if [[ ${EBUILD_PHASE_FUNC} == src_install ]]; then
+			# For USE=compile-locales, all locales should be built.
+			mkdir -p -- "${prefix}/usr/lib/locale" || die
+		elif locale-gen --list --config "${user_config}" | read -r; then
+			config=${user_config}
 		fi
-		localgen_args=( --config "${config}" --destdir "${EROOT}/" )
+		localegen_args=( --config "${config}" --destdir "${prefix}" )
 	fi
 
 	# bug 736794: we need to be careful with the parallelization... the
@@ -1362,7 +1368,7 @@ run_locale_gen() {
 		localegen_args+=( --jobs "$(makeopts_jobs)" )
 	fi
 
-	printf 'Running locale-gen %s\n' "${localegen_args[*]@Q}" >&2
+	printf 'Executing: locale-gen %s\n' "${localegen_args[*]@Q}" >&2
 	locale-gen "${localegen_args[@]}"
 }
 
@@ -1576,6 +1582,11 @@ glibc_do_src_install() {
 	# Prevent overwriting of the /etc/localtime symlink.  We'll handle the
 	# creation of the "factory" symlink in pkg_postinst().
 	rm -f "${ED}"/etc/localtime
+
+	# Generate all locales if this is a native build as locale generation
+	if use compile-locales && ! is_crosscompile && ! run_locale_gen "${ED}"; then
+		die "locale-gen(1) unexpectedly failed during the ${EBUILD_PHASE_FUNC} phase"
+	fi
 }
 
 glibc_headers_install() {
@@ -1724,8 +1735,8 @@ pkg_postinst() {
 		# window for the affected programs.
 		use loong && glibc_refresh_ldconfig
 
-		if ! run_locale_gen; then
-			ewarn "locale-gen unexpectedly failed during the pkg_postinst phase"
+		if ! use compile-locales && ! run_locale_gen "${EROOT}"; then
+			ewarn "locale-gen(1) unexpectedly failed during the ${EBUILD_PHASE_FUNC} phase"
 		fi
 
 		# If fixincludes was/is active for a particular GCC slot, we

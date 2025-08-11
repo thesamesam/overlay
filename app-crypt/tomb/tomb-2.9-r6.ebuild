@@ -8,7 +8,7 @@ inherit desktop qmake-utils toolchain-funcs xdg
 MY_P="${P^}"
 DESCRIPTION="File encryption tool for GNU/Linux"
 HOMEPAGE="https://www.dyne.org/software/tomb https://github.com/dyne/Tomb"
-SRC_URI="https://files.dyne.org/tomb/releases/Tomb-${PV}.tar.gz"
+SRC_URI="https://files.dyne.org/?file=tomb/releases/Tomb-${PV}.tar.gz"
 S="${WORKDIR}/${MY_P}"
 
 LICENSE="GPL-3 gui? ( GPL-3+ )"

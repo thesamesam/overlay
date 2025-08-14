@@ -1,6 +1,6 @@
 https://github.com/ninja-build/ninja/pull/2634
 
-From 4cb5bec61ac6e62cad1ea6beef15f32e61f0723d Mon Sep 17 00:00:00 2001
+From 1eb9398cf204885745e6f749bd2c06390699ba84 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Mon, 16 Jun 2025 14:14:31 +0200
 Subject: [PATCH 1/3] Add JobserverPool class.
@@ -20,7 +20,7 @@ of the client Jobserver class that uses the pool.
  create mode 100644 src/jobserver_pool_test.cc
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 9e189b6fca..77a9a78c53 100644
+index cbb0f1aa28..c785afe4bf 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -140,6 +140,7 @@ add_library(libninja OBJECT
@@ -410,7 +410,7 @@ index 0000000000..0882c4f441
 +  EXPECT_FALSE(slot.IsValid());
 +}
 
-From 3f5e43d5a27be11249cc21b2e0b70ecdd77c368d Mon Sep 17 00:00:00 2001
+From 272132db92bc90eddade9a1987980e791409a5aa Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Mon, 16 Jun 2025 14:44:56 +0200
 Subject: [PATCH 2/3] Implement GNU jobserver pool mode.
@@ -1028,7 +1028,7 @@ index 92d0761aa3..70af71c3d4 100644
  }
  
 
-From b3d934a8b72d411684e4962ae00c0ecdcb6e0156 Mon Sep 17 00:00:00 2001
+From eb1825b0538ba1af93f359155c178d4551a876b0 Mon Sep 17 00:00:00 2001
 From: David 'Digit' Turner <digit+github@google.com>
 Date: Tue, 1 Jul 2025 18:36:05 +0200
 Subject: [PATCH 3/3] Support `enable_jobserver_pool = 1` in `build.ninja`.

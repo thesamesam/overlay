@@ -1,15 +1,19 @@
-From 574bf4a9ee92678ef2cc0a538d8367d7d8353731 Mon Sep 17 00:00:00 2001
-Message-ID: <574bf4a9ee92678ef2cc0a538d8367d7d8353731.1753490122.git.sam@gentoo.org>
-In-Reply-To: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
-References: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
+From 11136a034429b6b32f9cd00fef42f6993a0ec9de Mon Sep 17 00:00:00 2001
+Message-ID: <11136a034429b6b32f9cd00fef42f6993a0ec9de.1755274487.git.sam@gentoo.org>
+In-Reply-To: <6458b45bb16bd264f7e4c9177d0c4bad41c77f59.1755274487.git.sam@gentoo.org>
+References: <6458b45bb16bd264f7e4c9177d0c4bad41c77f59.1755274487.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Sat, 26 Jul 2025 00:09:57 +0100
-Subject: [PATCH 4/4] gas: default-enable SFrames for x86_64-*-linux-*
+Subject: [PATCH 4/5] gas: default-enable SFrames for x86_64-*-linux-*
+ [NOMERGE]
 
-ChangeLog:
+(I don't intend for this to be merged at this point, I've just included
+it for testing.)
 
-	* gas/configure: Regenerate.
-	* gas/configure.ac (ac_default_sframe): Initialize to 1 for
+gas/
+	PR gas/33126
+	* configure: Regenerate.
+	* configure.ac (ac_default_sframe): Initialize to 1 for
 	x86_64-*-linux-*.
 ---
  gas/configure    | 7 +++++++

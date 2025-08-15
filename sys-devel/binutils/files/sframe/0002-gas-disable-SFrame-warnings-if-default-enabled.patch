@@ -1,10 +1,10 @@
-From 0fd3713e26157cbf0f1c8d8d8818fcd3d68ed610 Mon Sep 17 00:00:00 2001
-Message-ID: <0fd3713e26157cbf0f1c8d8d8818fcd3d68ed610.1753490122.git.sam@gentoo.org>
-In-Reply-To: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
-References: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
+From 26a00c2fc394797f0863796855900a595f7e9702 Mon Sep 17 00:00:00 2001
+Message-ID: <26a00c2fc394797f0863796855900a595f7e9702.1755274487.git.sam@gentoo.org>
+In-Reply-To: <6458b45bb16bd264f7e4c9177d0c4bad41c77f59.1755274487.git.sam@gentoo.org>
+References: <6458b45bb16bd264f7e4c9177d0c4bad41c77f59.1755274487.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 04:50:21 +0100
-Subject: [PATCH 2/4] gas: disable SFrame warnings if default-enabled
+Subject: [PATCH 2/5] gas: disable SFrame warnings if default-enabled
 
 When bootstrapping Binutils in packaging, I saw:
 ```
@@ -16,203 +16,218 @@ FAIL: bootstrap with strip
 ```
 
 Disable all the "no SFrame FDE emitted" warnings if SFrames are default-enabled:
-they will still appear with explicit --gsframe=yes.
+they will still appear with explicit --gsframe=yes. For distributions to
+deploy default-enabled SFrames, SFrames need to be opportunistic, which
+means not creating a lot of noise in build logs or aborting the build
+when SFrames cannot be generated (unless --gsframe is passed explicitly,
+of course).
 
-ChangeLog:
+Note that this commit does not preclude the possibility of us emitting
+a warning in the default-enabled case in future if it's merited, just it
+doesn't seem we ought to in these cases.
 
-        * gas/gen-sframe.c (sframe_xlate_do_def_cfa): Disable warning.
-        (sframe_xlate_do_def_cfa_register): Ditto.
-        (sframe_xlate_do_def_cfa_offset): Ditto.
-        (sframe_xlate_do_val_offset): Ditto.
-        (sframe_xlate_do_register): Ditto.
-        (sframe_xlate_do_remember_state): Ditto.
-        (sframe_xlate_do_aarch64_negate_ra_state_with_pc): Ditto.
-        (sframe_xlate_do_gnu_window_save): Ditto.
-        (sframe_xlate_do_escape_expr): Ditto.
-        (sframe_xlate_do_cfi_escape): Ditto.
-        (sframe_xlate_do_cfi_undefined): Ditto.
-        (sframe_do_cfi_insn): Ditto.
-        (sframe_do_fde): Ditto.
+gas/
+	PR gas/33126
+	* gen-sframe.c (sframe_xlate_do_def_cfa): Disable warning.
+	(sframe_xlate_do_def_cfa_register): Ditto.
+	(sframe_xlate_do_def_cfa_offset): Ditto.
+	(sframe_xlate_do_val_offset): Ditto.
+	(sframe_xlate_do_register): Ditto.
+	(sframe_xlate_do_remember_state): Ditto.
+	(sframe_xlate_do_aarch64_negate_ra_state_with_pc): Ditto.
+	(sframe_xlate_do_gnu_window_save): Ditto.
+	(sframe_xlate_do_escape_expr): Ditto.
+	(sframe_xlate_do_cfi_escape): Ditto.
+	(sframe_xlate_do_cfi_undefined): Ditto.
+	(sframe_do_cfi_insn): Ditto.
+	(sframe_do_fde): Ditto.
+	* gen-sframe.h (sframe_as_warn): New macro.
 ---
- gas/gen-sframe.c | 74 +++++++++++++++++++++++++++++-------------------
- 1 file changed, 45 insertions(+), 29 deletions(-)
+ gas/gen-sframe.c | 60 +++++++++++++++++++++++++-----------------------
+ gas/gen-sframe.h |  8 +++++++
+ 2 files changed, 39 insertions(+), 29 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index d082b974be3..2a5e6a33b99 100644
+index d082b974be3..f5bd5ede1b4 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -1022,9 +1022,10 @@ sframe_xlate_do_def_cfa (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1022,9 +1022,9 @@ sframe_xlate_do_def_cfa (struct sframe_xlate_ctx *xlate_ctx,
    if (cfi_insn->u.ri.reg != SFRAME_CFA_SP_REG
        && cfi_insn->u.ri.reg != SFRAME_CFA_FP_REG)
      {
 -      as_warn (_("no SFrame FDE emitted; "
 -		 "non-SP/FP register %u in .cfi_def_cfa"),
 -	       cfi_insn->u.ri.reg);
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; "
-+		   "non-SP/FP register %u in .cfi_def_cfa"),
-+		 cfi_insn->u.ri.reg);
++      sframe_as_warn (_("no SFrame FDE emitted; "
++			"non-SP/FP register %u in .cfi_def_cfa"),
++		      cfi_insn->u.ri.reg);
        return SFRAME_XLATE_ERR_NOTREPRESENTED; /* Not represented.  */
      }
    sframe_fre_set_cfa_base_reg (cur_fre, cfi_insn->u.ri.reg);
-@@ -1052,9 +1053,10 @@ sframe_xlate_do_def_cfa_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1052,9 +1052,9 @@ sframe_xlate_do_def_cfa_register (struct sframe_xlate_ctx *xlate_ctx,
    if (cfi_insn->u.r != SFRAME_CFA_SP_REG
        && cfi_insn->u.r != SFRAME_CFA_FP_REG)
      {
 -      as_warn (_("no SFrame FDE emitted; "
 -		 "non-SP/FP register %u in .cfi_def_cfa_register"),
 -	       cfi_insn->u.r);
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; "
-+		   "non-SP/FP register %u in .cfi_def_cfa_register"),
-+		 cfi_insn->u.r);
++      sframe_as_warn (_("no SFrame FDE emitted; "
++			"non-SP/FP register %u in .cfi_def_cfa_register"),
++		      cfi_insn->u.r);
        return SFRAME_XLATE_ERR_NOTREPRESENTED; /* Not represented.  */
      }
    sframe_fre_set_cfa_base_reg (cur_fre, cfi_insn->u.r);
-@@ -1092,8 +1094,9 @@ sframe_xlate_do_def_cfa_offset (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1092,8 +1092,8 @@ sframe_xlate_do_def_cfa_offset (struct sframe_xlate_ctx *xlate_ctx,
      {
        /* No CFA base register in effect.  Non-SP/FP CFA base register should
  	 not occur, as sframe_xlate_do_def_cfa[_register] would detect this.  */
 -      as_warn (_("no SFrame FDE emitted; "
 -		 ".cfi_def_cfa_offset without CFA base register in effect"));
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; "
-+		   ".cfi_def_cfa_offset without CFA base register in effect"));
++      sframe_as_warn (_("no SFrame FDE emitted; "
++			".cfi_def_cfa_offset without CFA base register in effect"));
        return SFRAME_XLATE_ERR_NOTREPRESENTED;
      }
  
-@@ -1157,9 +1160,10 @@ sframe_xlate_do_val_offset (const struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_U
+@@ -1157,9 +1157,9 @@ sframe_xlate_do_val_offset (const struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_U
  	      || (sframe_get_abi_arch () == SFRAME_ABI_S390X_ENDIAN_BIG
  		  && cfi_insn->u.ri.offset != SFRAME_S390X_SP_VAL_OFFSET))))
      {
 -      as_warn (_("no SFrame FDE emitted; %s with %s reg %u"),
 -	       cfi_esc_p ? ".cfi_escape DW_CFA_val_offset" : ".cfi_val_offset",
 -	       sframe_register_name (cfi_insn->u.ri.reg), cfi_insn->u.ri.reg);
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; %s with %s reg %u"),
-+		 cfi_esc_p ? ".cfi_escape DW_CFA_val_offset" : ".cfi_val_offset",
-+		 sframe_register_name (cfi_insn->u.ri.reg), cfi_insn->u.ri.reg);
++      sframe_as_warn (_("no SFrame FDE emitted; %s with %s reg %u"),
++		      cfi_esc_p ? ".cfi_escape DW_CFA_val_offset" : ".cfi_val_offset",
++		      sframe_register_name (cfi_insn->u.ri.reg), cfi_insn->u.ri.reg);
        return SFRAME_XLATE_ERR_NOTREPRESENTED; /* Not represented.  */
      }
  
-@@ -1217,8 +1221,9 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_UNUSED,
+@@ -1217,8 +1217,8 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_UNUSED,
        /* Ignore SP reg, as it can be recovered from the CFA tracking info.  */
        )
      {
 -      as_warn (_("no SFrame FDE emitted; %s register %u in .cfi_register"),
 -	       sframe_register_name (cfi_insn->u.rr.reg1), cfi_insn->u.rr.reg1);
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; %s register %u in .cfi_register"),
-+		 sframe_register_name (cfi_insn->u.rr.reg1), cfi_insn->u.rr.reg1);
++      sframe_as_warn (_("no SFrame FDE emitted; %s register %u in .cfi_register"),
++		      sframe_register_name (cfi_insn->u.rr.reg1), cfi_insn->u.rr.reg1);
        return SFRAME_XLATE_ERR_NOTREPRESENTED;  /* Not represented.  */
      }
  
-@@ -1239,8 +1244,9 @@ sframe_xlate_do_remember_state (struct sframe_xlate_ctx *xlate_ctx)
+@@ -1239,8 +1239,8 @@ sframe_xlate_do_remember_state (struct sframe_xlate_ctx *xlate_ctx)
       info for the function involved.  */
    if (!last_fre)
      {
 -      as_warn (_("no SFrame FDE emitted; "
 -		 ".cfi_remember_state without prior SFrame FRE state"));
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; "
-+		   ".cfi_remember_state without prior SFrame FRE state"));
++      sframe_as_warn (_("no SFrame FDE emitted; "
++			".cfi_remember_state without prior SFrame FRE state"));
        return SFRAME_XLATE_ERR_INVAL;
      }
  
-@@ -1340,7 +1346,8 @@ static int
+@@ -1340,7 +1340,7 @@ static int
  sframe_xlate_do_aarch64_negate_ra_state_with_pc (struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_UNUSED,
  						 struct cfi_insn_data *cfi_insn ATTRIBUTE_UNUSED)
  {
 -  as_warn (_("no SFrame FDE emitted; .cfi_negate_ra_state_with_pc"));
-+  if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+    as_warn (_("no SFrame FDE emitted; .cfi_negate_ra_state_with_pc"));
++  sframe_as_warn (_("no SFrame FDE emitted; .cfi_negate_ra_state_with_pc"));
    /* The used signing method should be encoded inside the FDE in SFrame v3.
       For now, PAuth_LR extension is not supported with SFrame.  */
    return SFRAME_XLATE_ERR_NOTREPRESENTED;  /* Not represented.  */
-@@ -1367,7 +1374,9 @@ sframe_xlate_do_gnu_window_save (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1367,7 +1367,8 @@ sframe_xlate_do_gnu_window_save (struct sframe_xlate_ctx *xlate_ctx,
        || abi_arch == SFRAME_ABI_AARCH64_ENDIAN_LITTLE)
      return sframe_xlate_do_aarch64_negate_ra_state (xlate_ctx, cfi_insn);
  
 -  as_warn (_("no SFrame FDE emitted; .cfi_window_save"));
-+  if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+    as_warn (_("no SFrame FDE emitted; .cfi_window_save"));
++  sframe_as_warn (_("no SFrame FDE emitted; .cfi_window_save"));
 +
    return SFRAME_XLATE_ERR_NOTREPRESENTED;  /* Not represented.  */
  }
  
-@@ -1425,9 +1434,10 @@ sframe_xlate_do_escape_expr (const struct sframe_xlate_ctx *xlate_ctx,
+@@ -1425,9 +1426,9 @@ sframe_xlate_do_escape_expr (const struct sframe_xlate_ctx *xlate_ctx,
        || (sframe_ra_tracking_p () && reg == SFRAME_CFA_RA_REG)
        || reg == xlate_ctx->cur_fre->cfa_base_reg)
      {
 -      as_warn (_("no SFrame FDE emitted; "
 -		 ".cfi_escape DW_CFA_expression with %s reg %u"),
 -	       sframe_register_name (reg), reg);
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; "
-+		   ".cfi_escape DW_CFA_expression with %s reg %u"),
-+		 sframe_register_name (reg), reg);
++      sframe_as_warn (_("no SFrame FDE emitted; "
++			".cfi_escape DW_CFA_expression with %s reg %u"),
++		      sframe_register_name (reg), reg);
        err = SFRAME_XLATE_ERR_NOTREPRESENTED;
      }
    /* else safe to skip, so continue to return SFRAME_XLATE_OK.  */
-@@ -1586,8 +1596,9 @@ sframe_xlate_do_cfi_escape (const struct sframe_xlate_ctx *xlate_ctx,
+@@ -1586,8 +1587,8 @@ sframe_xlate_do_cfi_escape (const struct sframe_xlate_ctx *xlate_ctx,
  	 OS-specific CFI opcodes), skip inspecting the DWARF expression.
  	 This may impact the asynchronicity due to loss of coverage.
  	 Continue to warn the user and bail out.  */
 -      as_warn (_("no SFrame FDE emitted; .cfi_escape with op (%#lx)"),
 -	       (unsigned long)firstop);
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; .cfi_escape with op (%#lx)"),
-+		 (unsigned long)firstop);
++      sframe_as_warn (_("no SFrame FDE emitted; .cfi_escape with op (%#lx)"),
++		      (unsigned long)firstop);
        err = SFRAME_XLATE_ERR_NOTREPRESENTED;
      }
  
-@@ -1611,8 +1622,9 @@ sframe_xlate_do_cfi_undefined (const struct sframe_xlate_ctx *xlate_ctx ATTRIBUT
+@@ -1611,8 +1612,8 @@ sframe_xlate_do_cfi_undefined (const struct sframe_xlate_ctx *xlate_ctx ATTRIBUT
        || cfi_insn->u.r == SFRAME_CFA_RA_REG
        || cfi_insn->u.r == SFRAME_CFA_SP_REG)
      {
 -      as_warn (_("no SFrame FDE emitted; %s reg %u in .cfi_undefined"),
 -	       sframe_register_name (cfi_insn->u.r), cfi_insn->u.r);
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; %s reg %u in .cfi_undefined"),
-+		 sframe_register_name (cfi_insn->u.r), cfi_insn->u.r);
++      sframe_as_warn (_("no SFrame FDE emitted; %s reg %u in .cfi_undefined"),
++		      sframe_register_name (cfi_insn->u.r), cfi_insn->u.r);
        return SFRAME_XLATE_ERR_NOTREPRESENTED; /* Not represented.  */
      }
  
-@@ -1789,8 +1801,10 @@ sframe_do_cfi_insn (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1789,8 +1790,9 @@ sframe_do_cfi_insn (struct sframe_xlate_ctx *xlate_ctx,
  
  	if (!cfi_name)
  	  cfi_name = _("(unknown)");
 -	as_warn (_("no SFrame FDE emitted; CFI insn %s (%#x)"),
 -		 cfi_name, op);
 +
-+	if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	  as_warn (_("no SFrame FDE emitted; CFI insn %s (%#x)"),
-+		   cfi_name, op);
++	sframe_as_warn (_("no SFrame FDE emitted; CFI insn %s (%#x)"),
++			cfi_name, op);
  	err = SFRAME_XLATE_ERR_NOTREPRESENTED;
        }
      }
-@@ -1813,8 +1827,9 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1813,8 +1815,8 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
    /* SFrame format cannot represent a non-default DWARF return column reg.  */
    if (xlate_ctx->dw_fde->return_column != DWARF2_DEFAULT_RETURN_COLUMN)
      {
 -      as_warn (_("no SFrame FDE emitted; non-default RA register %u"),
 -	       xlate_ctx->dw_fde->return_column);
-+      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+	as_warn (_("no SFrame FDE emitted; non-default RA register %u"),
-+		 xlate_ctx->dw_fde->return_column);
++      sframe_as_warn (_("no SFrame FDE emitted; non-default RA register %u"),
++		      xlate_ctx->dw_fde->return_column);
        return SFRAME_XLATE_ERR_NOTREPRESENTED;
      }
  
-@@ -1858,7 +1873,8 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1858,7 +1860,7 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
  	  if (fre->ra_loc != SFRAME_FRE_ELEM_LOC_STACK
  	      && fre->bp_loc == SFRAME_FRE_ELEM_LOC_STACK)
  	    {
 -	      as_warn (_("no SFrame FDE emitted; FP without RA on stack"));
-+	      if (flag_gen_sframe == GEN_SFRAME_ENABLED)
-+		as_warn (_("no SFrame FDE emitted; FP without RA on stack"));
++	      sframe_as_warn (_("no SFrame FDE emitted; FP without RA on stack"));
  	      return SFRAME_XLATE_ERR_NOTREPRESENTED;
  	    }
  	}
+diff --git a/gas/gen-sframe.h b/gas/gen-sframe.h
+index 8ad521b5cbe..7e69aae9ed0 100644
+--- a/gas/gen-sframe.h
++++ b/gas/gen-sframe.h
+@@ -21,6 +21,14 @@
+ #ifndef GENSFRAME_H
+ #define GENSFRAME_H
+ 
++/* Warnings shouldn't be emitted for the default-enabled case, only when
++   --gsframe is explicitly passed by the user.  */
++#define sframe_as_warn(format, ...) \
++  do {					       \
++    if (flag_gen_sframe == GEN_SFRAME_ENABLED) \
++      as_warn (format, ##__VA_ARGS__);	       \
++  } while (0)
++
+ /* Errors shouldn't be emitted either if SFrames are default-enabled, as
+    we interpret default-enabled as "opportunistic SFrames".  Users don't
+    want to be bothered by something preventing emission of SFrames in
 -- 
 2.50.1
 

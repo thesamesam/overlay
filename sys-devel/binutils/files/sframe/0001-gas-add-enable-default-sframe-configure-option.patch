@@ -1,8 +1,8 @@
-From 0d07430c615a7c5fcbbe390a5c4de67d3e364378 Mon Sep 17 00:00:00 2001
-Message-ID: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
+From 6458b45bb16bd264f7e4c9177d0c4bad41c77f59 Mon Sep 17 00:00:00 2001
+Message-ID: <6458b45bb16bd264f7e4c9177d0c4bad41c77f59.1755274487.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 11:08:59 +0100
-Subject: [PATCH 1/4] gas: add --enable-default-sframe configure option
+Subject: [PATCH 1/5] gas: add --enable-default-sframe configure option
 
 SFrames make the most sense when userland as a whole is built with them,
 so add a --enable-default-sframe configure flag to facilitate distributors
@@ -36,23 +36,32 @@ In summary, combined with the recent --gsframe=[yes|no] support:
 * Configured with --disable-default-sframe and --gsframe is passed
   => SFrames (no change from before)
 
+I've introduced a sframe_as_bad macro on Indu's suggestion. A following
+patch uses its sibling sframe_as_warn heavily and having symmetry plus
+the macro as a form of documentation of intent seems useful.
+
 (*) It gets added to multilib builds too and then we hit the
     `.sframe not supported for target` error in gas/dw2gencfi.c.
 
+gas/
 	PR gas/33126
-	* gas/as.c (enum gen_sframe_option): Initialize if DEFAULT_SFRAME.
-	* gas/config.in (DEFAULT_SFRAME): New.
-	* gas/configure: Regenerate.
-	* gas/configure.ac: Add --enable-default-sframe.
-	* gas/dw2gencfi.c (cfi_finish): Don't warn if SFrames are enabled
+	* as.c (enum gen_sframe_option): Initialize if DEFAULT_SFRAME.
+	* config.in (DEFAULT_SFRAME): New.
+	* configure: Regenerate.
+	* configure.ac: Add --enable-default-sframe.
+	* doc/as.texi: Document --enable-default-sframe.
+	* dw2gencfi.c (cfi_finish): Don't warn if SFrames are enabled
 	by default but unavailable for this target.
+	* gen-sframe.h (sframe_as_bad): New macro.
 ---
  gas/as.c         |  8 +++++++-
  gas/config.in    |  3 +++
  gas/configure    | 24 ++++++++++++++++++++++--
  gas/configure.ac | 16 ++++++++++++++++
- gas/dw2gencfi.c  |  9 ++++++---
- 5 files changed, 54 insertions(+), 6 deletions(-)
+ gas/doc/as.texi  |  3 ++-
+ gas/dw2gencfi.c  |  7 +++++--
+ gas/gen-sframe.h | 10 ++++++++++
+ 7 files changed, 65 insertions(+), 6 deletions(-)
 
 diff --git a/gas/as.c b/gas/as.c
 index 58ed0a59e21..efcc80deef1 100644
@@ -198,8 +207,22 @@ index c65797fdf0a..78fe021bafd 100644
  AC_DEFINE_UNQUOTED(DEFAULT_GENERATE_BUILD_NOTES,
    $ac_default_generate_build_notes,
    [Define to 1 if you want to generate GNU Build attribute notes
+diff --git a/gas/doc/as.texi b/gas/doc/as.texi
+index 2db5f4896ee..28fb6a6a97b 100644
+--- a/gas/doc/as.texi
++++ b/gas/doc/as.texi
+@@ -864,7 +864,8 @@ configure option.
+ @itemx --gsframe=yes
+ Create @var{.sframe} section from CFI directives.  The explicit
+ @option{--gsframe=yes} option behaves the same as @option{--gsframe}.
+-Generation can be suppressed with @option{--gsframe=no}.
++Generation can be suppressed with @option{--gsframe=no}.  The default can be
++controlled by a configure option @option{--enable-default-sframe}.
+ 
+ @end ifset
+ 
 diff --git a/gas/dw2gencfi.c b/gas/dw2gencfi.c
-index c28856cdf24..2077bedcec2 100644
+index c28856cdf24..272bf33dc61 100644
 --- a/gas/dw2gencfi.c
 +++ b/gas/dw2gencfi.c
 @@ -2598,9 +2598,10 @@ cfi_finish (void)
@@ -214,20 +237,38 @@ index c28856cdf24..2077bedcec2 100644
        || ((all_cfi_sections & CFI_EMIT_sframe) != 0
  	  && flag_gen_sframe != GEN_SFRAME_DISABLED))
      {
-@@ -2617,9 +2618,11 @@ cfi_finish (void)
- 	  elf_section_type (sframe_seg) = SHT_GNU_SFRAME;
- 	  output_sframe (sframe_seg);
+@@ -2619,7 +2620,9 @@ cfi_finish (void)
  	}
--      else
--#endif
-+      /* Avoid erroring with DEFAULT_SFRAME for non-default options, like
-+	 -32 on x86_64.  */
-+      else if (flag_gen_sframe != GEN_SFRAME_CONFIG_ENABLED)
- 	as_bad (_(".sframe not supported for target"));
-+#endif
+       else
+ #endif
+-	as_bad (_(".sframe not supported for target"));
++	/* Avoid erroring with DEFAULT_SFRAME for non-default options, like
++	   -32 on x86_64.  */
++	sframe_as_bad (_(".sframe not supported for target"));
      }
  
    if ((all_cfi_sections & CFI_EMIT_debug_frame) != 0)
+diff --git a/gas/gen-sframe.h b/gas/gen-sframe.h
+index e4a4c6ea0ce..8ad521b5cbe 100644
+--- a/gas/gen-sframe.h
++++ b/gas/gen-sframe.h
+@@ -21,6 +21,16 @@
+ #ifndef GENSFRAME_H
+ #define GENSFRAME_H
+ 
++/* Errors shouldn't be emitted either if SFrames are default-enabled, as
++   we interpret default-enabled as "opportunistic SFrames".  Users don't
++   want to be bothered by something preventing emission of SFrames in
++   such a case.  */
++#define sframe_as_bad(format, ...) \
++  do {					       \
++    if (flag_gen_sframe == GEN_SFRAME_ENABLED) \
++      as_bad (format, ##__VA_ARGS__);	       \
++  } while (0)
++
+ #define SFRAME_FRE_ELEM_LOC_REG		0
+ #define SFRAME_FRE_ELEM_LOC_STACK	1
+ 
 -- 
 2.50.1
 

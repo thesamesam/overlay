@@ -1,43 +1,54 @@
-From 017d6942050d36ce3009a05134d497ed31755dee Mon Sep 17 00:00:00 2001
-Message-ID: <017d6942050d36ce3009a05134d497ed31755dee.1753490122.git.sam@gentoo.org>
-In-Reply-To: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
-References: <0d07430c615a7c5fcbbe390a5c4de67d3e364378.1753490122.git.sam@gentoo.org>
+From 4141bd73be6c38e7fc24c12df669398b5bad988b Mon Sep 17 00:00:00 2001
+Message-ID: <4141bd73be6c38e7fc24c12df669398b5bad988b.1755274487.git.sam@gentoo.org>
+In-Reply-To: <6458b45bb16bd264f7e4c9177d0c4bad41c77f59.1755274487.git.sam@gentoo.org>
+References: <6458b45bb16bd264f7e4c9177d0c4bad41c77f59.1755274487.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
-Subject: [PATCH 3/4] binutils, gas, ld: Disable SFrames for some tests
+Subject: [PATCH 3/5] binutils, gas, ld: Disable SFrames for some tests
 
 These break with a gas configured to emit SFrames by default.
 
-(TODO: split it up?)
+The failures are all harmless, mainly just an unexpected extra section.
 
-ChangeLog:
+For the only non-trivial ones, Indu took a look at some of the PLT tests
+where we get a different address for .plt. She found lang_size_sections_1 ()
+-> bfd_set_section_vma () just gets called with a different offset which
+makes sense given different alignment requirements/sizes.
 
-	* binutils/testsuite/binutils-all/x86-64/compressed-1b.d: Pass --gsframe=no.
-	* binutils/testsuite/binutils-all/x86-64/compressed-1c.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-common-1.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-common-2.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-common-3.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-common-4.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-common-5.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-common-6.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-common-7.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-common-8.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-label.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi-x86_64.d: Ditto.
-	* gas/testsuite/gas/cfi/cfi.exp: Ditto.
-	* gas/testsuite/gas/i386/ehinterp.d: Ditto.
-	* gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d: Ditto.
-	* gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp: Ditto.
-	* ld/testsuite/ld-elf/eh5.d: Ditto.
-	* ld/testsuite/ld-sframe/sframe-empty.d: Ditto.
-	* ld/testsuite/ld-x86-64/ibt-plt-2a.d: Ditto.
-	* ld/testsuite/ld-x86-64/ibt-plt-2b.d: Ditto.
-	* ld/testsuite/ld-x86-64/ibt-plt-3a.d: Ditto.
-	* ld/testsuite/ld-x86-64/ibt-plt-3b.d: Ditto.
-	* ld/testsuite/ld-x86-64/pr20830a-now.d: Ditto.
-	* ld/testsuite/ld-x86-64/pr20830a.d: Ditto.
-	* ld/testsuite/ld-x86-64/pr27016a.d: Ditto.
-	* ld/testsuite/ld-x86-64/pr27016b.d: Ditto.
+binutils/
+	PR gas/33126
+	* testsuite/binutils-all/x86-64/compressed-1b.d: Pass --gsframe=no.
+	* testsuite/binutils-all/x86-64/compressed-1c.d: Ditto.
+
+gas/
+	PR gas/33126
+	* testsuite/gas/cfi/cfi-common-1.d: Pass --gsframe=no.
+	* testsuite/gas/cfi/cfi-common-2.d: Ditto.
+	* testsuite/gas/cfi/cfi-common-3.d: Ditto.
+	* testsuite/gas/cfi/cfi-common-4.d: Ditto.
+	* testsuite/gas/cfi/cfi-common-5.d: Ditto.
+	* testsuite/gas/cfi/cfi-common-6.d: Ditto.
+	* testsuite/gas/cfi/cfi-common-7.d: Ditto.
+	* testsuite/gas/cfi/cfi-common-8.d: Ditto.
+	* testsuite/gas/cfi/cfi-label.d: Ditto.
+	* testsuite/gas/cfi/cfi-x86_64.d: Ditto.
+	* testsuite/gas/cfi/cfi.exp: Ditto.
+	* testsuite/gas/i386/ehinterp.d: Ditto.
+	* testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d: Ditto.
+	* testsuite/gas/scfi/x86_64/scfi-x86-64.exp: Ditto.
+
+ld/
+	PR gas/33126
+	* testsuite/ld-elf/eh5.d: Pass --gsframe=no.
+	* testsuite/ld-sframe/sframe-empty.d: Ditto.
+	* testsuite/ld-x86-64/ibt-plt-2a.d: Ditto.
+	* testsuite/ld-x86-64/ibt-plt-2b.d: Ditto.
+	* testsuite/ld-x86-64/ibt-plt-3a.d: Ditto.
+	* testsuite/ld-x86-64/ibt-plt-3b.d: Ditto.
+	* testsuite/ld-x86-64/pr20830a-now.d: Ditto.
+	* testsuite/ld-x86-64/pr20830a.d: Ditto.
+	* testsuite/ld-x86-64/pr27016a.d: Ditto.
+	* testsuite/ld-x86-64/pr27016b.d: Ditto.
 ---
  binutils/testsuite/binutils-all/x86-64/compressed-1b.d | 2 +-
  binutils/testsuite/binutils-all/x86-64/compressed-1c.d | 2 +-

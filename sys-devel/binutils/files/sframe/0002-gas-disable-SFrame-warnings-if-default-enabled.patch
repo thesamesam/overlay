@@ -1,7 +1,7 @@
-From 26a00c2fc394797f0863796855900a595f7e9702 Mon Sep 17 00:00:00 2001
-Message-ID: <26a00c2fc394797f0863796855900a595f7e9702.1755274487.git.sam@gentoo.org>
-In-Reply-To: <6458b45bb16bd264f7e4c9177d0c4bad41c77f59.1755274487.git.sam@gentoo.org>
-References: <6458b45bb16bd264f7e4c9177d0c4bad41c77f59.1755274487.git.sam@gentoo.org>
+From 992aeff3430e379ae7a1760948b69b4b6bdf49ac Mon Sep 17 00:00:00 2001
+Message-ID: <992aeff3430e379ae7a1760948b69b4b6bdf49ac.1755638141.git.sam@gentoo.org>
+In-Reply-To: <819cadfb2e7397502091c5a47a7e9d1c8d8c9606.1755638141.git.sam@gentoo.org>
+References: <819cadfb2e7397502091c5a47a7e9d1c8d8c9606.1755638141.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 04:50:21 +0100
 Subject: [PATCH 2/5] gas: disable SFrame warnings if default-enabled
@@ -48,7 +48,7 @@ gas/
  2 files changed, 39 insertions(+), 29 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index d082b974be3..f5bd5ede1b4 100644
+index f5cf9bd8594..13342af7bd0 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -1022,9 +1022,9 @@ sframe_xlate_do_def_cfa (struct sframe_xlate_ctx *xlate_ctx,
@@ -101,7 +101,7 @@ index d082b974be3..f5bd5ede1b4 100644
        return SFRAME_XLATE_ERR_NOTREPRESENTED; /* Not represented.  */
      }
  
-@@ -1217,8 +1217,8 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_UNUSED,
+@@ -1217,8 +1217,8 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
        /* Ignore SP reg, as it can be recovered from the CFA tracking info.  */
        )
      {
@@ -125,7 +125,7 @@ index d082b974be3..f5bd5ede1b4 100644
  
 @@ -1340,7 +1340,7 @@ static int
  sframe_xlate_do_aarch64_negate_ra_state_with_pc (struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_UNUSED,
- 						 struct cfi_insn_data *cfi_insn ATTRIBUTE_UNUSED)
+ 						 const struct cfi_insn_data *cfi_insn ATTRIBUTE_UNUSED)
  {
 -  as_warn (_("no SFrame FDE emitted; .cfi_negate_ra_state_with_pc"));
 +  sframe_as_warn (_("no SFrame FDE emitted; .cfi_negate_ra_state_with_pc"));
@@ -229,5 +229,5 @@ index 8ad521b5cbe..7e69aae9ed0 100644
     we interpret default-enabled as "opportunistic SFrames".  Users don't
     want to be bothered by something preventing emission of SFrames in
 -- 
-2.50.1
+2.51.0
 

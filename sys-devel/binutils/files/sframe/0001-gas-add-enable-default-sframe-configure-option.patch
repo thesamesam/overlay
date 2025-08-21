@@ -1,5 +1,5 @@
-From 819cadfb2e7397502091c5a47a7e9d1c8d8c9606 Mon Sep 17 00:00:00 2001
-Message-ID: <819cadfb2e7397502091c5a47a7e9d1c8d8c9606.1755638141.git.sam@gentoo.org>
+From 186b8389164fdc7170bdcf3196b16687502519a6 Mon Sep 17 00:00:00 2001
+Message-ID: <186b8389164fdc7170bdcf3196b16687502519a6.1755740453.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 11:08:59 +0100
 Subject: [PATCH 1/5] gas: add --enable-default-sframe configure option

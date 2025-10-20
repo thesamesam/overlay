@@ -1,5 +1,6 @@
 app-admin/emacs-updater
 app-emacs/autoconf-mode
+app-emacs/a68-mode
 app-emacs/company-ebuild
 app-emacs/company-mode
 app-emacs/dwarf-mode

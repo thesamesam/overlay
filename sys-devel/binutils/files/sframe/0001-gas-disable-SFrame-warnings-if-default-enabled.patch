@@ -1,5 +1,5 @@
-From fe97d13ef5ce1741c334757b53b91d850fe84f40 Mon Sep 17 00:00:00 2001
-Message-ID: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
+From cc2f20ece05b98615ea9b9cb4df0a60486f810dc Mon Sep 17 00:00:00 2001
+Message-ID: <cc2f20ece05b98615ea9b9cb4df0a60486f810dc.1762172960.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 04:50:21 +0100
 Subject: [PATCH 1/4] gas: disable SFrame warnings if default-enabled

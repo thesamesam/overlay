@@ -1,7 +1,7 @@
-From b42bdd081e29cb0708b95b00914022f23758775c Mon Sep 17 00:00:00 2001
-Message-ID: <b42bdd081e29cb0708b95b00914022f23758775c.1762161262.git.sam@gentoo.org>
-In-Reply-To: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
-References: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
+From 5f0d8625fd178b6507d7286e57a6c3b43936f72e Mon Sep 17 00:00:00 2001
+Message-ID: <5f0d8625fd178b6507d7286e57a6c3b43936f72e.1762172960.git.sam@gentoo.org>
+In-Reply-To: <cc2f20ece05b98615ea9b9cb4df0a60486f810dc.1762172960.git.sam@gentoo.org>
+References: <cc2f20ece05b98615ea9b9cb4df0a60486f810dc.1762172960.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Fri, 15 Aug 2025 15:12:25 +0100
 Subject: [PATCH 4/4] gas: TODO wrt enable-default-sframe vs unsupported

@@ -1,7 +1,7 @@
-From 2c94365622840b808443c4897f70175193fda81c Mon Sep 17 00:00:00 2001
-Message-ID: <2c94365622840b808443c4897f70175193fda81c.1762161262.git.sam@gentoo.org>
-In-Reply-To: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
-References: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
+From 1571e6d765ab6f9ecde35b5ab61dc2b02137c36a Mon Sep 17 00:00:00 2001
+Message-ID: <1571e6d765ab6f9ecde35b5ab61dc2b02137c36a.1762172960.git.sam@gentoo.org>
+In-Reply-To: <cc2f20ece05b98615ea9b9cb4df0a60486f810dc.1762172960.git.sam@gentoo.org>
+References: <cc2f20ece05b98615ea9b9cb4df0a60486f810dc.1762172960.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
 Subject: [PATCH 2/4] binutils, gas, ld: Disable SFrames for some tests
@@ -16,11 +16,13 @@ where we get a different address for .plt. She found lang_size_sections_1 ()
 makes sense given different alignment requirements/sizes.
 
 binutils/
+	PR binutils/33317
 	PR gas/33126
 	* testsuite/binutils-all/x86-64/compressed-1b.d: Pass --gsframe=no.
 	* testsuite/binutils-all/x86-64/compressed-1c.d: Ditto.
 
 gas/
+	PR binutils/33317
 	PR gas/33126
 	* testsuite/gas/cfi/cfi-common-1.d: Pass --gsframe=no.
 	* testsuite/gas/cfi/cfi-common-2.d: Ditto.
@@ -30,6 +32,7 @@ gas/
 	* testsuite/gas/cfi/cfi-common-6.d: Ditto.
 	* testsuite/gas/cfi/cfi-common-7.d: Ditto.
 	* testsuite/gas/cfi/cfi-common-8.d: Ditto.
+	* testsuite/gas/cfi/cfi-common-10.d: Ditto.
 	* testsuite/gas/cfi/cfi-label.d: Ditto.
 	* testsuite/gas/cfi/cfi-x86_64.d: Ditto.
 	* testsuite/gas/cfi/cfi.exp: Ditto.
@@ -38,6 +41,7 @@ gas/
 	* testsuite/gas/scfi/x86_64/scfi-x86-64.exp: Ditto.
 
 ld/
+	PR binutils/33317
 	PR gas/33126
 	* testsuite/ld-elf/eh5.d: Pass --gsframe=no.
 	* testsuite/ld-sframe/sframe-empty.d: Ditto.
@@ -53,6 +57,7 @@ ld/
  binutils/testsuite/binutils-all/x86-64/compressed-1b.d | 2 +-
  binutils/testsuite/binutils-all/x86-64/compressed-1c.d | 2 +-
  gas/testsuite/gas/cfi/cfi-common-1.d                   | 1 +
+ gas/testsuite/gas/cfi/cfi-common-10.d                  | 1 +
  gas/testsuite/gas/cfi/cfi-common-2.d                   | 1 +
  gas/testsuite/gas/cfi/cfi-common-3.d                   | 1 +
  gas/testsuite/gas/cfi/cfi-common-4.d                   | 1 +
@@ -76,7 +81,7 @@ ld/
  ld/testsuite/ld-x86-64/pr20830a.d                      | 2 +-
  ld/testsuite/ld-x86-64/pr27016a.d                      | 2 +-
  ld/testsuite/ld-x86-64/pr27016b.d                      | 2 +-
- 26 files changed, 26 insertions(+), 17 deletions(-)
+ 27 files changed, 27 insertions(+), 17 deletions(-)
 
 diff --git a/binutils/testsuite/binutils-all/x86-64/compressed-1b.d b/binutils/testsuite/binutils-all/x86-64/compressed-1b.d
 index 517c8145397..cc84e196973 100644
@@ -111,6 +116,15 @@ index 876c5f22867..f7b556461f1 100644
  #objdump: -Wf
  #name: CFI common 1
  #...
+diff --git a/gas/testsuite/gas/cfi/cfi-common-10.d b/gas/testsuite/gas/cfi/cfi-common-10.d
+index 80900d96e64..d58ac3cc0c5 100644
+--- a/gas/testsuite/gas/cfi/cfi-common-10.d
++++ b/gas/testsuite/gas/cfi/cfi-common-10.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #objdump: -Wf
+ #name: CFI common 10
+ 
 diff --git a/gas/testsuite/gas/cfi/cfi-common-2.d b/gas/testsuite/gas/cfi/cfi-common-2.d
 index 41bbb05ea2a..4d20ea638ea 100644
 --- a/gas/testsuite/gas/cfi/cfi-common-2.d

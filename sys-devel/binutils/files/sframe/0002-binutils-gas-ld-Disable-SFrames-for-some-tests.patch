@@ -1,10 +1,10 @@
-From a8de1805fa60b79d42f9e1cfafc641ece3e8f2c4 Mon Sep 17 00:00:00 2001
-Message-ID: <a8de1805fa60b79d42f9e1cfafc641ece3e8f2c4.1755740453.git.sam@gentoo.org>
-In-Reply-To: <186b8389164fdc7170bdcf3196b16687502519a6.1755740453.git.sam@gentoo.org>
-References: <186b8389164fdc7170bdcf3196b16687502519a6.1755740453.git.sam@gentoo.org>
+From 2c94365622840b808443c4897f70175193fda81c Mon Sep 17 00:00:00 2001
+Message-ID: <2c94365622840b808443c4897f70175193fda81c.1762161262.git.sam@gentoo.org>
+In-Reply-To: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
+References: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
-Subject: [PATCH 3/5] binutils, gas, ld: Disable SFrames for some tests
+Subject: [PATCH 2/4] binutils, gas, ld: Disable SFrames for some tests
 
 These break with a gas configured to emit SFrames by default.
 
@@ -30,7 +30,6 @@ gas/
 	* testsuite/gas/cfi/cfi-common-6.d: Ditto.
 	* testsuite/gas/cfi/cfi-common-7.d: Ditto.
 	* testsuite/gas/cfi/cfi-common-8.d: Ditto.
-	* testsuite/gas/cfi/cfi-common-10.d: Ditto.
 	* testsuite/gas/cfi/cfi-label.d: Ditto.
 	* testsuite/gas/cfi/cfi-x86_64.d: Ditto.
 	* testsuite/gas/cfi/cfi.exp: Ditto.
@@ -54,7 +53,6 @@ ld/
  binutils/testsuite/binutils-all/x86-64/compressed-1b.d | 2 +-
  binutils/testsuite/binutils-all/x86-64/compressed-1c.d | 2 +-
  gas/testsuite/gas/cfi/cfi-common-1.d                   | 1 +
- gas/testsuite/gas/cfi/cfi-common-10.d                  | 1 +
  gas/testsuite/gas/cfi/cfi-common-2.d                   | 1 +
  gas/testsuite/gas/cfi/cfi-common-3.d                   | 1 +
  gas/testsuite/gas/cfi/cfi-common-4.d                   | 1 +
@@ -78,7 +76,7 @@ ld/
  ld/testsuite/ld-x86-64/pr20830a.d                      | 2 +-
  ld/testsuite/ld-x86-64/pr27016a.d                      | 2 +-
  ld/testsuite/ld-x86-64/pr27016b.d                      | 2 +-
- 27 files changed, 27 insertions(+), 17 deletions(-)
+ 26 files changed, 26 insertions(+), 17 deletions(-)
 
 diff --git a/binutils/testsuite/binutils-all/x86-64/compressed-1b.d b/binutils/testsuite/binutils-all/x86-64/compressed-1b.d
 index 517c8145397..cc84e196973 100644
@@ -113,15 +111,6 @@ index 876c5f22867..f7b556461f1 100644
  #objdump: -Wf
  #name: CFI common 1
  #...
-diff --git a/gas/testsuite/gas/cfi/cfi-common-10.d b/gas/testsuite/gas/cfi/cfi-common-10.d
-index 80900d96e64..d58ac3cc0c5 100644
---- a/gas/testsuite/gas/cfi/cfi-common-10.d
-+++ b/gas/testsuite/gas/cfi/cfi-common-10.d
-@@ -1,3 +1,4 @@
-+#as: --gsframe=no
- #objdump: -Wf
- #name: CFI common 10
- 
 diff --git a/gas/testsuite/gas/cfi/cfi-common-2.d b/gas/testsuite/gas/cfi/cfi-common-2.d
 index 41bbb05ea2a..4d20ea638ea 100644
 --- a/gas/testsuite/gas/cfi/cfi-common-2.d
@@ -206,7 +195,7 @@ index 6dd58f50cf5..29236cd9584 100644
  #name: CFI on x86-64
  #...
 diff --git a/gas/testsuite/gas/cfi/cfi.exp b/gas/testsuite/gas/cfi/cfi.exp
-index d89a102c885..251bbbe43d6 100644
+index 60094fe06f7..ccfdd36b7a0 100644
 --- a/gas/testsuite/gas/cfi/cfi.exp
 +++ b/gas/testsuite/gas/cfi/cfi.exp
 @@ -119,7 +119,7 @@ run_list_test "cfi-diag-1" ""
@@ -252,7 +241,7 @@ index 880948dd89c..4bba2a78007 100644
      run_list_test "scfi-cfi-sections-1" "--scfi=experimental --warn"
  
 diff --git a/ld/testsuite/ld-elf/eh5.d b/ld/testsuite/ld-elf/eh5.d
-index d51b4809e94..6fb432182ec 100644
+index 48109d38310..1e5b5ab26b7 100644
 --- a/ld/testsuite/ld-elf/eh5.d
 +++ b/ld/testsuite/ld-elf/eh5.d
 @@ -1,6 +1,7 @@
@@ -366,5 +355,5 @@ index 130ef5514ac..0a8ed83b55e 100644
  #objdump: -dw
  
 -- 
-2.51.0
+2.51.2
 

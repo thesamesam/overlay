@@ -1,10 +1,10 @@
-From ff96e1ce6f72a76c7a03a28a03b0c9deabaaa659 Mon Sep 17 00:00:00 2001
-Message-ID: <ff96e1ce6f72a76c7a03a28a03b0c9deabaaa659.1755740453.git.sam@gentoo.org>
-In-Reply-To: <186b8389164fdc7170bdcf3196b16687502519a6.1755740453.git.sam@gentoo.org>
-References: <186b8389164fdc7170bdcf3196b16687502519a6.1755740453.git.sam@gentoo.org>
+From df70c2b614e566a44209338ff2d146b51fa19a73 Mon Sep 17 00:00:00 2001
+Message-ID: <df70c2b614e566a44209338ff2d146b51fa19a73.1762161262.git.sam@gentoo.org>
+In-Reply-To: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
+References: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Sat, 26 Jul 2025 00:09:57 +0100
-Subject: [PATCH 4/5] gas: default-enable SFrames for x86_64-*-linux-*
+Subject: [PATCH 3/4] gas: default-enable SFrames for x86_64-*-linux-*
  [NOMERGE]
 
 (I don't intend for this to be merged at this point, I've just included
@@ -21,10 +21,10 @@ gas/
  2 files changed, 14 insertions(+)
 
 diff --git a/gas/configure b/gas/configure
-index 12d96a5acd2..1666a5f7fff 100755
+index 104fdb109dd..c98b266b7b4 100755
 --- a/gas/configure
 +++ b/gas/configure
-@@ -12164,6 +12164,13 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
+@@ -12538,6 +12538,13 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
  	   && test ${ac_default_generate_x86_used_note} = unset; then
  	  ac_default_generate_x86_used_note=1
  	fi
@@ -39,7 +39,7 @@ index 12d96a5acd2..1666a5f7fff 100755
  
        i386-*-solaris2 \
 diff --git a/gas/configure.ac b/gas/configure.ac
-index 78fe021bafd..ac575b9d0ab 100644
+index 4c7df3d8491..657dd760b84 100644
 --- a/gas/configure.ac
 +++ b/gas/configure.ac
 @@ -274,6 +274,13 @@ for this_target in $target $canon_targets ; do
@@ -57,5 +57,5 @@ index 78fe021bafd..ac575b9d0ab 100644
  
        i386-*-solaris2 \
 -- 
-2.51.0
+2.51.2
 

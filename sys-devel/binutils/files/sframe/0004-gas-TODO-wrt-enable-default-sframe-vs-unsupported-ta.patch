@@ -1,10 +1,10 @@
-From 124aeec6b5243675e00897912e38880f4b0e55bb Mon Sep 17 00:00:00 2001
-Message-ID: <124aeec6b5243675e00897912e38880f4b0e55bb.1755740453.git.sam@gentoo.org>
-In-Reply-To: <186b8389164fdc7170bdcf3196b16687502519a6.1755740453.git.sam@gentoo.org>
-References: <186b8389164fdc7170bdcf3196b16687502519a6.1755740453.git.sam@gentoo.org>
+From b42bdd081e29cb0708b95b00914022f23758775c Mon Sep 17 00:00:00 2001
+Message-ID: <b42bdd081e29cb0708b95b00914022f23758775c.1762161262.git.sam@gentoo.org>
+In-Reply-To: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
+References: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Fri, 15 Aug 2025 15:12:25 +0100
-Subject: [PATCH 5/5] gas: TODO wrt enable-default-sframe vs unsupported
+Subject: [PATCH 4/4] gas: TODO wrt enable-default-sframe vs unsupported
  targets
 
 TODO: Where's the best place to do this check? Or maybe we ought not
@@ -15,7 +15,7 @@ s.t. it errors if the target never supports SFrames (which)?
  1 file changed, 1 insertion(+)
 
 diff --git a/gas/configure.ac b/gas/configure.ac
-index ac575b9d0ab..5b7eb9ac10c 100644
+index 657dd760b84..cdaf458aafe 100644
 --- a/gas/configure.ac
 +++ b/gas/configure.ac
 @@ -117,6 +117,7 @@ AC_ARG_ENABLE(elf_stt_common,
@@ -27,5 +27,5 @@ index ac575b9d0ab..5b7eb9ac10c 100644
  # Provide a configure time option to override our default.
  AC_ARG_ENABLE(default-sframe,
 -- 
-2.51.0
+2.51.2
 

@@ -1,10 +1,8 @@
-From 50f6ec62f7e665fb3a09a3f63928cc3b16ad3228 Mon Sep 17 00:00:00 2001
-Message-ID: <50f6ec62f7e665fb3a09a3f63928cc3b16ad3228.1755740453.git.sam@gentoo.org>
-In-Reply-To: <186b8389164fdc7170bdcf3196b16687502519a6.1755740453.git.sam@gentoo.org>
-References: <186b8389164fdc7170bdcf3196b16687502519a6.1755740453.git.sam@gentoo.org>
+From fe97d13ef5ce1741c334757b53b91d850fe84f40 Mon Sep 17 00:00:00 2001
+Message-ID: <fe97d13ef5ce1741c334757b53b91d850fe84f40.1762161262.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 04:50:21 +0100
-Subject: [PATCH 2/5] gas: disable SFrame warnings if default-enabled
+Subject: [PATCH 1/4] gas: disable SFrame warnings if default-enabled
 
 When bootstrapping Binutils in packaging, I saw:
 ```
@@ -48,10 +46,10 @@ gas/
  2 files changed, 39 insertions(+), 29 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index f5cf9bd8594..13342af7bd0 100644
+index 3ac1cf4338c..768a0bb1b69 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -1022,9 +1022,9 @@ sframe_xlate_do_def_cfa (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1054,9 +1054,9 @@ sframe_xlate_do_def_cfa (struct sframe_xlate_ctx *xlate_ctx,
    if (cfi_insn->u.ri.reg != SFRAME_CFA_SP_REG
        && cfi_insn->u.ri.reg != SFRAME_CFA_FP_REG)
      {
@@ -64,7 +62,7 @@ index f5cf9bd8594..13342af7bd0 100644
        return SFRAME_XLATE_ERR_NOTREPRESENTED; /* Not represented.  */
      }
    sframe_fre_set_cfa_base_reg (cur_fre, cfi_insn->u.ri.reg);
-@@ -1052,9 +1052,9 @@ sframe_xlate_do_def_cfa_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1084,9 +1084,9 @@ sframe_xlate_do_def_cfa_register (struct sframe_xlate_ctx *xlate_ctx,
    if (cfi_insn->u.r != SFRAME_CFA_SP_REG
        && cfi_insn->u.r != SFRAME_CFA_FP_REG)
      {
@@ -77,7 +75,7 @@ index f5cf9bd8594..13342af7bd0 100644
        return SFRAME_XLATE_ERR_NOTREPRESENTED; /* Not represented.  */
      }
    sframe_fre_set_cfa_base_reg (cur_fre, cfi_insn->u.r);
-@@ -1092,8 +1092,8 @@ sframe_xlate_do_def_cfa_offset (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1124,8 +1124,8 @@ sframe_xlate_do_def_cfa_offset (struct sframe_xlate_ctx *xlate_ctx,
      {
        /* No CFA base register in effect.  Non-SP/FP CFA base register should
  	 not occur, as sframe_xlate_do_def_cfa[_register] would detect this.  */
@@ -88,7 +86,7 @@ index f5cf9bd8594..13342af7bd0 100644
        return SFRAME_XLATE_ERR_NOTREPRESENTED;
      }
  
-@@ -1157,9 +1157,9 @@ sframe_xlate_do_val_offset (const struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_U
+@@ -1189,9 +1189,9 @@ sframe_xlate_do_val_offset (const struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_U
  	      || (sframe_get_abi_arch () == SFRAME_ABI_S390X_ENDIAN_BIG
  		  && cfi_insn->u.ri.offset != SFRAME_S390X_SP_VAL_OFFSET))))
      {
@@ -101,7 +99,7 @@ index f5cf9bd8594..13342af7bd0 100644
        return SFRAME_XLATE_ERR_NOTREPRESENTED; /* Not represented.  */
      }
  
-@@ -1217,8 +1217,8 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1249,8 +1249,8 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
        /* Ignore SP reg, as it can be recovered from the CFA tracking info.  */
        )
      {
@@ -112,7 +110,7 @@ index f5cf9bd8594..13342af7bd0 100644
        return SFRAME_XLATE_ERR_NOTREPRESENTED;  /* Not represented.  */
      }
  
-@@ -1239,8 +1239,8 @@ sframe_xlate_do_remember_state (struct sframe_xlate_ctx *xlate_ctx)
+@@ -1271,8 +1271,8 @@ sframe_xlate_do_remember_state (struct sframe_xlate_ctx *xlate_ctx)
       info for the function involved.  */
    if (!last_fre)
      {
@@ -123,7 +121,7 @@ index f5cf9bd8594..13342af7bd0 100644
        return SFRAME_XLATE_ERR_INVAL;
      }
  
-@@ -1340,7 +1340,7 @@ static int
+@@ -1373,7 +1373,7 @@ static int
  sframe_xlate_do_aarch64_negate_ra_state_with_pc (struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_UNUSED,
  						 const struct cfi_insn_data *cfi_insn ATTRIBUTE_UNUSED)
  {
@@ -132,7 +130,7 @@ index f5cf9bd8594..13342af7bd0 100644
    /* The used signing method should be encoded inside the FDE in SFrame v3.
       For now, PAuth_LR extension is not supported with SFrame.  */
    return SFRAME_XLATE_ERR_NOTREPRESENTED;  /* Not represented.  */
-@@ -1367,7 +1367,8 @@ sframe_xlate_do_gnu_window_save (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1400,7 +1400,8 @@ sframe_xlate_do_gnu_window_save (struct sframe_xlate_ctx *xlate_ctx,
        || abi_arch == SFRAME_ABI_AARCH64_ENDIAN_LITTLE)
      return sframe_xlate_do_aarch64_negate_ra_state (xlate_ctx, cfi_insn);
  
@@ -142,7 +140,7 @@ index f5cf9bd8594..13342af7bd0 100644
    return SFRAME_XLATE_ERR_NOTREPRESENTED;  /* Not represented.  */
  }
  
-@@ -1425,9 +1426,9 @@ sframe_xlate_do_escape_expr (const struct sframe_xlate_ctx *xlate_ctx,
+@@ -1458,9 +1459,9 @@ sframe_xlate_do_escape_expr (const struct sframe_xlate_ctx *xlate_ctx,
        || (sframe_ra_tracking_p () && reg == SFRAME_CFA_RA_REG)
        || reg == xlate_ctx->cur_fre->cfa_base_reg)
      {
@@ -155,7 +153,7 @@ index f5cf9bd8594..13342af7bd0 100644
        err = SFRAME_XLATE_ERR_NOTREPRESENTED;
      }
    /* else safe to skip, so continue to return SFRAME_XLATE_OK.  */
-@@ -1586,8 +1587,8 @@ sframe_xlate_do_cfi_escape (const struct sframe_xlate_ctx *xlate_ctx,
+@@ -1679,8 +1680,8 @@ sframe_xlate_do_cfi_escape (const struct sframe_xlate_ctx *xlate_ctx,
  	 OS-specific CFI opcodes), skip inspecting the DWARF expression.
  	 This may impact the asynchronicity due to loss of coverage.
  	 Continue to warn the user and bail out.  */
@@ -166,8 +164,8 @@ index f5cf9bd8594..13342af7bd0 100644
        err = SFRAME_XLATE_ERR_NOTREPRESENTED;
      }
  
-@@ -1611,8 +1612,8 @@ sframe_xlate_do_cfi_undefined (const struct sframe_xlate_ctx *xlate_ctx ATTRIBUT
-       || cfi_insn->u.r == SFRAME_CFA_RA_REG
+@@ -1709,8 +1710,8 @@ sframe_xlate_do_cfi_undefined (const struct sframe_xlate_ctx *xlate_ctx ATTRIBUT
+   if (cfi_insn->u.r == SFRAME_CFA_FP_REG
        || cfi_insn->u.r == SFRAME_CFA_SP_REG)
      {
 -      as_warn (_("no SFrame FDE emitted; %s reg %u in .cfi_undefined"),
@@ -176,8 +174,8 @@ index f5cf9bd8594..13342af7bd0 100644
 +		      sframe_register_name (cfi_insn->u.r), cfi_insn->u.r);
        return SFRAME_XLATE_ERR_NOTREPRESENTED; /* Not represented.  */
      }
- 
-@@ -1789,8 +1790,9 @@ sframe_do_cfi_insn (struct sframe_xlate_ctx *xlate_ctx,
+   else if (cfi_insn->u.r == SFRAME_CFA_RA_REG)
+@@ -1898,8 +1899,9 @@ sframe_do_cfi_insn (struct sframe_xlate_ctx *xlate_ctx,
  
  	if (!cfi_name)
  	  cfi_name = _("(unknown)");
@@ -189,7 +187,7 @@ index f5cf9bd8594..13342af7bd0 100644
  	err = SFRAME_XLATE_ERR_NOTREPRESENTED;
        }
      }
-@@ -1813,8 +1815,8 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1922,8 +1924,8 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
    /* SFrame format cannot represent a non-default DWARF return column reg.  */
    if (xlate_ctx->dw_fde->return_column != DWARF2_DEFAULT_RETURN_COLUMN)
      {
@@ -200,7 +198,7 @@ index f5cf9bd8594..13342af7bd0 100644
        return SFRAME_XLATE_ERR_NOTREPRESENTED;
      }
  
-@@ -1858,7 +1860,7 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1967,7 +1969,7 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
  	  if (fre->ra_loc != SFRAME_FRE_ELEM_LOC_STACK
  	      && fre->bp_loc == SFRAME_FRE_ELEM_LOC_STACK)
  	    {
@@ -210,7 +208,7 @@ index f5cf9bd8594..13342af7bd0 100644
  	    }
  	}
 diff --git a/gas/gen-sframe.h b/gas/gen-sframe.h
-index 8ad521b5cbe..7e69aae9ed0 100644
+index d5cad324da6..d93dc6e7a3d 100644
 --- a/gas/gen-sframe.h
 +++ b/gas/gen-sframe.h
 @@ -21,6 +21,14 @@
@@ -229,5 +227,5 @@ index 8ad521b5cbe..7e69aae9ed0 100644
     we interpret default-enabled as "opportunistic SFrames".  Users don't
     want to be bothered by something preventing emission of SFrames in
 -- 
-2.51.0
+2.51.2
 

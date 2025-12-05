@@ -18,7 +18,6 @@ app-emacs/magit
 app-emacs/meson-mode
 app-emacs/nxml-gentoo-schemas
 app-emacs/nxml-libvirt-schemas
-app-emacs/org-mode
 app-emacs/treesit-auto
 app-emacs/which-key
 x11-misc/emacs-desktop-mail

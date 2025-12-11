@@ -11,8 +11,9 @@ inherit kernel-build toolchain-funcs
 MY_P=linux-${PV/_/-}
 # https://koji.fedoraproject.org/koji/packageinfo?packageID=8
 # forked to https://github.com/projg2/fedora-kernel-config-for-gentoo
-CONFIG_VER=6.15.5-gentoo
-GENTOO_CONFIG_VER=g16
+CONFIG_VER=6.17.10-gentoo
+GENTOO_CONFIG_VER=g17
+SHA256SUM_DATE=20251207
 
 DESCRIPTION="Linux kernel built from vanilla upstream sources"
 HOMEPAGE="
@@ -35,6 +36,10 @@ SRC_URI+="
 		https://raw.githubusercontent.com/projg2/fedora-kernel-config-for-gentoo/${CONFIG_VER}/kernel-ppc64le-fedora.config
 			-> kernel-ppc64le-fedora.config.${CONFIG_VER}
 	)
+	riscv? (
+		https://raw.githubusercontent.com/projg2/fedora-kernel-config-for-gentoo/${CONFIG_VER}/kernel-riscv64-fedora.config
+			-> kernel-riscv64-fedora.config.${CONFIG_VER}
+	)
 	x86? (
 		https://raw.githubusercontent.com/projg2/fedora-kernel-config-for-gentoo/${CONFIG_VER}/kernel-i686-fedora.config
 			-> kernel-i686-fedora.config.${CONFIG_VER}
@@ -42,10 +47,13 @@ SRC_URI+="
 "
 S=${WORKDIR}/${MY_P}
 
-LICENSE="GPL-2"
-#KEYWORDS="~amd64 ~arm ~arm64 ~hppa ~loong ~ppc ~ppc64 ~x86"
+#KEYWORDS="~amd64 ~arm ~arm64 ~hppa ~loong ~ppc ~ppc64 ~riscv ~sparc ~x86"
 IUSE="debug hardened"
-REQUIRED_USE="arm? ( savedconfig )"
+REQUIRED_USE="
+	arm? ( savedconfig )
+	hppa? ( savedconfig )
+	sparc? ( savedconfig )
+"
 
 BDEPEND="
 	debug? ( dev-util/pahole )
@@ -54,11 +62,11 @@ PDEPEND="
 	>=virtual/dist-kernel-${PV}
 "
 
-VERIFY_SIG_OPENPGP_KEY_PATH=/usr/share/openpgp-keys/kernel.org.asc
-
-PATCHES=(
-	"${FILESDIR}"/sframe
-)
+QA_FLAGS_IGNORED="
+	usr/src/linux-.*/scripts/gcc-plugins/.*.so
+	usr/src/linux-.*/vmlinux
+	usr/src/linux-.*/arch/powerpc/kernel/vdso.*/vdso.*.so.dbg
+"
 
 src_prepare() {
 	default
@@ -67,7 +75,7 @@ src_prepare() {
 
 	# prepare the default config
 	case ${ARCH} in
-		arm | hppa | loong)
+		arm | hppa | loong | sparc)
 			> .config || die
 		;;
 		amd64)
@@ -80,11 +88,14 @@ src_prepare() {
 		ppc)
 			# assume powermac/powerbook defconfig
 			# we still package.use.force savedconfig
-			cp "${WORKDIR}/${MY_P}/arch/powerpc/configs/pmac32_defconfig" .config || die
+			cp "${WORKDIR}/${BASE_P}/arch/powerpc/configs/pmac32_defconfig" .config || die
 			;;
 		ppc64)
 			cp "${DISTDIR}/kernel-ppc64le-fedora.config.${CONFIG_VER}" .config || die
 			biendian=true
+			;;
+		riscv)
+			cp "${DISTDIR}/kernel-riscv64-fedora.config.${CONFIG_VER}" .config || die
 			;;
 		x86)
 			cp "${DISTDIR}/kernel-i686-fedora.config.${CONFIG_VER}" .config || die
@@ -122,7 +133,10 @@ src_prepare() {
 		merge_configs+=( "${dist_conf_path}/big-endian.config" )
 	fi
 
-	use secureboot && merge_configs+=( "${dist_conf_path}/secureboot.config" )
+	use secureboot && merge_configs+=(
+		"${dist_conf_path}/secureboot.config"
+		"${dist_conf_path}/zboot.config"
+	)
 
 	kernel-build_merge_configs "${merge_configs[@]}"
 }

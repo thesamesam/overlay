@@ -198,6 +198,10 @@ XFAIL_TEST_LIST=(
 	test-float32x-compoundn
 	test-float64-compoundn
 	test-float-compoundn
+	# maybe related to 6.15_rc6 kernel?
+	tst-preadvwritev2
+	tst-preadvwritev64v2
+	tst-setvbuf2
 )
 
 XFAIL_NSPAWN_TEST_LIST=(

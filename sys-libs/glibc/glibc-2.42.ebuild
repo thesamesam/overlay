@@ -1037,8 +1037,9 @@ glibc_do_configure() {
 		*) ;;
 	esac
 
+	# XXX: Temporary for testing SFrame v3
 	case ${ABI}-${CTARGET} in
-		amd64-x86_64-*) myconf+=( --enable-sframe ) ;;
+		amd64-x86_64-*) myconf+=( --disable-sframe ) ;;
 		*) ;;
 	esac
 

@@ -1,0 +1,401 @@
+From 76efac38f49a338b72c74c0435b076e1c07634f5 Mon Sep 17 00:00:00 2001
+Message-ID: <76efac38f49a338b72c74c0435b076e1c07634f5.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Wed, 3 Dec 2025 12:50:33 -0800
+Subject: [PATCH 31/40] [SFrame-V3] ld: add --discard-sframe-sections command
+ line option
+
+Add a new command line option `--discard-sframe-sections` to the linker.
+This option allows users to prevent the linker from generating an output
+.sframe section.
+
+The rationale for this option is: Consider the case when say, the distro
+is shipped with SFrame sections in the installed binaries/libraries. A
+user application using these installed libraries, but not enabling
+.sframe for itself just yet, will see an output .sframe corresponding to
+the pulled in libraries.  This is "partial" .sframe information for the
+application.  Adding such an option to the linker, gives user a way to
+turn off the .sframe section completely without relying on a linker
+script.
+
+Previously, the existing `--no-ld-generated-unwind-info` option
+controlled whether (not just .eh_frame for PLT entries, but also) SFrame
+for PLT entries. The new command line option,
+`--discard-sframe-sections` now decouples SFrame from other unwind
+formats (like .eh_frame), allowing for more control over the output
+binary's SFrame data.
+
+The option is added for architectures that currently support SFrame:
+AArch64, s390x, and x86_64.
+
+In a subsequent commit, we will tie this option with discard of all
+input .sframe sections.
+
+TBD:
+  - (Input from reviewers appreciated) For aarch64, is adding to both
+    aarch64elf.sh and aarch64linux.sh necessary?  The desired outcome is
+    to allow the new command line for aarch64 elf, amd64 elf, s390x elf
+    only.  Confirm.
+  - Rename option to --discard-sframe [Jan, Indu].
+
+bfd/
+	* elf64-s390.c (elf_s390_create_dynamic_sections): Use
+	no_ld_sframe_info to guard .sframe section creation.
+	* elfxx-x86.c (_bfd_x86_elf_link_setup_gnu_properties): Likewise.
+include/
+	* bfdlink.h (struct bfd_link_info): Add no_ld_sframe_info bitfield.
+ld/
+	* ldlex.h (enum option_values): Add OPTION_NO_LD_SFRAME_INFO.
+	* lexsup.c (elf_sframe_list_options): New function.
+	(ld_list_options): Add sframe_info argument. Update callers.
+	* emulparams/sframe_info.sh: New file.
+	* emulparams/aarch64elf.sh: Source sframe_info.sh.
+	* emulparams/aarch64linux.sh: Likewise.
+	* emulparams/elf64_s390.sh: Likewise.
+	* emulparams/elf_x86_64.sh: Likewise.
+	* Makefile.am: Update to handle sframe_info.sh and new list options.
+	* configure.ac: Handle SFRAME_INFO target variable.
+	* Makefile.in: Regenerate.
+	* configure: Regenerate.
+
+---
+[Changes from RFC]
+  - Use dash in new files instead of underscore [Jan].
+  - Rename to --discard-sframe-sections [Jan, Augustine].
+  - Added documentation in ld.texi [Jan].
+[End of Changes from RFC]
+---
+ bfd/elf64-s390.c              |  2 +-
+ bfd/elfxx-x86.c               |  2 +-
+ include/bfdlink.h             |  4 ++++
+ ld/Makefile.am                |  3 ++-
+ ld/Makefile.in                |  4 +++-
+ ld/configure                  | 11 +++++++++--
+ ld/configure.ac               |  6 ++++++
+ ld/emulparams/aarch64elf.sh   |  1 +
+ ld/emulparams/aarch64linux.sh |  1 +
+ ld/emulparams/elf64_s390.sh   |  1 +
+ ld/emulparams/elf_x86_64.sh   |  1 +
+ ld/emulparams/sframe-info.sh  | 15 +++++++++++++++
+ ld/ld.texi                    | 10 +++++++---
+ ld/ldlex.h                    |  2 ++
+ ld/lexsup.c                   | 15 +++++++++++++--
+ 15 files changed, 67 insertions(+), 11 deletions(-)
+ create mode 100644 ld/emulparams/sframe-info.sh
+
+diff --git a/bfd/elf64-s390.c b/bfd/elf64-s390.c
+index 41bdf6c4d8d..011d408e310 100644
+--- a/bfd/elf64-s390.c
++++ b/bfd/elf64-s390.c
+@@ -4309,7 +4309,7 @@ elf_s390_create_dynamic_sections (bfd *dynobj,
+         }
+ 
+       /* Create .sframe section for .plt section.  */
+-      if (!info->no_ld_generated_unwind_info)
++      if (!info->discard_sframe_sections)
+ 	{
+ 	  flagword flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY
+ 			    | SEC_HAS_CONTENTS | SEC_IN_MEMORY
+diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
+index 595538591f1..72f2e51d143 100644
+--- a/bfd/elfxx-x86.c
++++ b/bfd/elfxx-x86.c
+@@ -4840,7 +4840,7 @@ _bfd_x86_elf_link_setup_gnu_properties
+ 	}
+ 
+       /* .sframe sections are emitted for AMD64 ABI only.  */
+-      if (ABI_64_P (info->output_bfd) && !info->no_ld_generated_unwind_info)
++      if (ABI_64_P (info->output_bfd) && !info->discard_sframe_sections)
+ 	{
+ 	  flagword flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY
+ 			    | SEC_HAS_CONTENTS | SEC_IN_MEMORY
+diff --git a/include/bfdlink.h b/include/bfdlink.h
+index d715fcbd6fb..cb6bfa45a77 100644
+--- a/include/bfdlink.h
++++ b/include/bfdlink.h
+@@ -475,6 +475,10 @@ struct bfd_link_info
+      linker created sections, TRUE if it should be omitted.  */
+   unsigned int no_ld_generated_unwind_info: 1;
+ 
++  /* TRUE if no .sframe stack trace info should be generated for the output.
++     This includes linker generated SFrame info as well.  */
++  unsigned int discard_sframe_sections: 1;
++
+   /* TRUE if BFD should generate a "task linked" object file,
+      similar to relocatable but also with globals converted to
+      statics.  */
+diff --git a/ld/Makefile.am b/ld/Makefile.am
+index 3f2a9ae9832..c219662d2e3 100644
+--- a/ld/Makefile.am
++++ b/ld/Makefile.am
+@@ -42,7 +42,8 @@ ZLIBINC = @zlibinc@
+ 
+ ELF_CFLAGS=-DELF_LIST_OPTIONS=@elf_list_options@ \
+ 	   -DELF_SHLIB_LIST_OPTIONS=@elf_shlib_list_options@ \
+-	   -DELF_PLT_UNWIND_LIST_OPTIONS=@elf_plt_unwind_list_options@
++	   -DELF_PLT_UNWIND_LIST_OPTIONS=@elf_plt_unwind_list_options@ \
++	   -DELF_SFRAME_LIST_OPTIONS=@elf_sframe_list_options@
+ WARN_CFLAGS = @WARN_CFLAGS@
+ NO_WERROR = @NO_WERROR@
+ AM_CFLAGS = $(WARN_CFLAGS) $(ELF_CFLAGS) $(JANSSON_CFLAGS) $(ZSTD_CFLAGS)
+diff --git a/ld/Makefile.in b/ld/Makefile.in
+index 0af36e9e310..f1ba6af5269 100644
+--- a/ld/Makefile.in
++++ b/ld/Makefile.in
+@@ -520,6 +520,7 @@ docdir = @docdir@
+ dvidir = @dvidir@
+ elf_list_options = @elf_list_options@
+ elf_plt_unwind_list_options = @elf_plt_unwind_list_options@
++elf_sframe_list_options = @elf_sframe_list_options@
+ elf_shlib_list_options = @elf_shlib_list_options@
+ enable_initfini_array = @enable_initfini_array@
+ enable_libctf = @enable_libctf@
+@@ -579,7 +580,8 @@ ZLIB = @zlibdir@ -lz
+ ZLIBINC = @zlibinc@
+ ELF_CFLAGS = -DELF_LIST_OPTIONS=@elf_list_options@ \
+ 	   -DELF_SHLIB_LIST_OPTIONS=@elf_shlib_list_options@ \
+-	   -DELF_PLT_UNWIND_LIST_OPTIONS=@elf_plt_unwind_list_options@
++	   -DELF_PLT_UNWIND_LIST_OPTIONS=@elf_plt_unwind_list_options@ \
++	   -DELF_SFRAME_LIST_OPTIONS=@elf_sframe_list_options@
+ 
+ AM_CFLAGS = $(WARN_CFLAGS) $(ELF_CFLAGS) $(JANSSON_CFLAGS) $(ZSTD_CFLAGS)
+ 
+diff --git a/ld/configure b/ld/configure
+index f557d53b1c3..99d0ace48ea 100755
+--- a/ld/configure
++++ b/ld/configure
+@@ -644,6 +644,7 @@ EMUL_EXTRA_OFILES
+ EMULATION_OFILES
+ TDIRS
+ EMUL
++elf_sframe_list_options
+ elf_plt_unwind_list_options
+ elf_shlib_list_options
+ elf_list_options
+@@ -11893,7 +11894,7 @@ else
+   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
+   lt_status=$lt_dlunknown
+   cat > conftest.$ac_ext <<_LT_EOF
+-#line 11896 "configure"
++#line 11897 "configure"
+ #include "confdefs.h"
+ 
+ #if HAVE_DLFCN_H
+@@ -11999,7 +12000,7 @@ else
+   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
+   lt_status=$lt_dlunknown
+   cat > conftest.$ac_ext <<_LT_EOF
+-#line 12002 "configure"
++#line 12003 "configure"
+ #include "confdefs.h"
+ 
+ #if HAVE_DLFCN_H
+@@ -19211,6 +19212,7 @@ TDIRS=
+ elf_list_options=false
+ elf_shlib_list_options=false
+ elf_plt_unwind_list_options=false
++elf_sframe_list_options=false
+ for targ_alias in `echo $target_alias $enable_targets | sed 's/,/ /g'`
+ do
+   if test "$targ_alias" = "all"; then
+@@ -19218,6 +19220,7 @@ do
+     elf_list_options=true
+     elf_shlib_list_options=true
+     elf_plt_unwind_list_options=true
++    elf_sframe_list_options=true
+   else
+     # Canonicalize the secondary target names.
+     result=`$ac_config_sub $targ_alias 2>/dev/null`
+@@ -19273,6 +19276,9 @@ tdir_$i=$result"
+ 	    if test x${PLT_UNWIND} = xyes; then
+ 	      elf_plt_unwind_list_options=true
+ 	    fi
++	    if test x${SFRAME_INFO} = xyes; then
++	      elf_sframe_list_options=true
++	    fi
+ 	  fi
+ 	  ;;
+ 	esac
+@@ -19481,6 +19487,7 @@ _ACEOF
+ 
+ 
+ 
++
+ if test x${all_targets} = xtrue; then
+   if test x${have_64_bit_bfd} = xyes; then
+     EMULATION_OFILES='$(ALL_EMULATIONS) $(ALL_64_EMULATIONS)'
+diff --git a/ld/configure.ac b/ld/configure.ac
+index 40ca00907e0..e4c1507ff77 100644
+--- a/ld/configure.ac
++++ b/ld/configure.ac
+@@ -506,6 +506,7 @@ TDIRS=
+ elf_list_options=false
+ elf_shlib_list_options=false
+ elf_plt_unwind_list_options=false
++elf_sframe_list_options=false
+ for targ_alias in `echo $target_alias $enable_targets | sed 's/,/ /g'`
+ do
+   if test "$targ_alias" = "all"; then
+@@ -513,6 +514,7 @@ do
+     elf_list_options=true
+     elf_shlib_list_options=true
+     elf_plt_unwind_list_options=true
++    elf_sframe_list_options=true
+   else
+     # Canonicalize the secondary target names.
+     result=`$ac_config_sub $targ_alias 2>/dev/null`
+@@ -568,6 +570,9 @@ tdir_$i=$result"
+ 	    if test x${PLT_UNWIND} = xyes; then
+ 	      elf_plt_unwind_list_options=true
+ 	    fi
++	    if test x${SFRAME_INFO} = xyes; then
++	      elf_sframe_list_options=true
++	    fi
+ 	  fi
+ 	  ;;
+ 	esac
+@@ -730,6 +735,7 @@ AC_DEFINE_UNQUOTED([DEFAULT_EMIT_GNU_HASH],
+ AC_SUBST(elf_list_options)
+ AC_SUBST(elf_shlib_list_options)
+ AC_SUBST(elf_plt_unwind_list_options)
++AC_SUBST(elf_sframe_list_options)
+ AC_SUBST(EMUL)
+ 
+ AC_SUBST(TDIRS)
+diff --git a/ld/emulparams/aarch64elf.sh b/ld/emulparams/aarch64elf.sh
+index aa051c76a7a..c788c692ba0 100644
+--- a/ld/emulparams/aarch64elf.sh
++++ b/ld/emulparams/aarch64elf.sh
+@@ -1,3 +1,4 @@
++source_sh ${srcdir}/emulparams/sframe-info.sh
+ source_sh ${srcdir}/emulparams/dt-relr.sh
+ 
+ ARCH=aarch64
+diff --git a/ld/emulparams/aarch64linux.sh b/ld/emulparams/aarch64linux.sh
+index 6fe82a70659..d6369fa9e94 100644
+--- a/ld/emulparams/aarch64linux.sh
++++ b/ld/emulparams/aarch64linux.sh
+@@ -1,3 +1,4 @@
++source_sh ${srcdir}/emulparams/sframe-info.sh
+ source_sh ${srcdir}/emulparams/dt-relr.sh
+ 
+ ARCH=aarch64
+diff --git a/ld/emulparams/elf64_s390.sh b/ld/emulparams/elf64_s390.sh
+index b58314800d1..750e83b714f 100644
+--- a/ld/emulparams/elf64_s390.sh
++++ b/ld/emulparams/elf64_s390.sh
+@@ -1,4 +1,5 @@
+ source_sh ${srcdir}/emulparams/plt_unwind.sh
++source_sh ${srcdir}/emulparams/sframe-info.sh
+ SCRIPT_NAME=elf
+ ELFSIZE=64
+ OUTPUT_FORMAT="elf64-s390"
+diff --git a/ld/emulparams/elf_x86_64.sh b/ld/emulparams/elf_x86_64.sh
+index fb4fcd6ae17..747114bc4b4 100644
+--- a/ld/emulparams/elf_x86_64.sh
++++ b/ld/emulparams/elf_x86_64.sh
+@@ -1,4 +1,5 @@
+ source_sh ${srcdir}/emulparams/plt_unwind.sh
++source_sh ${srcdir}/emulparams/sframe-info.sh
+ source_sh ${srcdir}/emulparams/extern_protected_data.sh
+ source_sh ${srcdir}/emulparams/dynamic_undefined_weak.sh
+ source_sh ${srcdir}/emulparams/reloc_overflow.sh
+diff --git a/ld/emulparams/sframe-info.sh b/ld/emulparams/sframe-info.sh
+new file mode 100644
+index 00000000000..7ee80af5d25
+--- /dev/null
++++ b/ld/emulparams/sframe-info.sh
+@@ -0,0 +1,15 @@
++SFRAME_INFO=yes
++
++PARSE_AND_LIST_LONGOPTS_SFRAME='
++  {"discard-sframe-sections", no_argument, NULL,
++   OPTION_DISCARD_SFRAME_SECTIONS},
++'
++
++PARSE_AND_LIST_ARGS_CASES_SFRAME='
++    case OPTION_DISCARD_SFRAME_SECTIONS:
++      link_info.discard_sframe_sections = true;
++      break;
++'
++
++PARSE_AND_LIST_LONGOPTS="$PARSE_AND_LIST_LONGOPTS $PARSE_AND_LIST_LONGOPTS_SFRAME"
++PARSE_AND_LIST_ARGS_CASES="$PARSE_AND_LIST_ARGS_CASES $PARSE_AND_LIST_ARGS_CASES_SFRAME"
+diff --git a/ld/ld.texi b/ld/ld.texi
+index 85272e4b6f6..28a4a594757 100644
+--- a/ld/ld.texi
++++ b/ld/ld.texi
+@@ -3247,9 +3247,13 @@ section and ELF @code{PT_GNU_EH_FRAME} segment header.
+ @item --no-ld-generated-unwind-info
+ Request creation of @code{.eh_frame} unwind info for linker
+ generated code sections like PLT.  This option is on by default
+-if linker generated unwind info is supported.  This option also
+-controls the generation of @code{.sframe} stack trace info for linker
+-generated code sections like PLT.
++if linker generated unwind info is supported.
++
++@kindex --discard-sframe-sections
++@item --discard-sframe-sections
++Discard @code{.sframe} stack trace info from the output.  This option also
++prohibits the creation of SFrame stack trace data for linker generated code
++sections like PLT.  This option is off by default.
+ 
+ @kindex --enable-new-dtags
+ @kindex --disable-new-dtags
+diff --git a/ld/ldlex.h b/ld/ldlex.h
+index 1efbe58002b..62ad942333b 100644
+--- a/ld/ldlex.h
++++ b/ld/ldlex.h
+@@ -215,6 +215,8 @@ enum option_values
+   /* Used by emulparams/plt_unwind.sh.  */
+   OPTION_LD_GENERATED_UNWIND_INFO,
+   OPTION_NO_LD_GENERATED_UNWIND_INFO,
++  /* Used by emulparams/sframe_info.sh.  */
++  OPTION_DISCARD_SFRAME_SECTIONS,
+   /* Used by emultempl/aarch64elf.em.  */
+   OPTION_FIX_ERRATUM_835769,
+   OPTION_FIX_ERRATUM_843419,
+diff --git a/ld/lexsup.c b/ld/lexsup.c
+index 843b809bacb..96577edf869 100644
+--- a/ld/lexsup.c
++++ b/ld/lexsup.c
+@@ -2364,13 +2364,23 @@ elf_plt_unwind_list_options (FILE *file)
+ }
+ 
+ static void
+-ld_list_options (FILE *file, bool elf, bool shlib, bool plt_unwind)
++elf_sframe_list_options (FILE *file)
++{
++  fprintf (file, _("\
++  --discard-sframe-sections   Don't generate SFrame stack trace info in output\n"));
++}
++
++static void
++ld_list_options (FILE *file, bool elf, bool shlib, bool plt_unwind,
++		 bool sframe_info)
+ {
+   if (!elf)
+     return;
+   printf (_("ELF emulations:\n"));
+   if (plt_unwind)
+     elf_plt_unwind_list_options (file);
++  if (sframe_info)
++    elf_sframe_list_options (file);
+   elf_static_list_options (file);
+   if (shlib)
+     elf_shlib_list_options (file);
+@@ -2495,7 +2505,8 @@ help (void)
+   /* xgettext:c-format */
+   printf (_("%s: emulation specific options:\n"), program_name);
+   ld_list_options (stdout, ELF_LIST_OPTIONS, ELF_SHLIB_LIST_OPTIONS,
+-		   ELF_PLT_UNWIND_LIST_OPTIONS);
++		   ELF_PLT_UNWIND_LIST_OPTIONS,
++		   ELF_SFRAME_LIST_OPTIONS);
+   ldemul_list_emulation_options (stdout);
+   printf ("\n");
+ 
+-- 
+2.52.0
+

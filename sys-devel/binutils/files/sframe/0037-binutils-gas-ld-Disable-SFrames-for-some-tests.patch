@@ -1,10 +1,10 @@
-From 1571e6d765ab6f9ecde35b5ab61dc2b02137c36a Mon Sep 17 00:00:00 2001
-Message-ID: <1571e6d765ab6f9ecde35b5ab61dc2b02137c36a.1762172960.git.sam@gentoo.org>
-In-Reply-To: <cc2f20ece05b98615ea9b9cb4df0a60486f810dc.1762172960.git.sam@gentoo.org>
-References: <cc2f20ece05b98615ea9b9cb4df0a60486f810dc.1762172960.git.sam@gentoo.org>
+From b2fe7366bd04e2b9981c056807992268ed83b656 Mon Sep 17 00:00:00 2001
+Message-ID: <b2fe7366bd04e2b9981c056807992268ed83b656.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
-Subject: [PATCH 2/4] binutils, gas, ld: Disable SFrames for some tests
+Subject: [PATCH 37/40] binutils, gas, ld: Disable SFrames for some tests
 
 These break with a gas configured to emit SFrames by default.
 
@@ -209,7 +209,7 @@ index 6dd58f50cf5..29236cd9584 100644
  #name: CFI on x86-64
  #...
 diff --git a/gas/testsuite/gas/cfi/cfi.exp b/gas/testsuite/gas/cfi/cfi.exp
-index 60094fe06f7..ccfdd36b7a0 100644
+index de518446a13..98a8295dbc5 100644
 --- a/gas/testsuite/gas/cfi/cfi.exp
 +++ b/gas/testsuite/gas/cfi/cfi.exp
 @@ -119,7 +119,7 @@ run_list_test "cfi-diag-1" ""
@@ -242,7 +242,7 @@ index 7a1d1715262..6f59e30306d 100644
  #name: SCFI no ignore .cfi_label
  #...
 diff --git a/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp b/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp
-index 880948dd89c..4bba2a78007 100644
+index 3589b4feb15..df6a03e5066 100644
 --- a/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp
 +++ b/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp
 @@ -48,7 +48,7 @@ if  { ([istarget "x86_64-*-*"] && ![istarget "x86_64-*-linux*-gnux32"]) } then {
@@ -369,5 +369,5 @@ index 130ef5514ac..0a8ed83b55e 100644
  #objdump: -dw
  
 -- 
-2.51.2
+2.52.0
 

@@ -1,0 +1,401 @@
+From 85e2535d06ba37a574304ef164a944241f0e8430 Mon Sep 17 00:00:00 2001
+Message-ID: <85e2535d06ba37a574304ef164a944241f0e8430.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Fri, 26 Dec 2025 12:56:54 -0800
+Subject: [PATCH 16/40] [SFrame-V3] gas: bfd: include: libsframe: fixup
+ terminology 'PC Type' vs 'FDE Type'
+
+In SFrame V2, we did use the the term 'FDE Type' for the two designated
+'PC Type' for the SFrame FDEs (SFRAME_FDE_TYPE_PCINC,
+SFRAME_FDE_TYPE_PCMASK).  In hindsight, 'FDE Type' was an inappropriate
+term for the said intent.  Fix this terminology by defining two new
+constants:
+ - SFRAME_V3_FDE_PCTYPE_MASK
+ - SFRAME_V3_FDE_PCTYPE_INC
+
+The old constants from V2 (SFRAME_FDE_TYPE_PCINC,
+SFRAME_FDE_TYPE_PCMASK) remain, but are now unused in the codebase.
+
+The term 'FDE Type' should be used for the actual FDE Types.  In a
+subsequent commit, we will add SFRAME_FDE_TYPE_FLEX FDE Type for SFrame
+V3.
+
+bfd/
+	* elf64-s390.c (_bfd_s390_elf_create_sframe_plt): Rename
+	inappropriate SFRAME_FDE_TYPE_PCINC to SFRAME_V3_FDE_PCTYPE_INC.
+	* elfxx-x86.c (_bfd_x86_elf_create_sframe_plt): Likewise.  Also
+	rename inappropriate SFRAME_FDE_TYPE_PCMASK to
+	SFRAME_V3_FDE_PCTYPE_MASK.
+gas/
+	* gen-sframe.c (output_sframe_funcdesc): Likewise.
+	* sframe-opt.c (sframe_convert_frag): Likewise.
+libsframe/
+	* sframe-dump.c (dump_sframe_func_with_fres): Likewise.
+	* sframe.c (sframe_fre_check_range_p): Likewise.
+	(sframe_fde_create_func_info): Likewise.
+libsframe/testsuite/
+	* libsframe.encode/encode-1.c: Likewise.
+	* libsframe.find/findfre-1.c: Likewise.
+	* libsframe.find/findfunc-1.c: Likewise.
+	* libsframe.find/plt-findfre-1.c: Likewise.
+	* libsframe.find/plt-findfre-2.c: Likewise.
+
+---
+[New in V1, Not present in RFC].
+---
+ bfd/elf64-s390.c                              | 10 ++--
+ bfd/elfxx-x86.c                               |  8 +--
+ gas/gen-sframe.c                              |  2 +-
+ gas/sframe-opt.c                              |  2 +-
+ include/sframe.h                              | 53 +++++++++++++------
+ libsframe/sframe-dump.c                       |  2 +-
+ libsframe/sframe.c                            |  6 +--
+ .../testsuite/libsframe.encode/encode-1.c     |  4 +-
+ .../testsuite/libsframe.find/findfre-1.c      |  4 +-
+ .../testsuite/libsframe.find/findfunc-1.c     |  6 +--
+ .../testsuite/libsframe.find/plt-findfre-1.c  |  4 +-
+ .../testsuite/libsframe.find/plt-findfre-2.c  |  4 +-
+ 12 files changed, 62 insertions(+), 43 deletions(-)
+
+diff --git a/bfd/elf64-s390.c b/bfd/elf64-s390.c
+index 90a5b9cb52a..41bdf6c4d8d 100644
+--- a/bfd/elf64-s390.c
++++ b/bfd/elf64-s390.c
+@@ -1604,7 +1604,7 @@ _bfd_s390_elf_create_sframe_plt (struct bfd_link_info *info)
+ 
+   /* FRE type is dependent on the size of the function.  */
+   fre_type = sframe_calc_fre_type (dpltsec->size);
+-  func_info = sframe_fde_create_func_info (fre_type, SFRAME_FDE_TYPE_PCINC);
++  func_info = sframe_fde_create_func_info (fre_type, SFRAME_V3_FDE_PCTYPE_INC);
+ 
+   /* Add SFrame FDE and the associated FREs for PLT0 if PLT0 has been
+      generated.  */
+@@ -1631,12 +1631,12 @@ _bfd_s390_elf_create_sframe_plt (struct bfd_link_info *info)
+   if (num_pltn_entries)
+     {
+       /* PLTn entries use an SFrame FDE of type
+-	 SFRAME_FDE_TYPE_PCMASK to exploit the repetitive
++	 SFRAME_V3_FDE_PCTYPE_MASK to exploit the repetitive
+ 	 pattern of the instructions in these entries.  Using this SFrame FDE
+ 	 type helps in keeping the SFrame stack trace info for PLTn entries
+ 	 compact.  */
+-      func_info	= sframe_fde_create_func_info (fre_type,
+-					       SFRAME_FDE_TYPE_PCMASK);
++      func_info = sframe_fde_create_func_info (fre_type,
++					       SFRAME_V3_FDE_PCTYPE_MASK);
+       /* Add the SFrame FDE for all PCs starting at the first PLTn entry (hence,
+ 	 function start address = plt0_entry_size.  As usual, this will be
+ 	 updated later at _bfd_elf_merge_section_sframe, by when the
+@@ -1651,7 +1651,7 @@ _bfd_s390_elf_create_sframe_plt (struct bfd_link_info *info)
+ 
+       sframe_frame_row_entry pltn_fre;
+       /* Now add the FREs for PLTn.  Simply adding the FREs suffices due
+-	 to the usage of SFRAME_FDE_TYPE_PCMASK above.  */
++	 to the usage of SFRAME_V3_FDE_PCTYPE_MASK above.  */
+       for (unsigned int j = 0; j < num_pltn_fres; j++)
+ 	{
+ 	  unsigned int func_idx = plt0_entry_size ? 1 : 0;
+diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
+index c1cf75000b6..595538591f1 100644
+--- a/bfd/elfxx-x86.c
++++ b/bfd/elfxx-x86.c
+@@ -1915,7 +1915,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+ 
+   /* FRE type is dependent on the size of the function.  */
+   fre_type = sframe_calc_fre_type (dpltsec->size);
+-  func_info = sframe_fde_create_func_info (fre_type, SFRAME_FDE_TYPE_PCINC);
++  func_info = sframe_fde_create_func_info (fre_type, SFRAME_V3_FDE_PCTYPE_INC);
+ 
+   /* Add SFrame FDE and the associated FREs for plt0 if plt0 has been
+      generated.  */
+@@ -1943,12 +1943,12 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+   if (num_pltn_entries)
+     {
+       /* pltn entries use an SFrame FDE of type
+-	 SFRAME_FDE_TYPE_PCMASK to exploit the repetitive
++	 SFRAME_V3_FDE_PCTYPE_MASK to exploit the repetitive
+ 	 pattern of the instructions in these entries.  Using this SFrame FDE
+ 	 type helps in keeping the SFrame stack trace info for pltn entries
+ 	 compact.  */
+       func_info	= sframe_fde_create_func_info (fre_type,
+-					       SFRAME_FDE_TYPE_PCMASK);
++					       SFRAME_V3_FDE_PCTYPE_MASK);
+       /* Add the SFrame FDE for all PCs starting at the first pltn entry (hence,
+ 	 function start address = plt0_entry_size.  As usual, this will be
+ 	 updated later at _bfd_elf_merge_section_sframe, by when the
+@@ -1963,7 +1963,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+ 
+       sframe_frame_row_entry pltn_fre;
+       /* Now add the FREs for pltn.  Simply adding the FREs suffices due
+-	 to the usage of SFRAME_FDE_TYPE_PCMASK above.  */
++	 to the usage of SFRAME_V3_FDE_PCTYPE_MASK above.  */
+       for (unsigned int j = 0; j < num_pltn_fres; j++)
+ 	{
+ 	  unsigned int func_idx = plt0_entry_size ? 1 : 0;
+diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
+index 940a40efe26..3ac8b504dec 100644
+--- a/gas/gen-sframe.c
++++ b/gas/gen-sframe.c
+@@ -750,7 +750,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+   pauth_key = (get_dw_fde_pauth_b_key_p (sframe_fde->dw_fde)
+ 	       ? SFRAME_AARCH64_PAUTH_KEY_B : SFRAME_AARCH64_PAUTH_KEY_A);
+   signal_p = get_dw_fde_signal_p (sframe_fde->dw_fde);
+-  func_info = sframe_set_func_info (SFRAME_FDE_TYPE_PCINC,
++  func_info = sframe_set_func_info (SFRAME_V3_FDE_PCTYPE_INC,
+ 				    SFRAME_FRE_TYPE_ADDR4,
+ 				    pauth_key, signal_p);
+   if (SFRAME_FRE_TYPE_SELECTION_OPT)
+diff --git a/gas/sframe-opt.c b/gas/sframe-opt.c
+index e13726d4bc6..d6ea6d512da 100644
+--- a/gas/sframe-opt.c
++++ b/gas/sframe-opt.c
+@@ -132,7 +132,7 @@ sframe_convert_frag (fragS *frag)
+       fde_pc_type = SFRAME_V3_FDE_PC_TYPE (rest_of_data);
+       pauth_key = SFRAME_V3_AARCH64_FDE_PAUTH_KEY (rest_of_data);
+       signal_p = SFRAME_V3_FDE_SIGNAL_P (rest_of_data);
+-      gas_assert (fde_pc_type == SFRAME_FDE_TYPE_PCINC);
++      gas_assert (fde_pc_type == SFRAME_V3_FDE_PCTYPE_INC);
+ 
+       /* Calculate the applicable fre_type.  */
+       fsizeS = exp->X_op_symbol;
+diff --git a/include/sframe.h b/include/sframe.h
+index 33ae25ba0ae..f6a0ee459bf 100644
+--- a/include/sframe.h
++++ b/include/sframe.h
+@@ -112,27 +112,20 @@ extern "C"
+ #define SFRAME_FRE_TYPE_ADDR2	1
+ #define SFRAME_FRE_TYPE_ADDR4	2
+ 
+-/* SFrame Function Descriptor Entry types.
++/* SFrame Function Descriptor Entry PC types.
+ 
+-   The SFrame format has two possible representations for functions.  The
+-   choice of which type to use is made according to the instruction patterns
+-   in the relevant program stub.
++   The SFrame format has two possible representations for functions' PC Type.
++   The choice of which PC type to use is made according to the instruction
++   patterns in the relevant program stub.
+ 
+-   An SFrame FDE of type SFRAME_FDE_TYPE_PCINC is an indication
+-   that the PCs in the FREs should be treated as increments in bytes.  This is
+-   used for a bulk of the executable code of a program, which contains
+-   instructions with no specific pattern.
++   For more details, see the (renamed to) entries SFRAME_V3_FDE_PCTYPE_INC and
++   SFRAME_V3_FDE_PCTYPE_MASK for SFrame V3.  */
+ 
+-   An SFrame FDE of type SFRAME_FDE_TYPE_PCMASK is an indication
+-   that the PCs in the FREs should be treated as masks.  This type is useful
+-   for the cases when a small pattern of instructions in a program stub is
+-   repeatedly to cover a specific functionality.  Typical usescases are pltN
+-   entries, trampolines etc.  */
+-
+-/* Unwinders perform a (PC >= FRE_START_ADDR) to look up a matching FRE.  */
++/* Unwinders perform a (PC >= FRE_START_ADDR) to look up a matching FRE.
++   NB: Use SFRAME_V3_FDE_PCTYPE_INC in SFrame V3 instead.  */
+ #define SFRAME_FDE_TYPE_PCINC   0
+ /* Unwinders perform a (PC % REP_BLOCK_SIZE >= FRE_START_ADDR) to look up a
+-   matching FRE.  */
++   matching FRE.  NB: Use SFRAME_V3_FDE_PCTYPE_MASK in SFrame V3 instead.  */
+ #define SFRAME_FDE_TYPE_PCMASK  1
+ 
+ /* SFrame FDE types.  */
+@@ -253,6 +246,32 @@ typedef struct sframe_func_desc_entry_v2
+ #define SFRAME_V2_FUNC_INFO_UPDATE_PAUTH_KEY(pauth_key, fde_info) \
+   SFRAME_V1_FUNC_INFO_UPDATE_PAUTH_KEY (pauth_key, fde_info)
+ 
++/* SFrame Function Descriptor Entry PC types.
++
++   The SFrame format has two possible representations for functions' PC Type.
++   The choice of which PC type to use is made according to the instruction
++   patterns in the relevant program stub.
++
++   The PC type SFRAME_V3_FDE_PCTYPE_INC is an indication that the PCs in the
++   FREs should be treated as increments in bytes.  This is used for a bulk of
++   the executable code of a program, which contains instructions with no
++   specific pattern.
++
++   The PC type SFRAME_V3_FDE_PCTYPE_MASK is an indication that the PCs in the
++   FREs should be treated as masks.  This type is useful for the cases when a
++   small pattern of instructions in a program stub is repeatedly to cover a
++   specific functionality.  Typical usescases are pltN entries, trampolines
++   etc.
++
++   NB: In SFrame version 2 or lower, the names SFRAME_FDE_TYPE_PCINC and
++   SFRAME_FDE_TYPE_PCMASK were used.  */
++
++/* Unwinders perform a (PC >= FRE_START_ADDR) to look up a matching FRE.  */
++#define SFRAME_V3_FDE_PCTYPE_INC   SFRAME_FDE_TYPE_PCINC
++/* Unwinders perform a (PC % REP_BLOCK_SIZE >= FRE_START_ADDR) to look up a
++   matching FRE.  */
++#define SFRAME_V3_FDE_PCTYPE_MASK  SFRAME_FDE_TYPE_PCMASK
++
+ typedef struct sframe_func_desc_entry_v3
+ {
+   /* Offset to the function start address.  Encoded as a signed offset,
+@@ -287,7 +306,7 @@ typedef struct sframe_func_desc_entry_v3
+      8        7         6                         5             0     */
+   uint8_t sfde_func_info2;
+   /* Size of the block of repeating insns.  Used for SFrame FDEs of type
+-     SFRAME_FDE_TYPE_PCMASK.  */
++     SFRAME_V3_FDE_PCTYPE_MASK.  */
+   uint8_t sfde_func_rep_size;
+ } ATTRIBUTE_PACKED sframe_func_desc_entry_v3;
+ 
+diff --git a/libsframe/sframe-dump.c b/libsframe/sframe-dump.c
+index 2e001b6f28f..b20771a6a2c 100644
+--- a/libsframe/sframe-dump.c
++++ b/libsframe/sframe-dump.c
+@@ -214,7 +214,7 @@ dump_sframe_func_with_fres (const sframe_decoder_ctx *sfd_ctx,
+   /* Mark FDEs with [m] where the FRE start address is interpreted as a
+      mask.  */
+   int pc_mask_p
+-    = (SFRAME_V2_FUNC_PC_TYPE (func_info) == SFRAME_FDE_TYPE_PCMASK);
++    = (SFRAME_V2_FUNC_PC_TYPE (func_info) == SFRAME_V3_FDE_PCTYPE_MASK);
+   const char *pc_mask_marker = (pc_mask_p ? "[m]" : "   ");
+   printf ("\n    %-7s%-8s %-10s%-10s%-13s",
+ 	  "STARTPC", pc_mask_marker, "CFA", "FP", "RA");
+diff --git a/libsframe/sframe.c b/libsframe/sframe.c
+index fd9f123445f..ddf289c44ca 100644
+--- a/libsframe/sframe.c
++++ b/libsframe/sframe.c
+@@ -548,7 +548,7 @@ sframe_fre_check_range_p (const sframe_decoder_ctx *dctx, uint32_t func_idx,
+   func_start_pc_offset = sframe_decoder_get_secrel_func_start_addr (dctx,
+ 								    func_idx);
+   pc_type = sframe_get_fde_pc_type (fdep);
+-  mask_p = (pc_type == SFRAME_FDE_TYPE_PCMASK);
++  mask_p = (pc_type == SFRAME_V3_FDE_PCTYPE_MASK);
+   rep_block_size = fdep->func_rep_size;
+ 
+   if (func_start_pc_offset > pc)
+@@ -900,8 +900,8 @@ sframe_fde_create_func_info (uint32_t fre_type,
+   sframe_assert (fre_type == SFRAME_FRE_TYPE_ADDR1
+ 		   || fre_type == SFRAME_FRE_TYPE_ADDR2
+ 		   || fre_type == SFRAME_FRE_TYPE_ADDR4);
+-  sframe_assert (fde_type == SFRAME_FDE_TYPE_PCINC
+-		    || fde_type == SFRAME_FDE_TYPE_PCMASK);
++  sframe_assert (fde_type == SFRAME_V3_FDE_PCTYPE_INC
++		 || fde_type == SFRAME_V3_FDE_PCTYPE_MASK);
+   func_info = SFRAME_V2_FUNC_INFO (fde_type, fre_type);
+   return func_info;
+ }
+diff --git a/libsframe/testsuite/libsframe.encode/encode-1.c b/libsframe/testsuite/libsframe.encode/encode-1.c
+index 53f15e68bac..7f52d35dbdf 100644
+--- a/libsframe/testsuite/libsframe.encode/encode-1.c
++++ b/libsframe/testsuite/libsframe.encode/encode-1.c
+@@ -38,7 +38,7 @@ add_fde1 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
+   int64_t func1_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCINC);
++						     SFRAME_V3_FDE_PCTYPE_INC);
+   int err = sframe_encoder_add_funcdesc_v3 (encode, func1_start_addr,
+ 					    *func_size, finfo, 0, 0,
+ 					    FDE1_NUM_FRES);
+@@ -74,7 +74,7 @@ add_fde2 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
+   int64_t func1_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCINC);
++						     SFRAME_V3_FDE_PCTYPE_INC);
+   int err = sframe_encoder_add_funcdesc_v3 (encode, func1_start_addr,
+ 					    *func_size, finfo, 0, 0,
+ 					    FDE1_NUM_FRES);
+diff --git a/libsframe/testsuite/libsframe.find/findfre-1.c b/libsframe/testsuite/libsframe.find/findfre-1.c
+index b63c3651a87..2c1abc68ae1 100644
+--- a/libsframe/testsuite/libsframe.find/findfre-1.c
++++ b/libsframe/testsuite/libsframe.find/findfre-1.c
+@@ -38,7 +38,7 @@ add_fde1 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
+   int64_t func1_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCINC);
++						     SFRAME_V3_FDE_PCTYPE_INC);
+   int err = sframe_encoder_add_funcdesc_v3 (encode, func1_start_addr,
+ 					    *func_size, finfo, 0, 0,
+ 					    FDE1_NUM_FRES);
+@@ -73,7 +73,7 @@ add_fde2 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
+   int64_t func2_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCINC);
++						     SFRAME_V3_FDE_PCTYPE_INC);
+   int err = sframe_encoder_add_funcdesc_v3 (encode, func2_start_addr,
+ 					    *func_size, finfo, 0, 0,
+ 					    FDE2_NUM_FRES);
+diff --git a/libsframe/testsuite/libsframe.find/findfunc-1.c b/libsframe/testsuite/libsframe.find/findfunc-1.c
+index 7d2c46b8b51..ba9cb2b9238 100644
+--- a/libsframe/testsuite/libsframe.find/findfunc-1.c
++++ b/libsframe/testsuite/libsframe.find/findfunc-1.c
+@@ -45,7 +45,7 @@ add_fde1 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
+   int64_t func1_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCINC);
++						     SFRAME_V3_FDE_PCTYPE_INC);
+   int err = sframe_encoder_add_funcdesc_v3 (encode, func1_start_addr,
+ 					    *func_size, finfo, 0, 0,
+ 					    FDE1_NUM_FRES);
+@@ -80,7 +80,7 @@ add_fde2 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
+   int64_t func2_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCINC);
++						     SFRAME_V3_FDE_PCTYPE_INC);
+   int err = sframe_encoder_add_funcdesc_v3 (encode, func2_start_addr,
+ 					    *func_size, finfo, 0, 0,
+ 					    FDE2_NUM_FRES);
+@@ -115,7 +115,7 @@ add_fde3 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
+   int64_t func3_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCINC);
++						     SFRAME_V3_FDE_PCTYPE_INC);
+   int err = sframe_encoder_add_funcdesc_v3 (encode, func3_start_addr,
+ 					    *func_size, finfo, 0, 0,
+ 					    FDE3_NUM_FRES);
+diff --git a/libsframe/testsuite/libsframe.find/plt-findfre-1.c b/libsframe/testsuite/libsframe.find/plt-findfre-1.c
+index 7368cc61fcb..9ede7f5ba1c 100644
+--- a/libsframe/testsuite/libsframe.find/plt-findfre-1.c
++++ b/libsframe/testsuite/libsframe.find/plt-findfre-1.c
+@@ -1,4 +1,4 @@
+-/* plt-findfre-1.c -- Test for sframe_find_fre for SFRAME_FDE_TYPE_PCMASK.
++/* plt-findfre-1.c -- Test for sframe_find_fre for SFRAME_V3_FDE_PCTYPE_MASK.
+ 
+    Copyright (C) 2023-2026 Free Software Foundation, Inc.
+ 
+@@ -31,7 +31,7 @@ add_plt_fde1 (sframe_encoder_ctx *ectx, int64_t plt_vaddr,
+       };
+ 
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCMASK);
++						     SFRAME_V3_FDE_PCTYPE_MASK);
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (ectx, idx, NULL);
+   int64_t func_start_addr = (plt_vaddr
+diff --git a/libsframe/testsuite/libsframe.find/plt-findfre-2.c b/libsframe/testsuite/libsframe.find/plt-findfre-2.c
+index e6f317a757d..5044f8daef5 100644
+--- a/libsframe/testsuite/libsframe.find/plt-findfre-2.c
++++ b/libsframe/testsuite/libsframe.find/plt-findfre-2.c
+@@ -37,7 +37,7 @@ add_plt0_fde (sframe_encoder_ctx *ectx, int64_t plt_vaddr,
+ 	SFRAME_V1_FRE_INFO (SFRAME_BASE_REG_SP, 1, SFRAME_FRE_OFFSET_1B) };
+ 
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCINC);
++						     SFRAME_V3_FDE_PCTYPE_INC);
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (ectx, idx, NULL);
+ 
+@@ -71,7 +71,7 @@ add_pltn_fde (sframe_encoder_ctx *ectx, int64_t plt_vaddr,
+ 	SFRAME_V1_FRE_INFO (SFRAME_BASE_REG_SP, 1, SFRAME_FRE_OFFSET_1B) };
+ 
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+-						     SFRAME_FDE_TYPE_PCMASK);
++						     SFRAME_V3_FDE_PCTYPE_MASK);
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (ectx, idx, NULL);
+ 
+-- 
+2.52.0
+

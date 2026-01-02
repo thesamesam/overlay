@@ -1,0 +1,1209 @@
+From afd19d881e1cf5e4aa359469f5cfaf44b90eab68 Mon Sep 17 00:00:00 2001
+Message-ID: <afd19d881e1cf5e4aa359469f5cfaf44b90eab68.1767385714.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Fri, 24 Oct 2025 09:39:01 -0700
+Subject: [PATCH 05/40] [SFrame-V3] sframe: gas: bfd: ld: format bump to
+ version 3
+
+Bump version to SFRAME_VERSION_3.  Introduce a new definition of SFrame
+FDE for version 3, which is a duplicate of SFrame FDE in V2, for now.
+In other words, no changes to the format specification yet.
+
+GNU as emits SFrame V3 by default.  SFrame encoder (ld) emits SFrame V3
+sections.  In a later commit, we will add a new command line option to
+gas: --gsframe-3 which will bind the implementation in gas to emit
+SFrame V3.
+
+Also, adjust the testcases for the new version string
+"SFRAME_VERSION_3".
+
+bfd/
+	* elf-sframe.c (_bfd_elf_merge_section_sframe): Linker emits
+	the latest version by default.
+	* elf64-s390.c (_bfd_s390_elf_create_sframe_plt): Linker emitted
+	PLT sections are also SFRAME_VERSION_3.
+	* elfxx-x86.c (_bfd_x86_elf_create_sframe_plt): Likewise.
+gas/
+	* gen-sframe.c (sframe_set_version): GAS emits SFrame V3 by
+	default.
+	(output_sframe): Likewise.
+libsframe/
+	* sframe-dump.c (dump_sframe): Enable dumping for both
+	SFRAME_VERSION_2 and SFRAME_VERSION_3.
+include/ChangeLog:
+	* sframe.h (SFRAME_VERSION_3): New definition.
+	(SFRAME_VERSION): Current version is now SFRAME_VERSION_3.
+	(SFRAME_V3_FDE_FUNC_INFO): New definition.
+	(SFRAME_V3_FDE_FRE_TYPE): Likewise.
+	(SFRAME_V3_FDE_PC_TYPE): Likewise.
+	(SFRAME_V3_AARCH64_FDE_PAUTH_KEY): Likewise.
+	(SFRAME_V3_FDE_UPDATE_PAUTH_KEY): Likewise.
+binutils/testsuite/
+	* all affected tests: Replace SFRAME_VERSION_2 with
+	SFRAME_VERSION_3.
+gas/testsuite/
+	* all affected tests: Likewise.
+ld/testsuite/
+	* all affected tests: Likewise.
+libsframe/testsuite/
+	* all affected tests: Likewise.
+
+---
+[Changes from RFC]
+  - Even though sframe_decode_fde will be refactored out, use
+    SFRAME_V3_FUNC_FRE_TYPE in the stub for handling SFrame V3 [Jens].
+  - Renamed SFRAME_V3_FUNC_TYPE to SFRAME_V3_FDE_PC_TYPE [Indu].
+  - Renamed SFRAME_V3_FUNC_* to SFRAME_V3_FDE_* [Jens].
+  - Moved (from a later commit) the dump_sframe hunk to this commit to
+    keep each commit bisectable with clean testsuite run [Indu].
+[End of changes from RFC]
+---
+ bfd/elf-sframe.c                              |   6 +-
+ bfd/elf64-s390.c                              |   2 +-
+ bfd/elfxx-x86.c                               |   2 +-
+ .../binutils-all/x86-64/objdump-sframe-01.d   |   2 +-
+ .../binutils-all/x86-64/readelf-sframe-01.d   |   2 +-
+ gas/gen-sframe.c                              |  12 +--
+ .../gas/cfi-sframe/cfi-sframe-aarch64-1.d     |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-aarch64-2.d     |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-aarch64-3.d     |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-aarch64-4.d     |   2 +-
+ .../cfi-sframe-aarch64-pac-ab-key-1.d         |   2 +-
+ .../cfi-sframe-aarch64-ra-undefined-1.d       |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-1.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-10.d     |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-11.d     |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-12.d     |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-2.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-3.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-4.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-5.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-6.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-7.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-8.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-common-9.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-s390x-1.d       |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-s390x-2.d       |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-s390x-3.d       |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-s390x-err-1.d   |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-s390x-err-2.d   |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-s390x-err-3.d   |   2 +-
+ .../cfi-sframe-s390x-fpra-offset-1.d          |   2 +-
+ .../cfi-sframe-s390x-fpra-offset-2.d          |   2 +-
+ .../cfi-sframe-s390x-fpra-register-1.d        |   2 +-
+ .../cfi-sframe-s390x-fpra-register-2.d        |   2 +-
+ .../cfi-sframe-s390x-ra-undefined-1.d         |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-x86_64-1.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-x86_64-2.d      |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-x86_64-3.d      |   2 +-
+ .../cfi-sframe/cfi-sframe-x86_64-empty-1.d    |   2 +-
+ .../cfi-sframe/cfi-sframe-x86_64-empty-2.d    |   2 +-
+ .../cfi-sframe/cfi-sframe-x86_64-empty-3.d    |   2 +-
+ .../cfi-sframe/cfi-sframe-x86_64-empty-4.d    |   2 +-
+ .../cfi-sframe-x86_64-empty-pr33277.d         |   2 +-
+ .../cfi-sframe/cfi-sframe-x86_64-pr33170.d    |   2 +-
+ .../cfi-sframe-x86_64-ra-undefined-1.d        |   2 +-
+ gas/testsuite/gas/cfi-sframe/common-empty-1.d |   2 +-
+ gas/testsuite/gas/cfi-sframe/common-empty-2.d |   2 +-
+ gas/testsuite/gas/cfi-sframe/common-empty-3.d |   2 +-
+ .../gas/scfi/x86_64/scfi-cfi-sections-1.d     |   2 +-
+ .../gas/scfi/x86_64/scfi-dyn-stack-1.d        |   2 +-
+ include/sframe.h                              |  42 ++++++++-
+ ld/testsuite/ld-aarch64/sframe-simple-1.d     |   2 +-
+ ld/testsuite/ld-s390/sframe-plt-1.d           |   2 +-
+ ld/testsuite/ld-s390/sframe-simple-1.d        |   2 +-
+ ld/testsuite/ld-x86-64/sframe-ibt-plt-1.d     |   2 +-
+ ld/testsuite/ld-x86-64/sframe-plt-1.d         |   2 +-
+ ld/testsuite/ld-x86-64/sframe-pltgot-1.d      |   2 +-
+ ld/testsuite/ld-x86-64/sframe-pltgot-2.d      |   2 +-
+ ld/testsuite/ld-x86-64/sframe-reloc-1.d       |   2 +-
+ ld/testsuite/ld-x86-64/sframe-simple-1.d      |   2 +-
+ libsframe/sframe-dump.c                       |  11 +--
+ libsframe/sframe.c                            |  81 ++++++++++++++----
+ libsframe/testsuite/libsframe.decode/DATA2    | Bin 98 -> 98 bytes
+ 63 files changed, 177 insertions(+), 89 deletions(-)
+
+diff --git a/bfd/elf-sframe.c b/bfd/elf-sframe.c
+index 0ed374bd0b9..5a9cc45435f 100644
+--- a/bfd/elf-sframe.c
++++ b/bfd/elf-sframe.c
+@@ -25,7 +25,7 @@
+ #include "sframe-api.h"
+ #include "sframe-internal.h"
+ 
+-typedef sframe_func_desc_entry_v2 sframe_func_desc_entry;
++typedef sframe_func_desc_entry_v3 sframe_func_desc_entry;
+ 
+ /* Return TRUE if the function has been marked for deletion during the linking
+    process.  */
+@@ -409,7 +409,7 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
+ 	 SFRAME_V2_GNU_AS_LD_ENCODING_FLAGS, it is enforced that the provided
+ 	 input sections also have this flag set.  */
+       tflags |= SFRAME_F_FDE_FUNC_START_PCREL;
+-      htab->sfe_info.sfe_ctx = sframe_encode (SFRAME_VERSION_2,
++      htab->sfe_info.sfe_ctx = sframe_encode (SFRAME_VERSION_3,
+ 					      tflags, /* SFrame flags.  */
+ 					      sfd_ctx_abi_arch,
+ 					      sfd_ctx_fixed_fp_offset,
+@@ -451,7 +451,7 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
+   /* Check that all .sframe sections being linked have the same version.  */
+   dctx_version = sframe_decoder_get_version (sfd_ctx);
+   ectx_version = sframe_encoder_get_version (sfe_ctx);
+-  if (dctx_version != SFRAME_VERSION_2 || dctx_version != ectx_version)
++  if (dctx_version != SFRAME_VERSION_3 || dctx_version != ectx_version)
+     {
+       _bfd_error_handler
+ 	(_("input SFrame sections with different format versions prevent"
+diff --git a/bfd/elf64-s390.c b/bfd/elf64-s390.c
+index c20f784d802..ea06b52fed8 100644
+--- a/bfd/elf64-s390.c
++++ b/bfd/elf64-s390.c
+@@ -1595,7 +1595,7 @@ _bfd_s390_elf_create_sframe_plt (struct bfd_link_info *info)
+   num_pltn_fres = htab->sframe_plt->pltn_num_fres;
+   num_pltn_entries = (dpltsec->size - plt0_entry_size) / plt_entry_size;
+ 
+-  *ectx = sframe_encode (SFRAME_VERSION_2,
++  *ectx = sframe_encode (SFRAME_VERSION_3,
+ 			 SFRAME_F_FDE_FUNC_START_PCREL,
+ 			 SFRAME_ABI_S390X_ENDIAN_BIG,
+ 			 SFRAME_CFA_FIXED_FP_INVALID,
+diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
+index df72acf08bf..2271edd40ba 100644
+--- a/bfd/elfxx-x86.c
++++ b/bfd/elfxx-x86.c
+@@ -1906,7 +1906,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+       break;
+     }
+ 
+-  *ectx = sframe_encode (SFRAME_VERSION_2,
++  *ectx = sframe_encode (SFRAME_VERSION_3,
+ 			 SFRAME_F_FDE_FUNC_START_PCREL,
+ 			 SFRAME_ABI_AMD64_ENDIAN_LITTLE,
+ 			 SFRAME_CFA_FIXED_FP_INVALID,
+diff --git a/binutils/testsuite/binutils-all/x86-64/objdump-sframe-01.d b/binutils/testsuite/binutils-all/x86-64/objdump-sframe-01.d
+index cca83cbf09b..5fb28b43b34 100644
+--- a/binutils/testsuite/binutils-all/x86-64/objdump-sframe-01.d
++++ b/binutils/testsuite/binutils-all/x86-64/objdump-sframe-01.d
+@@ -10,7 +10,7 @@
+ #...
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: -8
+     Num FDEs: 1
+diff --git a/binutils/testsuite/binutils-all/x86-64/readelf-sframe-01.d b/binutils/testsuite/binutils-all/x86-64/readelf-sframe-01.d
+index a6973d832a4..bcb8cc04743 100644
+--- a/binutils/testsuite/binutils-all/x86-64/readelf-sframe-01.d
++++ b/binutils/testsuite/binutils-all/x86-64/readelf-sframe-01.d
+@@ -10,7 +10,7 @@
+ #...
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: -8
+     Num FDEs: 1
+diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
+index 3e329c92001..70cba9a2765 100644
+--- a/gas/gen-sframe.c
++++ b/gas/gen-sframe.c
+@@ -54,8 +54,8 @@
+ # define SFRAME_FRE_TYPE_SELECTION_OPT 1
+ #endif
+ 
+-/* gas emits SFrame Version 2 only at this time.  */
+-typedef sframe_func_desc_entry_v2 sframe_func_desc_entry;
++/* gas emits SFrame Version 3 only at this time.  */
++typedef sframe_func_desc_entry_v3 sframe_func_desc_entry;
+ 
+ /* List of SFrame FDE entries.  */
+ 
+@@ -310,10 +310,10 @@ sframe_v1_set_func_info (unsigned int fde_type, unsigned int fre_type,
+ static void
+ sframe_set_version (uint32_t sframe_version ATTRIBUTE_UNUSED)
+ {
+-  sframe_ver_ops.format_version = SFRAME_VERSION_2;
++  sframe_ver_ops.format_version = SFRAME_VERSION_3;
+ 
+-  /* These operations remain the same for SFRAME_VERSION_2 as fre_info and
+-     func_info have not changed from SFRAME_VERSION_1.  */
++  /* These operations remain the same for SFRAME_VERSION_3 as fre_info and
++     func_info have not changed from SFRAME_VERSION_2 and SFRAME_VERSION_1.  */
+ 
+   sframe_ver_ops.set_fre_info = sframe_v1_set_fre_info;
+ 
+@@ -2111,7 +2111,7 @@ output_sframe (segT sframe_seg)
+   (void) sframe_seg;
+ 
+   /* Setup the version specific access functions.  */
+-  sframe_set_version (SFRAME_VERSION_2);
++  sframe_set_version (SFRAME_VERSION_3);
+ 
+   /* Process all fdes and create SFrame stack trace information.  */
+   create_sframe_all ();
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-1.d
+index 830a6526628..38fcdf86e37 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-1.d
+@@ -5,7 +5,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 3
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-2.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-2.d
+index a6ee2ae7cdc..9d918c0d601 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-2.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-2.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 2
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-3.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-3.d
+index c8ace34e375..948fa0c60ab 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-3.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-3.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 2
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-4.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-4.d
+index fc753799ac0..cf870147b74 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-4.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-4.d
+@@ -15,7 +15,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 0
+     Num FREs: 0
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-pac-ab-key-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-pac-ab-key-1.d
+index 4f14e390107..270ec89d383 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-pac-ab-key-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-pac-ab-key-1.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 2
+     Num FREs: 6
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-ra-undefined-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-ra-undefined-1.d
+index f6bd6d71008..c8493fb5442 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-ra-undefined-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-aarch64-ra-undefined-1.d
+@@ -5,7 +5,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 4
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-1.d
+index 9c341b49b4a..f6b4d348222 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-1.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-10.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-10.d
+index a91b1fe3336..8cf9796b7f7 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-10.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-10.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-11.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-11.d
+index 2173ddbd4a2..b9a4fb066a3 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-11.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-11.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-12.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-12.d
+index c91ce7b1011..f607a7106b9 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-12.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-12.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-2.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-2.d
+index 146b7891854..87c21e2ef4b 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-2.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-2.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-3.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-3.d
+index 8c065f8c1c9..40817e53856 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-3.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-3.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-4.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-4.d
+index 0aed15c0c70..fb22f464388 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-4.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-4.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-5.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-5.d
+index d7cedb388ac..1c293751412 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-5.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-5.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-6.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-6.d
+index 41074c78a35..9d3276f1a06 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-6.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-6.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-7.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-7.d
+index e68a9a302c4..f82d21a4005 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-7.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-7.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-8.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-8.d
+index 11a15bfc07c..f82407b7c3d 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-8.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-8.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-9.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-9.d
+index ef588ea1496..0bb883a9b2d 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-9.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-9.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-1.d
+index df315df23f2..0a27cd5a7c0 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-1.d
+@@ -5,7 +5,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 6
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-2.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-2.d
+index a772c2bd055..7ab16531567 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-2.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-2.d
+@@ -5,7 +5,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 6
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-3.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-3.d
+index f775fe54ed7..76fd2b4814f 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-3.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-3.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 1
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-1.d
+index 14f2382e145..5cd31c7da00 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-1.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 0
+     Num FREs: 0
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-2.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-2.d
+index 0d3b47573c2..0397cd84c05 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-2.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-2.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 0
+     Num FREs: 0
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-3.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-3.d
+index 519c2353059..7cdb764a7d4 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-3.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-3.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 0
+     Num FREs: 0
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-offset-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-offset-1.d
+index e5eac75d3f2..581f977fbc6 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-offset-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-offset-1.d
+@@ -5,7 +5,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 5
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-offset-2.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-offset-2.d
+index 305a917e325..ca249eb4c17 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-offset-2.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-offset-2.d
+@@ -5,7 +5,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 5
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-register-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-register-1.d
+index aa1b19511a9..c53b2477cdc 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-register-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-register-1.d
+@@ -5,7 +5,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 5
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-register-2.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-register-2.d
+index 7b719fd979f..f781fb1dee9 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-register-2.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-fpra-register-2.d
+@@ -5,7 +5,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 5
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-ra-undefined-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-ra-undefined-1.d
+index dfd47e30bbe..aeef6969f21 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-ra-undefined-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-ra-undefined-1.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 4
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-1.d
+index 7850db2c774..f0835492601 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-1.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+     Num FDEs: 1
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-2.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-2.d
+index c3841aa0aeb..233a43e1434 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-2.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-2.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-3.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-3.d
+index 0e495159c01..cd5c3e3a0a8 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-3.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-3.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d
+index a63231e6b87..7e31bf53094 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-1.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d
+index c3b4c4cea9f..c844a26a245 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-2.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d
+index 29a6d0c7595..928c6b2d078 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-3.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d
+index 1a718af9435..89972cf4c84 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-4.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-pr33277.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-pr33277.d
+index a04d84d7cc3..a2d5b2cdf6c 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-pr33277.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-pr33277.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33170.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33170.d
+index 85c358fa30f..a11682c7767 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33170.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33170.d
+@@ -5,7 +5,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+     Num FDEs: 1
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-ra-undefined-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-ra-undefined-1.d
+index a635c3cd9cb..3342495d94a 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-ra-undefined-1.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-ra-undefined-1.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+     Num FDEs: 1
+diff --git a/gas/testsuite/gas/cfi-sframe/common-empty-1.d b/gas/testsuite/gas/cfi-sframe/common-empty-1.d
+index c64dd92e003..dc4cf51c682 100644
+--- a/gas/testsuite/gas/cfi-sframe/common-empty-1.d
++++ b/gas/testsuite/gas/cfi-sframe/common-empty-1.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/common-empty-2.d b/gas/testsuite/gas/cfi-sframe/common-empty-2.d
+index 8174b322920..c80ea50c75f 100644
+--- a/gas/testsuite/gas/cfi-sframe/common-empty-2.d
++++ b/gas/testsuite/gas/cfi-sframe/common-empty-2.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/cfi-sframe/common-empty-3.d b/gas/testsuite/gas/cfi-sframe/common-empty-3.d
+index c01498852e8..6b8b26e1f14 100644
+--- a/gas/testsuite/gas/cfi-sframe/common-empty-3.d
++++ b/gas/testsuite/gas/cfi-sframe/common-empty-3.d
+@@ -7,7 +7,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+ #?    CFA fixed FP offset: \-?\d+
+ #?    CFA fixed RA offset: \-?\d+
+diff --git a/gas/testsuite/gas/scfi/x86_64/scfi-cfi-sections-1.d b/gas/testsuite/gas/scfi/x86_64/scfi-cfi-sections-1.d
+index 52ff74c923a..d99a779e358 100644
+--- a/gas/testsuite/gas/scfi/x86_64/scfi-cfi-sections-1.d
++++ b/gas/testsuite/gas/scfi/x86_64/scfi-cfi-sections-1.d
+@@ -6,7 +6,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+     Num FDEs: 1
+diff --git a/gas/testsuite/gas/scfi/x86_64/scfi-dyn-stack-1.d b/gas/testsuite/gas/scfi/x86_64/scfi-dyn-stack-1.d
+index d4054201be6..86cfe9ecf2e 100644
+--- a/gas/testsuite/gas/scfi/x86_64/scfi-dyn-stack-1.d
++++ b/gas/testsuite/gas/scfi/x86_64/scfi-dyn-stack-1.d
+@@ -7,7 +7,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+     Num FDEs: 1
+diff --git a/include/sframe.h b/include/sframe.h
+index 82e35ce7bd7..c519a4930ba 100644
+--- a/include/sframe.h
++++ b/include/sframe.h
+@@ -74,10 +74,11 @@ extern "C"
+ /* SFrame format versions.  */
+ #define SFRAME_VERSION_1	1
+ #define SFRAME_VERSION_2	2
++#define SFRAME_VERSION_3        3
+ /* SFrame magic number.  */
+ #define SFRAME_MAGIC		0xdee2
+ /* Current version of SFrame format.  */
+-#define SFRAME_VERSION	SFRAME_VERSION_2
++#define SFRAME_VERSION	SFRAME_VERSION_3
+ 
+ /* Various flags for SFrame.  */
+ 
+@@ -239,6 +240,45 @@ typedef struct sframe_func_desc_entry_v2
+ #define SFRAME_V2_FUNC_INFO_UPDATE_PAUTH_KEY(pauth_key, fde_info) \
+   SFRAME_V1_FUNC_INFO_UPDATE_PAUTH_KEY (pauth_key, fde_info)
+ 
++typedef struct sframe_func_desc_entry_v3
++{
++  /* Function start address.  Encoded as a signed offset, relative to the
++     beginning of the current FDE.  */
++  int32_t sfde_func_start_address;
++  /* Size of the function in bytes.  */
++  uint32_t sfde_func_size;
++  /* Offset of the first SFrame Frame Row Entry of the function, relative to the
++     beginning of the SFrame Frame Row Entry sub-section.  */
++  uint32_t sfde_func_start_fre_off;
++  /* Number of frame row entries for the function.  */
++  uint32_t sfde_func_num_fres;
++  /* Additional information for stack tracing from the function:
++     - 4-bits: Identify the FRE type used for the function.
++     - 1-bit: Identify the PC type of the function - mask or inc.
++     - 1-bit: PAC authorization A/B key (aarch64).
++     - 2-bits: Unused.
++     ------------------------------------------------------------------------
++     |     Unused    |  PAC auth A/B key (aarch64) |   FDE   |   FRE Type   |
++     |               |     Unused (amd64, s390x)   | PC Type |              |
++     ------------------------------------------------------------------------
++     8               6                             5         4              0     */
++  uint8_t sfde_func_info;
++  /* Size of the block of repeating insns.  Used for SFrame FDEs of type
++     SFRAME_FDE_TYPE_PCMASK.  */
++  uint8_t sfde_func_rep_size;
++  uint16_t sfde_func_padding2;
++} ATTRIBUTE_PACKED sframe_func_desc_entry_v3;
++
++#define SFRAME_V3_FDE_FUNC_INFO(fde_pc_type, fre_type) \
++  (SFRAME_V2_FUNC_INFO (fde_pc_type, fre_type))
++
++#define SFRAME_V3_FDE_FRE_TYPE(info)          (SFRAME_V2_FUNC_FRE_TYPE (info))
++#define SFRAME_V3_FDE_PC_TYPE(info)           (SFRAME_V2_FUNC_PC_TYPE (info))
++#define SFRAME_V3_AARCH64_FDE_PAUTH_KEY(info) (SFRAME_V2_FUNC_PAUTH_KEY (info))
++
++#define SFRAME_V3_FDE_UPDATE_PAUTH_KEY(pauth_key, info) \
++  SFRAME_V2_FUNC_INFO_UPDATE_PAUTH_KEY (pauth_key, info)
++
+ /* Size of stack frame offsets in an SFrame Frame Row Entry.  A single
+    SFrame FRE has all offsets of the same size.  Offset size may vary
+    across frame row entries.  */
+diff --git a/ld/testsuite/ld-aarch64/sframe-simple-1.d b/ld/testsuite/ld-aarch64/sframe-simple-1.d
+index 1ae73de2828..2b2fc0ef4ae 100644
+--- a/ld/testsuite/ld-aarch64/sframe-simple-1.d
++++ b/ld/testsuite/ld-aarch64/sframe-simple-1.d
+@@ -10,7 +10,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_SORTED,
+            SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 2
+diff --git a/ld/testsuite/ld-s390/sframe-plt-1.d b/ld/testsuite/ld-s390/sframe-plt-1.d
+index db09030cdc8..beaeb2cc3cd 100644
+--- a/ld/testsuite/ld-s390/sframe-plt-1.d
++++ b/ld/testsuite/ld-s390/sframe-plt-1.d
+@@ -10,7 +10,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_SORTED,
+            SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 4
+diff --git a/ld/testsuite/ld-s390/sframe-simple-1.d b/ld/testsuite/ld-s390/sframe-simple-1.d
+index 1c1bf324690..7a2f4c82051 100644
+--- a/ld/testsuite/ld-s390/sframe-simple-1.d
++++ b/ld/testsuite/ld-s390/sframe-simple-1.d
+@@ -10,7 +10,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_SORTED,
+            SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 4
+diff --git a/ld/testsuite/ld-x86-64/sframe-ibt-plt-1.d b/ld/testsuite/ld-x86-64/sframe-ibt-plt-1.d
+index 45bf99a5e42..531ea135495 100644
+--- a/ld/testsuite/ld-x86-64/sframe-ibt-plt-1.d
++++ b/ld/testsuite/ld-x86-64/sframe-ibt-plt-1.d
+@@ -9,7 +9,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_SORTED,
+            SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+diff --git a/ld/testsuite/ld-x86-64/sframe-plt-1.d b/ld/testsuite/ld-x86-64/sframe-plt-1.d
+index d23540ea907..7880c2b773f 100644
+--- a/ld/testsuite/ld-x86-64/sframe-plt-1.d
++++ b/ld/testsuite/ld-x86-64/sframe-plt-1.d
+@@ -10,7 +10,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_SORTED,
+            SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+diff --git a/ld/testsuite/ld-x86-64/sframe-pltgot-1.d b/ld/testsuite/ld-x86-64/sframe-pltgot-1.d
+index e2255b0ca0b..f2851254020 100644
+--- a/ld/testsuite/ld-x86-64/sframe-pltgot-1.d
++++ b/ld/testsuite/ld-x86-64/sframe-pltgot-1.d
+@@ -9,7 +9,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_SORTED,
+            SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+diff --git a/ld/testsuite/ld-x86-64/sframe-pltgot-2.d b/ld/testsuite/ld-x86-64/sframe-pltgot-2.d
+index 52e712b4a82..e8373ee5a1f 100644
+--- a/ld/testsuite/ld-x86-64/sframe-pltgot-2.d
++++ b/ld/testsuite/ld-x86-64/sframe-pltgot-2.d
+@@ -9,7 +9,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_SORTED,
+            SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+diff --git a/ld/testsuite/ld-x86-64/sframe-reloc-1.d b/ld/testsuite/ld-x86-64/sframe-reloc-1.d
+index d4915bd28f3..114a498b73b 100644
+--- a/ld/testsuite/ld-x86-64/sframe-reloc-1.d
++++ b/ld/testsuite/ld-x86-64/sframe-reloc-1.d
+@@ -10,7 +10,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+     Num FDEs: 2
+diff --git a/ld/testsuite/ld-x86-64/sframe-simple-1.d b/ld/testsuite/ld-x86-64/sframe-simple-1.d
+index bb4142ff560..981fc4815d5 100644
+--- a/ld/testsuite/ld-x86-64/sframe-simple-1.d
++++ b/ld/testsuite/ld-x86-64/sframe-simple-1.d
+@@ -10,7 +10,7 @@
+ Contents of the SFrame section .sframe:
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_SORTED,
+            SFRAME_F_FDE_FUNC_START_PCREL
+     CFA fixed RA offset: \-8
+diff --git a/libsframe/sframe-dump.c b/libsframe/sframe-dump.c
+index 1b12596f8ce..94e5a0a5213 100644
+--- a/libsframe/sframe-dump.c
++++ b/libsframe/sframe-dump.c
+@@ -90,7 +90,8 @@ dump_sframe_header (const sframe_decoder_ctx *sfd_ctx)
+   const char *version_names[]
+     = { "NULL",
+ 	"SFRAME_VERSION_1",
+-	"SFRAME_VERSION_2" };
++	"SFRAME_VERSION_2",
++	"SFRAME_VERSION_3" };
+ 
+   ver = sframe_decoder_get_version (sfd_ctx);
+   if (ver <= SFRAME_VERSION)
+@@ -268,12 +269,12 @@ dump_sframe_functions (const sframe_decoder_ctx *sfd_ctx, uint64_t sec_addr)
+ void
+ dump_sframe (const sframe_decoder_ctx *sfd_ctx, uint64_t sec_addr)
+ {
+-  uint8_t ver;
+-
+   dump_sframe_header (sfd_ctx);
+ 
+-  ver = sframe_decoder_get_version (sfd_ctx);
+-  if (ver == SFRAME_VERSION)
++  uint8_t ver = sframe_decoder_get_version (sfd_ctx);
++  /* Although newer gas and ld do not generate SFrame V2, continue to support
++     textual dump of SFrame V2 sections ATM.  */
++  if (ver == SFRAME_VERSION_3 || ver == SFRAME_VERSION_2)
+     dump_sframe_functions (sfd_ctx, sec_addr);
+   else
+     printf ("\n No further information can be displayed.  %s",
+diff --git a/libsframe/sframe.c b/libsframe/sframe.c
+index 543c9cb7f6a..e0648780d1c 100644
+--- a/libsframe/sframe.c
++++ b/libsframe/sframe.c
+@@ -141,14 +141,13 @@ static int
+ sframe_fde_tbl_init (sf_fde_tbl *fde_tbl, const char *fde_buf,
+ 		     size_t *fidx_size, unsigned int num_fdes, uint8_t ver)
+ {
+-  sframe_func_desc_entry_v2 *fdep = NULL;
+-
+-  if (ver == SFRAME_VERSION_2 && SFRAME_VERSION == SFRAME_VERSION_2)
++  if (ver == SFRAME_VERSION_3 && SFRAME_VERSION == SFRAME_VERSION_3)
+     {
+-      *fidx_size = num_fdes * sizeof (sframe_func_desc_entry_int);
++      *fidx_size = num_fdes * sizeof (sframe_func_desc_entry_v3);
+       for (unsigned int i = 0; i < num_fdes; i++)
+ 	{
+-	  fdep = (sframe_func_desc_entry_v2 *)fde_buf + i;
++	  const sframe_func_desc_entry_v3 *fdep
++	    = (sframe_func_desc_entry_v3 *)fde_buf + i;
+ 	  fde_tbl->entry[i].func_start_pc_offset = fdep->sfde_func_start_address;
+ 	  fde_tbl->entry[i].func_size = fdep->sfde_func_size;
+ 	  fde_tbl->entry[i].func_start_fre_off = fdep->sfde_func_start_fre_off;
+@@ -160,6 +159,23 @@ sframe_fde_tbl_init (sf_fde_tbl *fde_tbl, const char *fde_buf,
+     }
+   /* If ver is not the latest, read buffer manually and upgrade from
+      sframe_func_desc_entry_v2 to populate the sf_fde_tbl entries.  */
++  else if (ver == SFRAME_VERSION_2 && SFRAME_VERSION == SFRAME_VERSION_3)
++    {
++      *fidx_size = num_fdes * sizeof (sframe_func_desc_entry_v2);
++      for (unsigned int i = 0; i < num_fdes; i++)
++	{
++	  const sframe_func_desc_entry_v2 *fdep
++	    = (sframe_func_desc_entry_v2 *)fde_buf + i;
++	  fde_tbl->entry[i].func_start_pc_offset
++	    = fdep->sfde_func_start_address;
++	  fde_tbl->entry[i].func_size = fdep->sfde_func_size;
++	  fde_tbl->entry[i].func_start_fre_off = fdep->sfde_func_start_fre_off;
++	  fde_tbl->entry[i].func_num_fres = fdep->sfde_func_num_fres;
++	  fde_tbl->entry[i].func_info = fdep->sfde_func_info;
++	  fde_tbl->entry[i].func_rep_size = fdep->sfde_func_rep_size;
++	}
++      fde_tbl->count = num_fdes;
++    }
+   else
+     {
+       /* Not possible ATM.  */
+@@ -291,8 +307,17 @@ flip_header (char *buf, uint8_t ver ATTRIBUTE_UNUSED)
+ static int
+ flip_fde (char *buf, size_t buf_size, uint8_t ver, size_t *fde_size)
+ {
++  if (ver == SFRAME_VERSION_3)
++    {
++      sframe_func_desc_entry_v3 *fdep = (sframe_func_desc_entry_v3 *) buf;
++      swap_thing (fdep->sfde_func_start_address);
++      swap_thing (fdep->sfde_func_size);
++      swap_thing (fdep->sfde_func_start_fre_off);
++      swap_thing (fdep->sfde_func_num_fres);
+ 
+-  if (ver == SFRAME_VERSION_2)
++      *fde_size = sizeof (sframe_func_desc_entry_v3);
++    }
++  else if (ver == SFRAME_VERSION_2)
+     {
+       if (buf_size < sizeof (sframe_func_desc_entry_v2))
+ 	return SFRAME_ERR;
+@@ -319,7 +344,8 @@ sframe_header_sanity_check_p (const sframe_header *hp)
+   /* Check preamble is valid.  */
+   if (hp->sfh_preamble.sfp_magic != SFRAME_MAGIC
+       || (hp->sfh_preamble.sfp_version != SFRAME_VERSION_1
+-	  && hp->sfh_preamble.sfp_version != SFRAME_VERSION_2)
++	  && hp->sfh_preamble.sfp_version != SFRAME_VERSION_2
++	  && hp->sfh_preamble.sfp_version != SFRAME_VERSION_3)
+       || (hp->sfh_preamble.sfp_flags & ~SFRAME_V2_F_ALL_FLAGS))
+     return false;
+ 
+@@ -546,7 +572,19 @@ sframe_decode_fde (const char *buf, size_t buf_size, uint8_t ver,
+ 		   uint32_t *num_fres, uint32_t *fre_type,
+ 		   uint32_t *fre_offset, size_t *fde_size)
+ {
+-  if (ver == SFRAME_VERSION_2)
++  if (ver == SFRAME_VERSION_3)
++    {
++      if (buf_size < sizeof (sframe_func_desc_entry_v3))
++	return SFRAME_ERR;
++
++      sframe_func_desc_entry_v3 *fdep = (sframe_func_desc_entry_v3 *) buf;
++      *num_fres = fdep->sfde_func_num_fres;
++      *fre_type = SFRAME_V3_FDE_FRE_TYPE (fdep->sfde_func_info);
++      *fre_offset = fdep->sfde_func_start_fre_off;
++
++      *fde_size = sizeof (sframe_func_desc_entry_v3);
++    }
++  else if (ver == SFRAME_VERSION_2)
+     {
+       if (buf_size < sizeof (sframe_func_desc_entry_v2))
+ 	return SFRAME_ERR;
+@@ -1288,9 +1326,18 @@ sframe_decoder_get_offsetof_fde_start_addr (const sframe_decoder_ctx *dctx,
+   else if (errp)
+     *errp = 0;
+ 
+-  return (sframe_decoder_get_hdr_size (dctx)
+-	  + func_idx * sizeof (sframe_func_desc_entry_v2)
+-	  + offsetof (sframe_func_desc_entry_v2, sfde_func_start_address));
++  if (sframe_decoder_get_version (dctx) == SFRAME_VERSION_3)
++    return (sframe_decoder_get_hdr_size (dctx)
++	    + func_idx * sizeof (sframe_func_desc_entry_v3)
++	    + offsetof (sframe_func_desc_entry_v3, sfde_func_start_address));
++  else if (sframe_decoder_get_version (dctx) == SFRAME_VERSION_2)
++    return (sframe_decoder_get_hdr_size (dctx)
++	    + func_idx * sizeof (sframe_func_desc_entry_v2)
++	    + offsetof (sframe_func_desc_entry_v2, sfde_func_start_address));
++  else
++    sframe_ret_set_errno (errp, SFRAME_ERR_INVAL);
++
++  return 0;
+ }
+ 
+ /* Find the function descriptor entry starting which contains the specified
+@@ -1694,8 +1741,8 @@ sframe_encoder_get_offsetof_fde_start_addr (sframe_encoder_ctx *ectx,
+     *errp = 0;
+ 
+   return (sframe_encoder_get_hdr_size (ectx)
+-	  + func_idx * sizeof (sframe_func_desc_entry_v2)
+-	  + offsetof (sframe_func_desc_entry_v2, sfde_func_start_address));
++	  + func_idx * sizeof (sframe_func_desc_entry_v3)
++	  + offsetof (sframe_func_desc_entry_v3, sfde_func_start_address));
+ }
+ 
+ /* Add an SFrame FRE to function at FUNC_IDX'th function descriptor entry in
+@@ -2011,7 +2058,7 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
+ 			  char *contents, sframe_func_desc_entry_int *fde,
+ 			  size_t *fde_write_size)
+ {
+-  sframe_func_desc_entry_v2 *fdep = (sframe_func_desc_entry_v2 *)contents;
++  sframe_func_desc_entry_v3 *fdep = (sframe_func_desc_entry_v3 *)contents;
+ 
+   fdep->sfde_func_start_address = (int32_t)fde->func_start_pc_offset;
+   fdep->sfde_func_size = fde->func_size;
+@@ -2021,7 +2068,7 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
+   fdep->sfde_func_rep_size = fde->func_rep_size;
+   fdep->sfde_func_padding2 = 0;
+ 
+-  *fde_write_size = sizeof (sframe_func_desc_entry_v2);
++  *fde_write_size = sizeof (sframe_func_desc_entry_v3);
+ 
+   return 0;
+ }
+@@ -2053,7 +2100,7 @@ sframe_encoder_write_sframe (sframe_encoder_ctx *ectx, bool sort_fde_p)
+   contents = ectx->sfe_data;
+   buf_size = ectx->sfe_data_size;
+   num_fdes = sframe_encoder_get_num_fidx (ectx);
+-  all_fdes_size = num_fdes * sizeof (sframe_func_desc_entry_v2);
++  all_fdes_size = num_fdes * sizeof (sframe_func_desc_entry_v3);
+   ehp = sframe_encoder_get_header (ectx);
+   hdr_size = sframe_get_hdr_size (ehp);
+ 
+@@ -2160,7 +2207,7 @@ sframe_encoder_write (sframe_encoder_ctx *ectx, size_t *encoded_size,
+ 
+   ehp = sframe_encoder_get_header (ectx);
+   hdrsize = sframe_get_hdr_size (ehp);
+-  fsz = sframe_encoder_get_num_fidx (ectx) * sizeof (sframe_func_desc_entry_v2);
++  fsz = sframe_encoder_get_num_fidx (ectx) * sizeof (sframe_func_desc_entry_v3);
+   fresz = ectx->sfe_fre_nbytes;
+ 
+   /* Encoder writes out data in the latest SFrame format version.  */
+diff --git a/libsframe/testsuite/libsframe.decode/DATA2 b/libsframe/testsuite/libsframe.decode/DATA2
+index 90649e2716947e16bd51f42d8cb58ab75a69fd4f..aa62398b2ca115660338a00b76b4bcb351cedf3d 100644
+GIT binary patch
+delta 9
+QcmYdFVt#awc_MQ>01{>cegFUf
+
+delta 9
+QcmYdFVt#awX(Dqx01{#YeE<Le
+
+-- 
+2.52.0
+

@@ -1,0 +1,354 @@
+From e95919385584414c494c1a2219e72db68f1f049c Mon Sep 17 00:00:00 2001
+Message-ID: <e95919385584414c494c1a2219e72db68f1f049c.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Thu, 20 Nov 2025 09:32:32 -0800
+Subject: [PATCH 28/40] [SFrame-V3] bfd: ld: sframe: avoid unnecessary decoding
+ of SFrame FREs at link time
+
+At link time, in _bfd_elf_merge_section_sframe (), it suffices to bring
+over the function metadata (FDE attr and all FREs) as a blob into the
+SFrame encoder object.  There is no need to "decode" each SFrame FRE,
+only to add them in a serial fashion.
+
+This is an optimization, and not directly related to any SFrame V3
+related changes to the specification.  This should also bring us a step
+closer to supporting SFrame for targets which use linker relaxations.
+Removing the need to decode the input FREs can allow the linker to
+simply use the available set of FREs from (relocated) contents.  Other
+changes in the work done at SFrame parse time may also be necessary, but
+this brings us just a step closer.
+
+Add two new APIs to accomplish this:
+ - sframe_decoder_get_fres_buf, and
+ - sframe_encoder_add_fres_buf
+
+bfd/
+	* elf-sframe.c (_bfd_elf_merge_section_sframe): Get all FRE data
+	and add it all in bulk.
+libsframe/
+	* libsframe.ver: Add new APIs.
+	* sframe.c (sframe_buf_fre_entry_size): New internal API to get
+	size of one SFrame FRE at the indicated buffer location, without
+	fully "decoding" the SFrame FRE.
+	(sframe_decoder_get_fres_buf): New definition.
+	(sframe_encoder_add_fres_buf): New definition.
+include/
+	* sframe-api.h (sframe_decoder_get_fres_buf): New declaration.
+	(sframe_encoder_add_fres_buf): New declaration.
+
+---
+[No changes from RFC]
+---
+ bfd/elf-sframe.c        |  38 +++++------
+ include/sframe-api.h    |  23 +++++++
+ libsframe/libsframe.ver |   2 +
+ libsframe/sframe.c      | 143 ++++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 184 insertions(+), 22 deletions(-)
+
+diff --git a/bfd/elf-sframe.c b/bfd/elf-sframe.c
+index 1ef53120543..b5d1e28d5e2 100644
+--- a/bfd/elf-sframe.c
++++ b/bfd/elf-sframe.c
+@@ -475,7 +475,7 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
+   /* Iterate over the function descriptor entries and the FREs of the
+      function from the decoder context.  Add each of them to the encoder
+      context, if suitable.  */
+-  uint32_t i = 0, j = 0, cur_fidx = 0;
++  uint32_t i = 0, cur_fidx = 0;
+ 
+   uint32_t num_fidx = sframe_decoder_get_num_fidx (sfd_ctx);
+   uint32_t num_enc_fidx = sframe_encoder_get_num_fidx (sfe_ctx);
+@@ -487,16 +487,12 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
+       int64_t func_start_addr;
+       bfd_vma address;
+       uint32_t func_size = 0;
+-      unsigned char func_info = 0;
+-      unsigned char func_info2 = 0;
+       unsigned int r_offset = 0;
+       bool pltn_reloc_by_hand = false;
+       unsigned int pltn_r_offset = 0;
+-      uint8_t rep_block_size = 0;
+ 
+       if (!sframe_decoder_get_funcdesc_v3 (sfd_ctx, i, &num_fres, &func_size,
+-					   &func_start_addr, &func_info,
+-					   &func_info2, &rep_block_size))
++					   &func_start_addr, NULL, NULL, NULL))
+ 	{
+ 	  /* If function belongs to a deleted section, skip editing the
+ 	     function descriptor entry.  */
+@@ -560,27 +556,25 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
+ 	      func_start_addr = address;
+ 	    }
+ 
+-	  /* Update the encoder context with updated content.  */
+-	  int err = sframe_encoder_add_funcdesc_v3 (sfe_ctx, func_start_addr,
+-						    func_size, func_info,
+-						    func_info2, rep_block_size,
+-						    num_fres);
++	  /* Update the encoder context with FDE index entry.  */
++	  int err = sframe_encoder_add_funcdesc (sfe_ctx, func_start_addr,
++						 func_size);
+ 	  cur_fidx++;
+ 	  BFD_ASSERT (!err);
+ 	}
+ 
+-      for (j = 0; j < num_fres; j++)
+-	{
+-	  sframe_frame_row_entry fre;
+-	  if (!sframe_decoder_get_fre (sfd_ctx, i, j, &fre))
+-	    {
+-	      int err = sframe_encoder_add_fre (sfe_ctx,
+-						cur_fidx-1+num_enc_fidx,
+-						&fre);
+-	      BFD_ASSERT (!err);
+-	    }
+-	}
++      uint32_t fde_num_fres = 0;
++      char *fres_buf = NULL;
++      size_t fres_buf_size = 0;
++
++      int err = sframe_decoder_get_fres_buf (sfd_ctx, i, &fres_buf,
++					     &fres_buf_size, &fde_num_fres);
++      BFD_ASSERT (!err && fde_num_fres == num_fres);
++      err = sframe_encoder_add_fres_buf (sfe_ctx, cur_fidx - 1 + num_enc_fidx,
++					 num_fres, fres_buf, fres_buf_size);
++      BFD_ASSERT (!err);
+     }
++
+   sfd_info->sfd_state = SFRAME_SEC_MERGED;
+   /* Free the SFrame decoder context.  */
+   sframe_decoder_free (&sfd_ctx);
+diff --git a/include/sframe-api.h b/include/sframe-api.h
+index 825cef154a6..3ce5f9c9e75 100644
+--- a/include/sframe-api.h
++++ b/include/sframe-api.h
+@@ -169,6 +169,19 @@ sframe_decoder_get_fre (const sframe_decoder_ctx *ctx,
+ 			unsigned int fre_idx,
+ 			sframe_frame_row_entry *fre);
+ 
++/* Get the SFrame FRE data of the function at FUNC_IDX'th function index entry
++   in the SFrame decoder DCTX.  The reference to the buffer is returned in
++   FRES_BUF with FRES_BUF_SIZE indicating the size of the buffer.  The number
++   of FREs in the buffer are NUM_FRES.  In SFrame V3, this buffer also contains
++   the FDE attr data before the actual SFrame FREs.  Returns SFRAME_ERR in case
++   of error.  */
++extern int
++sframe_decoder_get_fres_buf (const sframe_decoder_ctx *dctx,
++			     uint32_t func_idx,
++			     char **fres_buf,
++			     size_t *fres_buf_size,
++			     uint32_t *num_fres);
++
+ /* Get the data (NUM_FRES, FUNC_SIZE, FUNC_START_ADDRESS, FUNC_INFO,
+    REP_BLOCK_SIZE) from the function descriptor entry at index I'th
+    in the decoder CTX.  If failed, return error code.
+@@ -299,6 +312,16 @@ sframe_encoder_add_fre (sframe_encoder_ctx *ectx,
+ 			unsigned int func_idx,
+ 			sframe_frame_row_entry *frep);
+ 
++/* Add SFrame FRE data given in the buffer FRES_BUF of size FRES_BUF_SIZE (for
++   function at index FUNC_IDX) to the encoder context ECTX.  The number of FREs
++   in the buffer are NUM_FRES.  */
++int
++sframe_encoder_add_fres_buf (sframe_encoder_ctx *ectx,
++			     unsigned int func_idx,
++			     uint32_t num_fres,
++			     const char *fres_buf,
++			     size_t fres_buf_size);
++
+ /* Add a new SFrame function descriptor entry with START_ADDR and FUNC_SIZE to
+    the encoder context ECTX.  */
+ extern int
+diff --git a/libsframe/libsframe.ver b/libsframe/libsframe.ver
+index f6dbde273de..8bad0e733f5 100644
+--- a/libsframe/libsframe.ver
++++ b/libsframe/libsframe.ver
+@@ -25,6 +25,7 @@ LIBSFRAME_3.0 {
+     sframe_decoder_get_funcdesc_v2;
+     sframe_decoder_get_funcdesc_v3;
+     sframe_decoder_get_fre;
++    sframe_decoder_get_fres_buf;
+     sframe_encode;
+     sframe_encoder_free;
+     sframe_encoder_get_flags;
+@@ -37,6 +38,7 @@ LIBSFRAME_3.0 {
+     sframe_encoder_add_funcdesc;
+     sframe_encoder_add_funcdesc_v2;
+     sframe_encoder_add_funcdesc_v3;
++    sframe_encoder_add_fres_buf;
+     sframe_encoder_write;
+     dump_sframe;
+     sframe_errmsg;
+diff --git a/libsframe/sframe.c b/libsframe/sframe.c
+index 8d5dba76f2c..439ff70b0ce 100644
+--- a/libsframe/sframe.c
++++ b/libsframe/sframe.c
+@@ -482,6 +482,21 @@ sframe_fre_entry_size (sframe_frame_row_entry *frep, uint32_t fre_type)
+ 	  + sframe_fre_offset_bytes_size (fre_info));
+ }
+ 
++/* Get total size in bytes in the SFrame FRE at FRE_BUF location, given the
++   type of FRE as FRE_TYPE.  */
++
++static size_t
++sframe_buf_fre_entry_size (const char *fre_buf, uint32_t fre_type)
++{
++  if (fre_buf == NULL)
++    return 0;
++
++  size_t addr_size = sframe_fre_start_addr_size (fre_type);
++  uint8_t fre_info = *(uint8_t *)(fre_buf + addr_size);
++
++  return (addr_size + sizeof (fre_info)
++	  + sframe_fre_offset_bytes_size (fre_info));
++}
+ /* Get the function descriptor entry at index FUNC_IDX in the decoder
+    context CTX.  */
+ 
+@@ -1663,6 +1678,52 @@ sframe_decoder_get_fre (const sframe_decoder_ctx *ctx,
+   return sframe_set_errno (&err, SFRAME_ERR_FDE_NOTFOUND);
+ }
+ 
++/* Get the SFrame FRE data of the function at FUNC_IDX'th function index entry
++   in the SFrame decoder DCTX.  The reference to the buffer is returned in
++   FRES_BUF with FRES_BUF_SIZE indicating the size of the buffer.  The number
++   of FREs in the buffer are NUM_FRES.  In SFrame V3, this buffer also contains
++   the FDE attr data before the actual SFrame FREs.  Returns SFRAME_ERR in case
++   of error.  */
++
++int
++sframe_decoder_get_fres_buf (const sframe_decoder_ctx *dctx,
++			     const uint32_t func_idx,
++			     char **fres_buf,
++			     size_t *fres_buf_size,
++			     uint32_t *num_fres)
++{
++  sframe_func_desc_entry_int *fdep;
++  uint32_t i = 0;
++  uint32_t fre_type;
++  size_t esz;
++  int err = 0;
++
++  if (dctx == NULL || fres_buf == NULL)
++    return sframe_set_errno (&err, SFRAME_ERR_INVAL);
++
++  /* Get function descriptor entry at index func_idx.  */
++  fdep = sframe_decoder_get_funcdesc_at_index (dctx, func_idx);
++  *num_fres = fdep->func_num_fres;
++
++  if (fdep == NULL)
++    return sframe_set_errno (&err, SFRAME_ERR_FDE_NOTFOUND);
++
++  fre_type = sframe_get_fre_type (fdep);
++  /* Update the pointer to (and total size of) the FRE entries.  */
++  *fres_buf = dctx->sfd_fres + fdep->func_start_fre_off;
++  const char *tmp_buf = *fres_buf;
++  while (i < *num_fres)
++    {
++      /* Avoid cost of full decoding at this time.  */
++      esz = sframe_buf_fre_entry_size (tmp_buf, fre_type);
++      tmp_buf += esz;
++      *fres_buf_size += esz;
++      i++;
++    }
++
++  return 0;
++}
++
+ 
+ /* SFrame Encoder.  */
+ 
+@@ -1913,6 +1974,88 @@ bad:
+   return -1;
+ }
+ 
++/* Add SFrame FRE data given in the buffer FRES_BUF of size FRES_BUF_SIZE (for
++   function at index FUNC_IDX) to the encoder context ECTX.  The number of FREs
++   in the buffer are NUM_FRES.  Returns SFRAME_ERR if failure.  */
++
++int
++sframe_encoder_add_fres_buf (sframe_encoder_ctx *ectx,
++			     unsigned int func_idx,
++			     uint32_t num_fres,
++			     const char *fres_buf,
++			     size_t fres_buf_size)
++{
++  sframe_frame_row_entry *ectx_frep;
++  size_t esz = 0;
++
++  int err = 0;
++  if (ectx == NULL || ((fres_buf == NULL) != (fres_buf_size == 0)))
++    return sframe_set_errno (&err, SFRAME_ERR_INVAL);
++
++  /* Use func_idx to gather the function descriptor entry.  */
++  sframe_func_desc_entry_int *fdep
++    = sframe_encoder_get_funcdesc_at_index (ectx, func_idx);
++  if (fdep == NULL)
++    return sframe_set_errno (&err, SFRAME_ERR_FDE_NOTFOUND);
++
++  sf_fre_tbl *fre_tbl = ectx->sfe_fres;
++  if (fre_tbl == NULL || fre_tbl->count + num_fres >= fre_tbl->alloced)
++    {
++      sf_fre_tbl *tmp = sframe_grow_fre_tbl (fre_tbl, num_fres, &err);
++      if (err)
++	{
++	  sframe_set_errno (&err, SFRAME_ERR_NOMEM);
++	  goto bad;		/* OOM.  */
++	}
++      fre_tbl = tmp;
++    }
++
++  uint32_t fre_type = sframe_get_fre_type (fdep);
++  uint32_t remaining = num_fres;
++  size_t buf_size = 0;
++  while (remaining)
++    {
++      ectx_frep = &fre_tbl->entry[fre_tbl->count];
++      /* Copy the SFrame FRE data over to the encoder object's fre_tbl.  */
++      sframe_decode_fre (fres_buf, ectx_frep, fre_type, &esz);
++
++      if (!sframe_fre_sanity_check_p (ectx_frep))
++	return sframe_set_errno (&err, SFRAME_ERR_FRE_INVAL);
++
++      /* Although a stricter sanity check on fre_start_addr like:
++	   if (fdep->func_size)
++	     sframe_assert (frep->fre_start_addr < fdep->func_size);
++	 is more suitable, some code has been seen to not abide by it.  See PR
++	 libsframe/33131.  */
++      sframe_assert (ectx_frep->fre_start_addr <= fdep->func_size);
++
++      ectx->sfe_fre_nbytes += esz;
++
++      fre_tbl->count++;
++      fres_buf += esz;
++      buf_size += esz;
++      remaining--;
++    }
++
++  sframe_assert (fres_buf_size == buf_size);
++  ectx->sfe_fres = fre_tbl;
++
++  sframe_header *ehp = sframe_encoder_get_header (ectx);
++  ehp->sfh_num_fres = fre_tbl->count;
++
++  /* Update the value of the number of FREs for the function.  */
++  fdep->func_num_fres = num_fres;
++
++  return 0;
++
++bad:
++  if (fre_tbl != NULL)
++    free (fre_tbl);
++  ectx->sfe_fres = NULL;
++  ectx->sfe_fre_nbytes = 0;
++  return -1;
++}
++
+ /* Add a new SFrame function descriptor entry with START_ADDR, FUNC_SIZE and
+    FUNC_INFO to the encoder context ECTX.  Caller must make sure that ECTX
+    exists.  */
+-- 
+2.52.0
+

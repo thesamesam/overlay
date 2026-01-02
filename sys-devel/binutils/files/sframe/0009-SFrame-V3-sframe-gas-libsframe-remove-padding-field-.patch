@@ -1,0 +1,86 @@
+From e87b9b34ce5d79f1bc64679f7e1482c61a50cd51 Mon Sep 17 00:00:00 2001
+Message-ID: <e87b9b34ce5d79f1bc64679f7e1482c61a50cd51.1767385714.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Fri, 28 Nov 2025 12:31:17 -0800
+Subject: [PATCH 09/40] [SFrame-V3] sframe: gas: libsframe: remove padding
+ field from FDE
+
+Remove the unused sfde_func_padding2 member from the
+sframe_func_desc_entry_v3 structure.
+
+A later patch in this series reorganizes the members of the FDE
+structure in a way explicit padding is no longer necessary to keep
+natural alignment.  So remove the explicit padding now.
+
+Reviewed-by: Jens Remus <jremus@linux.ibm.com>
+
+include/
+	* sframe.h: Remove sfde_func_padding2 from
+	sframe_func_desc_entry_v3.
+gas/
+	* gen-sframe.c (output_sframe_funcdesc): Stop writing
+	sfde_func_padding2.
+libsframe/
+	* sframe.c (sframe_encoder_write_fde): Stop writing
+	sfde_func_padding2.
+	* testsuite/libsframe.decode/DATA2: Regenerate binary test data.
+
+---
+[No changes since RFC]
+---
+ gas/gen-sframe.c                           |   1 -
+ include/sframe.h                           |   1 -
+ libsframe/sframe.c                         |   1 -
+ libsframe/testsuite/libsframe.decode/DATA2 | Bin 94 -> 90 bytes
+ 4 files changed, 3 deletions(-)
+
+diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
+index 7f2636477aa..dfd7f420066 100644
+--- a/gas/gen-sframe.c
++++ b/gas/gen-sframe.c
+@@ -748,7 +748,6 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+   else
+     out_one (func_info);
+   out_one (0);
+-  out_two (0);
+ }
+ 
+ static void
+diff --git a/include/sframe.h b/include/sframe.h
+index 118fa125835..daf5918ec3f 100644
+--- a/include/sframe.h
++++ b/include/sframe.h
+@@ -266,7 +266,6 @@ typedef struct sframe_func_desc_entry_v3
+   /* Size of the block of repeating insns.  Used for SFrame FDEs of type
+      SFRAME_FDE_TYPE_PCMASK.  */
+   uint8_t sfde_func_rep_size;
+-  uint16_t sfde_func_padding2;
+ } ATTRIBUTE_PACKED sframe_func_desc_entry_v3;
+ 
+ #define SFRAME_V3_FDE_FUNC_INFO(fde_pc_type, fre_type) \
+diff --git a/libsframe/sframe.c b/libsframe/sframe.c
+index cf0071e75ff..0f1e4412cb4 100644
+--- a/libsframe/sframe.c
++++ b/libsframe/sframe.c
+@@ -2134,7 +2134,6 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
+   fdep->sfde_func_num_fres = (uint16_t)fde->func_num_fres;
+   fdep->sfde_func_info = fde->func_info;
+   fdep->sfde_func_rep_size = fde->func_rep_size;
+-  fdep->sfde_func_padding2 = 0;
+ 
+   *fde_write_size = sizeof (sframe_func_desc_entry_v3);
+ 
+diff --git a/libsframe/testsuite/libsframe.decode/DATA2 b/libsframe/testsuite/libsframe.decode/DATA2
+index 7a218f86bcce9e3a6e3446c7c725dfedbd6d687b..b1069c3c4d106a6d6985832fa8c1610548155b90 100644
+GIT binary patch
+delta 41
+mcma!xnjoR5z`($u^x^-1X&?;(EI_Oa<O=|4eh`16ts(%<zzF^T
+
+delta 45
+ncma!wn;@a8!oa|w^x^-1X&?;(EMQU_C?Wu4@k2x=S}Fnn>68fo
+
+-- 
+2.52.0
+

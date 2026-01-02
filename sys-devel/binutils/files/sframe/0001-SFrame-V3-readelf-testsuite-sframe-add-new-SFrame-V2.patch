@@ -1,0 +1,634 @@
+From 04d5b2fb02b9e46296d674eff569ef86bbb7a94d Mon Sep 17 00:00:00 2001
+Message-ID: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Fri, 5 Dec 2025 12:24:30 -0800
+Subject: [PATCH 01/40] [SFrame-V3] readelf: testsuite: sframe: add new SFrame
+ V2 test
+
+In subsequent commits, we will add support for SFrame V3.  In the next
+GNU Binutils release, GNU as and ld will only generate SFrame V3; SFrame
+V2 will not be supported for generation nor linking.
+
+For readelf/objdump, however, continue to support textual dump of SFrame
+V2 sections.  Add a binary file (with no debug data) with SFrame V2
+section to keep the dumping tested.
+
+Add ET_REL And ET_EXEC binary file based tests for x86_64 and s390x.
+Check that both readelf and objdump works on the SFrame V2 sections.
+
+binutils/testsuite/
+	* binutils-all/s390/README-sframe-tests: New test.
+	* binutils-all/s390/sframe.exp: New test.
+	* binutils-all/s390/test-v2-ET_EXEC.sframe.bz2: New test.
+	* binutils-all/s390/test-v2-ET_EXEC.sframe.dump: New test.
+	* binutils-all/s390/test-v2-ET_REL.sframe.bz2: New test.
+	* binutils-all/s390/test-v2-ET_REL.sframe.dump: New test.
+	* binutils-all/x86-64/README-sframe-tests: New test.
+	* binutils-all/x86-64/sframe.exp: New test.
+	* binutils-all/x86-64/test-v2-ET_EXEC.sframe.bz2: New test.
+	* binutils-all/x86-64/test-v2-ET_EXEC.sframe.dump: New test.
+	* binutils-all/x86-64/test-v2-ET_REL.sframe.bz2: New test.
+	* binutils-all/x86-64/test-v2-ET_REL.sframe.dump: New test.
+
+---
+[Changes from RFC]
+  - Use regexp_diff for the testcases [Indu].
+  - Add binary data based (ET_REL and ET_EXEC) tests for s390x [Jan,
+    Jens].
+  - Add objdump to the testcase as well [Jan].
+  - Add a README-sframe-tests file containing the instructions to
+    recreate the binary data files [Jan].
+[End of changes from RFC]
+---
+ .../binutils-all/s390/README-sframe-tests     |   8 +++
+ .../testsuite/binutils-all/s390/sframe.exp    |  63 ++++++++++++++++++
+ .../s390/test-v2-ET_EXEC.sframe.bz2           | Bin 0 -> 4094 bytes
+ .../s390/test-v2-ET_EXEC.sframe.dump          |  41 ++++++++++++
+ .../s390/test-v2-ET_REL.sframe.bz2            | Bin 0 -> 748 bytes
+ .../s390/test-v2-ET_REL.sframe.dump           |  24 +++++++
+ .../binutils-all/x86-64/README-sframe-tests   |  53 +++++++++++++++
+ .../testsuite/binutils-all/x86-64/sframe.exp  |  63 ++++++++++++++++++
+ .../x86-64/test-v2-ET_EXEC.sframe.bz2         | Bin 0 -> 2739 bytes
+ .../x86-64/test-v2-ET_EXEC.sframe.dump        |  42 ++++++++++++
+ .../x86-64/test-v2-ET_REL.sframe.bz2          | Bin 0 -> 728 bytes
+ .../x86-64/test-v2-ET_REL.sframe.dump         |  23 +++++++
+ 12 files changed, 317 insertions(+)
+ create mode 100644 binutils/testsuite/binutils-all/s390/README-sframe-tests
+ create mode 100644 binutils/testsuite/binutils-all/s390/sframe.exp
+ create mode 100644 binutils/testsuite/binutils-all/s390/test-v2-ET_EXEC.sframe.bz2
+ create mode 100644 binutils/testsuite/binutils-all/s390/test-v2-ET_EXEC.sframe.dump
+ create mode 100644 binutils/testsuite/binutils-all/s390/test-v2-ET_REL.sframe.bz2
+ create mode 100644 binutils/testsuite/binutils-all/s390/test-v2-ET_REL.sframe.dump
+ create mode 100644 binutils/testsuite/binutils-all/x86-64/README-sframe-tests
+ create mode 100644 binutils/testsuite/binutils-all/x86-64/sframe.exp
+ create mode 100644 binutils/testsuite/binutils-all/x86-64/test-v2-ET_EXEC.sframe.bz2
+ create mode 100644 binutils/testsuite/binutils-all/x86-64/test-v2-ET_EXEC.sframe.dump
+ create mode 100644 binutils/testsuite/binutils-all/x86-64/test-v2-ET_REL.sframe.bz2
+ create mode 100644 binutils/testsuite/binutils-all/x86-64/test-v2-ET_REL.sframe.dump
+
+diff --git a/binutils/testsuite/binutils-all/s390/README-sframe-tests b/binutils/testsuite/binutils-all/s390/README-sframe-tests
+new file mode 100644
+index 00000000000..38162d4e78d
+--- /dev/null
++++ b/binutils/testsuite/binutils-all/s390/README-sframe-tests
+@@ -0,0 +1,8 @@
++The tests in sframe.exp use binary data files:
++  - test-v2-ET_EXEC.sframe.bz2
++  - test-v2-ET_REL.sframe.bz2
++These files are generated using a as/ld supporting SFrame V2 sections (Binutils
++<= 2.45).  The purpose of those tests is to make sure readelf/objdump support
++works for SFrame V2.
++
++The binary files are generated using the steps outlined in x86_64/README-sframe-tests.
+diff --git a/binutils/testsuite/binutils-all/s390/sframe.exp b/binutils/testsuite/binutils-all/s390/sframe.exp
+new file mode 100644
+index 00000000000..569b59abcd1
+--- /dev/null
++++ b/binutils/testsuite/binutils-all/s390/sframe.exp
+@@ -0,0 +1,63 @@
++# Expect script for s390 object tests for SFrame.
++#   Copyright (C) 2025 Free Software Foundation, Inc.
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
++# MA 02110-1301, USA.
++
++if {![istarget "s390x-*-linux*"] || [is_remote host]} {
++    return
++}
++
++set tempfile tmpdir/sframe-testbin
++
++set test_list [lsort [glob -nocomplain $srcdir/$subdir/*.sframe.bz2]]
++foreach t $test_list {
++    # We need to strip the ".bz2", but can leave the dirname.
++    set test $subdir/[file tail $t]
++    set testname [file rootname $test]
++    verbose $testname
++
++    # We will check against the expected output in file named ${dumpfile}.dump
++    set dumpfile [file rootname $t]
++
++    if {[catch "system \"bzip2 -dc $t > $tempfile\""] != 0} {
++	untested "bzip2 -dc ($tempfile)"
++	continue
++    }
++
++    # Check readelf output of SFrame V2 sections.
++    set got [remote_exec host "$READELF --sframe $tempfile" "" "/dev/null" "${tempfile}.out"]
++    if { [lindex $got 0] != 0 || ![string match "" [lindex $got 1]] } then {
++	fail "readelf SFrame V2 ($testname)"
++	continue
++    }
++
++    if { [regexp_diff "${tempfile}.out" "${dumpfile}.dump"] } then {
++	fail "readelf SFrame V2 ($testname)"
++    }
++    pass "readelf SFrame V2 ($testname)"
++
++    # Check objdump output of SFrame V2 sections as well.
++    set got [remote_exec host "$OBJDUMP --sframe $tempfile" "" "/dev/null" "${tempfile}.out"]
++    if { [lindex $got 0] != 0 || ![string match "" [lindex $got 1]] } then {
++	fail "objdump SFrame V2 ($testname)"
++	continue
++    }
++
++    if { [regexp_diff "${tempfile}.out" "${dumpfile}.dump"] } then {
++	fail "objdump SFrame V2 ($testname)"
++    }
++    pass "objdump SFrame V2 ($testname)"
++}
+diff --git a/binutils/testsuite/binutils-all/s390/test-v2-ET_EXEC.sframe.bz2 b/binutils/testsuite/binutils-all/s390/test-v2-ET_EXEC.sframe.bz2
+new file mode 100644
+index 0000000000000000000000000000000000000000..00fad8bd1ce3b151ce146f6d7019d1ce5acfd333
+GIT binary patch
+literal 4094
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/binutils/testsuite/binutils-all/s390/test-v2-ET_EXEC.sframe.dump b/binutils/testsuite/binutils-all/s390/test-v2-ET_EXEC.sframe.dump
+new file mode 100644
+index 00000000000..e67dda5f8f7
+--- /dev/null
++++ b/binutils/testsuite/binutils-all/s390/test-v2-ET_EXEC.sframe.dump
+@@ -0,0 +1,41 @@
++#...
++Contents of the SFrame section .sframe:
++  Header :
++
++    Version: SFRAME_VERSION_2
++    Flags: SFRAME_F_FDE_SORTED,
++           SFRAME_F_FDE_FUNC_START_PCREL
++    Num FDEs: 6
++    Num FREs: 12
++
++  Function Index :
++
++    func idx \[0\]: pc = 0x10004a0, size = 32 bytes
++    STARTPC +CFA +FP +RA +
++    00000000010004a0 +sp\+160 +u +u +
++
++    func idx \[1\]: pc = 0x10004c0, size = 64 bytes
++    STARTPC\[m\] +CFA +FP +RA +
++    0000000000000000 +sp\+160 +u +u +
++
++    func idx \[2\]: pc = 0x1000500, size = 46 bytes
++    STARTPC +CFA +FP +RA +
++    0000000001000500 +sp\+160 +u +u +
++    0000000001000506 +sp\+160 +u +c-48 +
++    000000000100050a +sp\+320 +u +c-48 +
++    000000000100052c +sp\+160 +u +u +
++
++    func idx \[3\]: pc = 0x1000620, size = 38 bytes
++    STARTPC +CFA +FP +RA +
++    0000000001000620 +sp\+160 +u +u +
++    0000000001000626 +sp\+160 +u +c-48 +
++    000000000100062a +sp\+832 +u +c-48 +
++    0000000001000644 +sp\+160 +u +u +
++
++    func idx \[4\]: pc = 0x1000648, size = 10 bytes
++    STARTPC +CFA +FP +RA +
++    0000000001000648 +sp\+160 +u +u +
++
++    func idx \[5\]: pc = 0x1000658, size = 24 bytes
++    STARTPC +CFA +FP +RA +
++    0000000001000658 +sp\+160 +u +u +
+diff --git a/binutils/testsuite/binutils-all/s390/test-v2-ET_REL.sframe.bz2 b/binutils/testsuite/binutils-all/s390/test-v2-ET_REL.sframe.bz2
+new file mode 100644
+index 0000000000000000000000000000000000000000..1cc0050f1e088e1949110a234dd5128ed0db4f60
+GIT binary patch
+literal 748
+zcmV<I0u%j0T4*^jL0KkKSvTGvJ^%unfA|0Y{Y+KodUS8aUR3{Y{&>JafIvWiKtsR*
+z8VKx4zyea@izx<(LS!RGO%18(7@BAe21Y@kXf$XVWND$JKn)C;2C3y5o`m%?P-u++
+zG|&cyfB+f;LroeP27u524geZypa94K0B8UJXaE6_01XWQ5+yW~${wLVR57GBlhPV!
+zFqt%Iqb7jKr>Fn}O*AynGH8+MEQJQ@&P`^Vbe$5*>5&%id66g-c`l3=#O6(czL+Cd
+zMEYv4-f#h{VP9yuDnzE(AY`||pKFsTQg<l4s76JbG%}cm_tT}{GU4SzlI?)$KJfxo
+zlOTm?`IGcG=W26JXa~8iB%n+{APL@&FV*v&(PXtX7}QK@G##6+71WR?*W~C=li<BH
+zWl94{hhm$#ty!-Unx$e=ZUI+r5StrG3A8q%Atc*lX$i1G)oCk@APj-Ap-5=}aq!SU
+znKBbWij>n_c4hVHS3qQ-L4=WEuK0Yb6tG}v&!Cbc$bI>dEJK|(HcwVyrrj5Gigh^8
+zH|9R`kg~Z&#+2CYAiZfKriRlZD`8zOEL94_0<wtQA}DNWRk%kQ;R1%L9f5GdIxI%8
+z(nOwvlSkKd_7edroIU$yYY_|6c`~9w1esvQLP(4*+5`5{g(-@?vuk5E$Vo#pB^JM}
+zWwwoq=F_K{S9QY3&wOPN(jdVRnaeSq3@C?FFIbQe&<TC!m(2t>q`Z(GHd^=_b=$U%
+zA$uUlaYu+$>o}_`wCPe6=G|8pxpip3%zPjVIFUk?^b-`I$uu2<`-w&1Yoa1yfP^s`
+z2q{IF!WmnX&Go_o)`FVi_czkZtvdqZFo^f7{U0%7IRJ5BR41e@goAwo3M#1F*hwp*
+z6d-&VC=iyA;zJ1mYs~0Dm6HO1L*RJyhCoAfDTf*Kq!b;b>NC@5T5;<F*Ny$P4kC(y
+eef$N%yDbz<(Aa;rE{2wm{x0N-aG@Y?ygq!HrcCDm
+
+literal 0
+HcmV?d00001
+
+diff --git a/binutils/testsuite/binutils-all/s390/test-v2-ET_REL.sframe.dump b/binutils/testsuite/binutils-all/s390/test-v2-ET_REL.sframe.dump
+new file mode 100644
+index 00000000000..30b26026b8d
+--- /dev/null
++++ b/binutils/testsuite/binutils-all/s390/test-v2-ET_REL.sframe.dump
+@@ -0,0 +1,24 @@
++#...
++Contents of the SFrame section .sframe:
++  Header :
++
++    Version: SFRAME_VERSION_2
++    Flags: SFRAME_F_FDE_FUNC_START_PCREL
++    Num FDEs: 2
++    Num FREs: 8
++
++  Function Index :
++
++    func idx \[0\]: pc = 0x0, size = 38 bytes
++    STARTPC +CFA +FP +RA +
++    0000000000000000 +sp\+160 +u +u +
++    0000000000000006 +sp\+160 +u +c-48 +
++    000000000000000a +sp\+832 +u +c-48 +
++    0000000000000024 +sp\+160 +u +u +
++
++    func idx \[1\]: pc = 0x0, size = 46 bytes
++    STARTPC +CFA +FP +RA +
++    0000000000000000 +sp\+160 +u +u +
++    0000000000000006 +sp\+160 +u +c-48 +
++    000000000000000a +sp\+320 +u +c-48 +
++    000000000000002c +sp\+160 +u +u +
+diff --git a/binutils/testsuite/binutils-all/x86-64/README-sframe-tests b/binutils/testsuite/binutils-all/x86-64/README-sframe-tests
+new file mode 100644
+index 00000000000..312e361d7a0
+--- /dev/null
++++ b/binutils/testsuite/binutils-all/x86-64/README-sframe-tests
+@@ -0,0 +1,53 @@
++The tests in sframe.exp use binary data files:
++  - test-v2-ET_EXEC.sframe.bz2
++  - test-v2-ET_REL.sframe.bz2
++These files are generated using a as/ld supporting SFrame V2 sections (Binutils
++<= 2.45).  The purpose of those tests is to make sure readelf/objdump support
++works for SFrame V2.
++
++The binary files are generated using the following steps.
++
++$ cat fake_sort.c
++/* Keep noinline to ensure a separate FDE is generated */
++void __attribute__ ((noinline))
++swapit (int *a, int *b)
++{
++  *a = *b;
++}
++
++void fake_sort (int *a, int n)
++{
++  if (n > 0)
++    swapit (&a[0], &a[n-1]);
++}
++
++$ cat sort.c
++#include <stdio.h>
++
++#define ARRAY_LEN 128
++
++void fake_sort (int *a, int n);
++
++void sort_array (void)
++{
++  volatile int data[ARRAY_LEN];
++  fake_sort ((int *)data, ARRAY_LEN);
++}
++
++int main (void)
++{
++  sort_array ();
++  /* for plt.  */
++  printf ("done");
++  return 0;
++}
++
++$ gcc -c sort.c -O2 -Wa,--gsframe 
++$ gcc -c fake_sort.c -O2 -Wa,--gsframe 
++$ gcc sort.o fake_sort.o -o sort -O2 -Wa,--gsframe 
++
++$ objcopy --dump-section .sframe=test-v2-ET_EXEC.sframe sort
++$ bzip2 test-v2-ET_EXEC.sframe
++
++$ objcopy --dump-section .sframe=test-v2-ET_REL.sframe sort.o
++$ bzip2 test-v2-ET_REL.sframe
+diff --git a/binutils/testsuite/binutils-all/x86-64/sframe.exp b/binutils/testsuite/binutils-all/x86-64/sframe.exp
+new file mode 100644
+index 00000000000..f5c14bc326a
+--- /dev/null
++++ b/binutils/testsuite/binutils-all/x86-64/sframe.exp
+@@ -0,0 +1,63 @@
++# Expect script for x86-64 object tests for SFrame.
++#   Copyright (C) 2025 Free Software Foundation, Inc.
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
++# MA 02110-1301, USA.
++
++if {![istarget "x86_64-*-linux*"] || [is_remote host]} {
++    return
++}
++
++set tempfile tmpdir/sframe-testbin
++
++set test_list [lsort [glob -nocomplain $srcdir/$subdir/*.sframe.bz2]]
++foreach t $test_list {
++    # We need to strip the ".bz2", but can leave the dirname.
++    set test $subdir/[file tail $t]
++    set testname [file rootname $test]
++    verbose $testname
++
++    # We will check against the expected output in file named ${dumpfile}.dump
++    set dumpfile [file rootname $t]
++
++    if {[catch "system \"bzip2 -dc $t > $tempfile\""] != 0} {
++	untested "bzip2 -dc ($tempfile)"
++	continue
++    }
++
++    # Check readelf output of SFrame V2 sections.
++    set got [remote_exec host "$READELF --sframe $tempfile" "" "/dev/null" "${tempfile}.out"]
++    if { [lindex $got 0] != 0 || ![string match "" [lindex $got 1]] } then {
++	fail "readelf SFrame V2 ($testname)"
++	continue
++    }
++
++    if { [regexp_diff "${tempfile}.out" "${dumpfile}.dump"] } then {
++	fail "readelf SFrame V2 ($testname)"
++    }
++    pass "readelf SFrame V2 ($testname)"
++
++    # Check objdump output of SFrame V2 sections as well.
++    set got [remote_exec host "$OBJDUMP --sframe $tempfile" "" "/dev/null" "${tempfile}.out"]
++    if { [lindex $got 0] != 0 || ![string match "" [lindex $got 1]] } then {
++	fail "objdump SFrame V2 ($testname)"
++	continue
++    }
++
++    if { [regexp_diff "${tempfile}.out" "${dumpfile}.dump"] } then {
++	fail "objdump SFrame V2 ($testname)"
++    }
++    pass "objdump SFrame V2 ($testname)"
++}
+diff --git a/binutils/testsuite/binutils-all/x86-64/test-v2-ET_EXEC.sframe.bz2 b/binutils/testsuite/binutils-all/x86-64/test-v2-ET_EXEC.sframe.bz2
+new file mode 100644
+index 0000000000000000000000000000000000000000..1c4832b2d5b8915a0df44ba88079c2723c015d3f
+GIT binary patch
+literal 2739
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/binutils/testsuite/binutils-all/x86-64/test-v2-ET_EXEC.sframe.dump b/binutils/testsuite/binutils-all/x86-64/test-v2-ET_EXEC.sframe.dump
+new file mode 100644
+index 00000000000..87ce8d86797
+--- /dev/null
++++ b/binutils/testsuite/binutils-all/x86-64/test-v2-ET_EXEC.sframe.dump
+@@ -0,0 +1,42 @@
++#...
++Contents of the SFrame section .sframe:
++  Header :
++
++    Version: SFRAME_VERSION_2
++    Flags: SFRAME_F_FDE_SORTED,
++           SFRAME_F_FDE_FUNC_START_PCREL
++    CFA fixed RA offset: -8
++    Num FDEs: 6
++    Num FREs: 12
++
++  Function Index :
++
++    func idx \[0\]: pc = 0x401020, size = 16 bytes
++    STARTPC +CFA +FP +RA +
++    0000000000401020 +sp\+16 +u +f +
++    0000000000401026 +sp\+24 +u +f +
++
++    func idx \[1\]: pc = 0x401030, size = 16 bytes
++    STARTPC\[m\] +CFA +FP +RA +
++    0000000000000000 +sp\+8 +u +f +
++    000000000000000b +sp\+16 +u +f +
++
++    func idx \[2\]: pc = 0x401040, size = 28 bytes
++    STARTPC +CFA +FP +RA +
++    0000000000401040 +sp\+8 +u +f +
++    0000000000401044 +sp\+16 +u +f +
++    000000000040105b +sp\+8 +u +f +
++
++    func idx \[3\]: pc = 0x401150, size = 28 bytes
++    STARTPC +CFA +FP +RA +
++    0000000000401150 +sp\+8 +u +f +
++    0000000000401157 +sp\+528 +u +f +
++    000000000040116b +sp\+8 +u +f +
++
++    func idx \[4\]: pc = 0x401170, size = 5 bytes
++    STARTPC +CFA +FP +RA +
++    0000000000401170 +sp\+8 +u +f +
++
++    func idx \[5\]: pc = 0x401180, size = 18 bytes
++    STARTPC +CFA +FP +RA +
++    0000000000401180 +sp\+8 +u +f +
+diff --git a/binutils/testsuite/binutils-all/x86-64/test-v2-ET_REL.sframe.bz2 b/binutils/testsuite/binutils-all/x86-64/test-v2-ET_REL.sframe.bz2
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf27032d02435937ca8a844273e629b50bbbd1b3
+GIT binary patch
+literal 728
+zcmV;}0w?`KT4*^jL0KkKS!bB5>Hq?j|NsC0{!UqE|50DXUWEVe-f-+;NC*Hx2tmvM
+z06`GMWJJIMMaG6{28dAfB4o(JKt@e8(9xlw13&{n00xZ)gH0L$)M+#(X*{B2Xfg(k
+z0imD`003#A00E(($N)G127m#eG5`PufB@4#00006fC&*K)byijJdx@iqd)*?8fl{-
+z000^Rpm{(I0id&8uz`nm=$30ilv8bTC{9b(;?rgk<g9zJ@)-;y&bZr4GW%<@5yB1?
+zN{SLxB%EM~lw^5BhpzxTj|C3S*;Jl{sk3DPVPMkhfu{%aM9D+V>wz5LM+vaQm!CIV
+zCKN$>z=HuW67H{(V+gGHW?;i*rLViKl|t>hQ^wK8!Cp>Yel>f2L;ww?m7M{9I^2e3
+znwcEPO2>Gg%DP!VK#XP}yxSIg>2F{T-BzU^-t-|W8b~W*v5>$57;KmvJ#|M-Y8=!1
+zkQgBN$gCKiYi6%fiTq?hGRLnpBq%&WWs$&9_F6uZw8_e-qbl`j=}`BzXdTh$zst7L
+z%l1XLjKZu1`9kNs(aV-7V4;Hi6|2&Q?lScV0MKfUE9#M&<HM)=l4;JRRTOOiYMIve
+zVZ~@F7DhP)>1fQ{i<Y4(G~TVjkkvKQxS?CyR^Xm&VyetobT8*qg!#m=Nt4v+AAC|7
+z41nT#2vj+O4$%~X5Z3@C!1zCTszDGoW`Qpl;nbtSUM*^<fIO0F+?Tmc2BgZy;v`_q
+zE;fo?hM0BeO<unz5&UH|o<L>{3l*ggWp~aBm{9?nM^9&A*mzLhao`h0vq_@ID`B*^
+zs1i~Gs1LJlsXiP<T}3K6Lo{JI^{Om@>Hv&$#c<7nW9^92U)`FKDC06B)N~wy#DxWi
+z1EiCHhqy0-7;>h^)Q}J^kcvm0GVv}>2w+kRO`nz8RjNO0X@(H(V814jewlw4_`8xR
+K!i0l7#a~dwz)acz
+
+literal 0
+HcmV?d00001
+
+diff --git a/binutils/testsuite/binutils-all/x86-64/test-v2-ET_REL.sframe.dump b/binutils/testsuite/binutils-all/x86-64/test-v2-ET_REL.sframe.dump
+new file mode 100644
+index 00000000000..310347ba48a
+--- /dev/null
++++ b/binutils/testsuite/binutils-all/x86-64/test-v2-ET_REL.sframe.dump
+@@ -0,0 +1,23 @@
++#...
++Contents of the SFrame section .sframe:
++  Header :
++
++    Version: SFRAME_VERSION_2
++    Flags: SFRAME_F_FDE_FUNC_START_PCREL
++    CFA fixed RA offset: -8
++    Num FDEs: 2
++    Num FREs: 6
++
++  Function Index :
++
++    func idx \[0\]: pc = 0x0, size = 28 bytes
++    STARTPC +CFA +FP +RA +
++    0000000000000000 +sp\+8 +u +f +
++    0000000000000007 +sp\+528 +u +f +
++    000000000000001b +sp\+8 +u +f +
++
++    func idx \[1\]: pc = 0x0, size = 28 bytes
++    STARTPC +CFA +FP +RA +
++    0000000000000000 +sp\+8 +u +f +
++    0000000000000004 +sp\+16 +u +f +
++    000000000000001b +sp\+8 +u +f +
+-- 
+2.52.0
+

@@ -1,0 +1,84 @@
+From b7bd847988347a3b858351de53c9533bd826459a Mon Sep 17 00:00:00 2001
+Message-ID: <b7bd847988347a3b858351de53c9533bd826459a.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Wed, 24 Dec 2025 23:42:54 -0800
+Subject: [PATCH 34/40] [SFrame-V3] gas: binutils: ld: NEWS: add SFrame v3
+ related announcements
+
+Add NEWS entries related to the SFrame version 3 release.
+
+---
+[New in V1. Not present in RFC]
+---
+ binutils/NEWS |  8 ++++++++
+ gas/NEWS      |  9 +++++++++
+ ld/NEWS       | 12 ++++++++++++
+ 3 files changed, 29 insertions(+)
+
+diff --git a/binutils/NEWS b/binutils/NEWS
+index fb98171aba4..cb9bab479d9 100644
+--- a/binutils/NEWS
++++ b/binutils/NEWS
+@@ -17,6 +17,14 @@
+ 
+ * NaCl target support is removed.
+ 
++* New versioned release of libsframe: libsframe.so.3.  This release introduces
++  versioned symbols with version node name LIBSFRAME_3.0.
++
++* objdump and readelf now support displaying SFrame Version 3 information.
++  The existing `--sframe` option can be used to display sections in the the new
++  V3 format.  Display of SFrame version 2 information continues to be supported
++  (NB: Emission and linking of SFrame version 2 is discontinued).
++
+ Changes in 2.45:
+ 
+ * New versioned release of libsframe: libsframe.so.2.  This release introduces
+diff --git a/gas/NEWS b/gas/NEWS
+index 35ae7b94273..0a5926ef0f1 100644
+--- a/gas/NEWS
++++ b/gas/NEWS
+@@ -15,6 +15,15 @@
+ * Add support for RISC-V standard extensions:
+   sdtrig v1.0, ssstrict v1.0.
+ 
++* The assembler now supports generating SFrame Version 3 format.  This version
++  supports `.text` > 2 GiB, support for marking outermost frames, support for
++  marking signal trampolines, and support for `flexible` frames which have
++  non-SP/FP based CFA, or save FP/RA in REG among other patterns.
++
++* New command line option `--gsframe-3` causes GAS to emit SFrame section in
++  version 3.  SFrame version 3 is emitted by default with the existing option
++  `--gsframe`.
++
+ Changes in 2.45:
+ 
+ * Add support to generate SFrame stack trace information (.sframe)
+diff --git a/ld/NEWS b/ld/NEWS
+index 3636714868f..800ca7ae7db 100644
+--- a/ld/NEWS
++++ b/ld/NEWS
+@@ -13,6 +13,18 @@
+ 
+ * NaCl target support is removed.
+ 
++* New command line option `--discard-sframe-sections` which disables the
++  emission of `.sframe` output section in the linked output.  This option also
++  prohibits the creation of SFrame stack trace info for linker-generated
++  sections like PLT.  The existing linker option
++  `--no-ld-generated-unwind-info` no longer controls creation of `.sframe` data
++  for PLT.
++
++* The linker now supports processing and merging SFrame Version 3 sections.
++  The linker does not combine SFrame sections of older versions with SFrame
++  version 3 sections.  SFrame version 2 sections should not be enabled in the
++  wild.
++
+ Changes in 2.45:
+ 
+ * On s390 64-bit (s390x), generate SFrame stack trace information (.sframe)
+-- 
+2.52.0
+

@@ -1,10 +1,10 @@
-From 8acfd42e35cc2f353522a68ffadf1061179ed24c Mon Sep 17 00:00:00 2001
-Message-ID: <8acfd42e35cc2f353522a68ffadf1061179ed24c.1762172960.git.sam@gentoo.org>
-In-Reply-To: <cc2f20ece05b98615ea9b9cb4df0a60486f810dc.1762172960.git.sam@gentoo.org>
-References: <cc2f20ece05b98615ea9b9cb4df0a60486f810dc.1762172960.git.sam@gentoo.org>
+From 9b86b7bb6a03be65ccf0dcb58a047b883b8c4575 Mon Sep 17 00:00:00 2001
+Message-ID: <9b86b7bb6a03be65ccf0dcb58a047b883b8c4575.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Sat, 26 Jul 2025 00:09:57 +0100
-Subject: [PATCH 3/4] gas: default-enable SFrames for x86_64-*-linux-*
+Subject: [PATCH 38/40] gas: default-enable SFrames for x86_64-*-linux-*
  [NOMERGE]
 
 (I don't intend for this to be merged at this point, I've just included
@@ -21,10 +21,10 @@ gas/
  2 files changed, 14 insertions(+)
 
 diff --git a/gas/configure b/gas/configure
-index 104fdb109dd..c98b266b7b4 100755
+index 2bcb85bb666..55ccf64cf95 100755
 --- a/gas/configure
 +++ b/gas/configure
-@@ -12538,6 +12538,13 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
+@@ -12524,6 +12524,13 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
  	   && test ${ac_default_generate_x86_used_note} = unset; then
  	  ac_default_generate_x86_used_note=1
  	fi
@@ -37,12 +37,12 @@ index 104fdb109dd..c98b266b7b4 100755
 +
  	;;
  
-       i386-*-solaris2 \
+       microblaze*)
 diff --git a/gas/configure.ac b/gas/configure.ac
-index 4c7df3d8491..657dd760b84 100644
+index 613f85016c5..742067ca7ba 100644
 --- a/gas/configure.ac
 +++ b/gas/configure.ac
-@@ -274,6 +274,13 @@ for this_target in $target $canon_targets ; do
+@@ -263,6 +263,13 @@ for this_target in $target $canon_targets ; do
  	   && test ${ac_default_generate_x86_used_note} = unset; then
  	  ac_default_generate_x86_used_note=1
  	fi
@@ -55,7 +55,7 @@ index 4c7df3d8491..657dd760b84 100644
 +
  	;;
  
-       i386-*-solaris2 \
+       microblaze*)
 -- 
-2.51.2
+2.52.0
 

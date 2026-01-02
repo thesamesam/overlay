@@ -138,7 +138,8 @@ src_prepare() {
 			eapply "${WORKDIR}/patch"
 			einfo "Done."
 
-			eapply "${FILESDIR}/sframe"
+			#eapply "${FILESDIR}/sframe"
+			git am "${FILESDIR}/sframe/"*.patch || die
 
 			# This is applied conditionally for now just out of caution.
 			# It should be okay on non-prefix systems though. See bug #892549.

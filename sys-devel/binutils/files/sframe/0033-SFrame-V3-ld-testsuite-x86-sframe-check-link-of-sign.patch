@@ -1,0 +1,144 @@
+From 5de85a4ab3a1080986f7b76c2f55dea92c340b69 Mon Sep 17 00:00:00 2001
+Message-ID: <5de85a4ab3a1080986f7b76c2f55dea92c340b69.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Fri, 5 Dec 2025 20:57:30 -0800
+Subject: [PATCH 33/40] [SFrame-V3] ld: testsuite: x86: sframe: check link of
+ signal frame and outermost frames
+
+In this test, two "special" case FDEs are linked:
+  - Signal frame where the SFrame stack trace data is not
+    respresentable.
+  - _start like outermost frame function.
+
+This is useful test for sframe_encoder's merge input sections
+functionality and its associated write code-paths (sframe_encoder_write)
+too.
+
+ld/testsuite/
+	* ld-x86-64/sframe-link-1.d: New test.
+	* ld-x86-64/sframe-signal.s: New input file.
+	* ld-x86-64/sframe-start.s: Likewise.
+	* ld-x86-64/x86-64.exp: Add new test.
+
+---
+[Changes from RFC]
+  - Use register name in .cfi_* directives and clarify whats going on.
+    [Jan].
+[End of changes from RFC]
+---
+ ld/testsuite/ld-x86-64/sframe-link-1.d | 38 ++++++++++++++++++++++++++
+ ld/testsuite/ld-x86-64/sframe-signal.s | 19 +++++++++++++
+ ld/testsuite/ld-x86-64/sframe-start.s  | 15 ++++++++++
+ ld/testsuite/ld-x86-64/x86-64.exp      |  1 +
+ 4 files changed, 73 insertions(+)
+ create mode 100644 ld/testsuite/ld-x86-64/sframe-link-1.d
+ create mode 100644 ld/testsuite/ld-x86-64/sframe-signal.s
+ create mode 100644 ld/testsuite/ld-x86-64/sframe-start.s
+
+diff --git a/ld/testsuite/ld-x86-64/sframe-link-1.d b/ld/testsuite/ld-x86-64/sframe-link-1.d
+new file mode 100644
+index 00000000000..57881f875f8
+--- /dev/null
++++ b/ld/testsuite/ld-x86-64/sframe-link-1.d
+@@ -0,0 +1,38 @@
++#as: --gsframe
++#source: sframe-start.s
++#source: sframe-signal.s
++#warning: \.cfi\_escape with op \(0xf\)
++#objdump: --sframe=.sframe
++#ld: -shared --no-rosegment -z separate-code
++#name: SFrame link special case FDEs - 1
++
++.*: +file format .*
++
++Contents of the SFrame section .sframe:
++  Header :
++
++    Version: SFRAME_VERSION_3
++    Flags: SFRAME_F_FDE_SORTED,
++           SFRAME_F_FDE_FUNC_START_PCREL
++    CFA fixed RA offset: \-8
++    Num FDEs: 4
++    Num FREs: 5
++
++  Function Index :
++
++    func idx \[0\]: pc = 0x1000, size = 16 bytes
++    STARTPC +CFA +FP +RA +
++    0+1000 +sp\+16 +u +f +
++    0+1006 +sp\+24 +u +f +
++
++    func idx \[1\]: pc = 0x1010, size = 16 bytes
++    STARTPC\[m\] +CFA +FP +RA +
++    0+0000 +sp\+8 +u +f +
++    0+000b +sp\+16 +u +f +
++
++    func idx \[2\]: pc = 0x1020, size = 8 bytes
++    STARTPC +CFA +FP +RA +
++    0+1020 +RA undefined
++
++    func idx \[3\]: pc = 0x1028, size = 2 bytes, attr = "S"
++    STARTPC +CFA +FP +RA +
+diff --git a/ld/testsuite/ld-x86-64/sframe-signal.s b/ld/testsuite/ld-x86-64/sframe-signal.s
+new file mode 100644
+index 00000000000..119bfac699d
+--- /dev/null
++++ b/ld/testsuite/ld-x86-64/sframe-signal.s
+@@ -0,0 +1,19 @@
++# Input file with SFrame FDE for a signal trampoline
++# Input file mimic'ing the start of frame FDE
++# When linked with other "special" case FDEs like start frame,
++# this is a useful test for sframe_encoder's merge input sections
++# functionality and its associated write code-paths (sframe_encoder_write)
++	.text
++	.globl	rest_rt
++	.type	rest_rt, @function
++rest_rt:
++	.cfi_startproc
++	.cfi_signal_frame
++	# DW_CFA_def_cfa_expression, length, DW_OP_breg9, (sleb)offset, DW_OP_deref
++	.cfi_escape 0xf,0x3,0x79,0x78,0x6
++	nop
++	.cfi_offset rbp, -16
++	ret
++	.cfi_endproc
++	.size	rest_rt, .-rest_rt
++	.section	.note.GNU-stack,"",@progbits
+diff --git a/ld/testsuite/ld-x86-64/sframe-start.s b/ld/testsuite/ld-x86-64/sframe-start.s
+new file mode 100644
+index 00000000000..f3a2e1d8c76
+--- /dev/null
++++ b/ld/testsuite/ld-x86-64/sframe-start.s
+@@ -0,0 +1,15 @@
++# Input file mimic'ing the start of frame FDE
++# When linked with other "special" case FDEs like signal frame,
++# this is a useful test for sframe_encoder's merge input sections
++# functionality and its associated write code-paths (sframe_encoder_write)
++	.text
++	.globl	_start
++	.type	_start, @function
++_start:
++	.cfi_startproc
++	.cfi_undefined rip
++	xor	%rbp, %rbp
++	call	foo
++	.cfi_endproc
++	.size	_start, .-_start
++	.section	.note.GNU-stack,"",@progbits
+diff --git a/ld/testsuite/ld-x86-64/x86-64.exp b/ld/testsuite/ld-x86-64/x86-64.exp
+index df2bb5ea1bd..aa5c90f8ca2 100644
+--- a/ld/testsuite/ld-x86-64/x86-64.exp
++++ b/ld/testsuite/ld-x86-64/x86-64.exp
+@@ -587,6 +587,7 @@ run_dump_test "tls-le-pic-3-x32"
+ 
+ if { ![skip_sframe_tests] } {
+     run_dump_test "sframe-simple-1"
++    run_dump_test "sframe-link-1"
+     run_dump_test "sframe-command-line-1"
+     run_dump_test "sframe-reloc-1"
+     run_dump_test "sframe-plt-1"
+-- 
+2.52.0
+

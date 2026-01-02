@@ -1,0 +1,120 @@
+From 4f131133d61a49ab2db1317576f5378ef35900c8 Mon Sep 17 00:00:00 2001
+Message-ID: <4f131133d61a49ab2db1317576f5378ef35900c8.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Mon, 22 Dec 2025 00:54:44 -0800
+Subject: [PATCH 17/40] [SFrame-V3] gas: sframe: use three states for location
+ tracking
+
+Up until now, for SFrame stack trace data generation (for default FDE
+types), tracking of two states sufficed:
+  - the tracked entity is saved on a location on stack (tracked by
+    SFRAME_FRE_ELEM_LOC_STACK)
+  - the tracked entity is in register (tracked by
+    SFRAME_FRE_ELEM_LOC_REG).
+
+(In some sense, the distinction between the two was the same as saying
+SFRAME_FRE_ELEM_LOC_TRACKED or SFRAME_FRE_ELEM_LOC_UNTRACKED
+respectively.)
+
+Soon though, we will start to generate a new FDE type
+SFRAME_FDE_TYPE_FLEX, where:
+  - the tracked entity may be saved in a temporary register
+  - the tracked entity may be saved at a "non-standard", not a simple
+    CFA+offset based location
+  - and more
+
+To effectively distinguish between the various states (necessary to
+track for flex FDEs), define three states to track the location of each
+tracked entity:
+  - SFRAME_FRE_ELEM_LOC_NONE: the entity is not tracked
+  - SFRAME_FRE_ELEM_LOC_REG: the entitiy is in a location based off a
+    register
+  - SFRAME_FRE_ELEM_LOC_STACK: the entity is in a located based off the
+    CFA
+
+TBD:
+  - Add Co-Authored-By, Suggested-By Jens
+  - Ideally the interfaces sframe_fre_set_ra_track,
+    sframe_fre_set_fp_track need an uplift, but we can address that when
+    time permits.
+
+gas/
+	* gen-sframe.c (sframe_xlate_do_offset): Reset other state.
+	(sframe_xlate_do_same_value): Reset to SFRAME_FRE_ELEM_LOC_NONE.
+	* gen-sframe.h (SFRAME_FRE_ELEM_LOC_REG): New definition.
+	(SFRAME_FRE_ELEM_LOC_STACK): Likewise.
+	(SFRAME_FRE_ELEM_LOC_NONE): Likewise.
+
+---
+[New in V1.  Not represent in RFC.]
+---
+ gas/gen-sframe.c |  9 ++++++---
+ gas/gen-sframe.h | 10 ++++++++--
+ 2 files changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
+index 3ac8b504dec..a5cd36e4c7e 100644
+--- a/gas/gen-sframe.c
++++ b/gas/gen-sframe.c
+@@ -1253,14 +1253,17 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
+   /* Ignore SP reg, as it can be recovered from the CFA tracking info.  */
+   if (cfi_insn->u.ri.reg == SFRAME_CFA_FP_REG)
+     {
+-      gas_assert (cur_fre->fp_reg == SFRAME_FRE_REG_INVALID);
+       sframe_fre_set_fp_track (cur_fre, cfi_insn->u.ri.offset);
++      cur_fre->fp_reg = SFRAME_FRE_REG_INVALID;
++      cur_fre->fp_deref_p = true;
+       cur_fre->merge_candidate = false;
+     }
+   else if (sframe_ra_tracking_p ()
+ 	   && cfi_insn->u.ri.reg == SFRAME_CFA_RA_REG)
+     {
+       sframe_fre_set_ra_track (cur_fre, cfi_insn->u.ri.offset);
++      cur_fre->ra_reg = SFRAME_FRE_REG_INVALID;
++      cur_fre->ra_deref_p = true;
+       cur_fre->merge_candidate = false;
+     }
+   /* This is used to track changes to non-rsp registers, skip all others
+@@ -1874,14 +1877,14 @@ sframe_xlate_do_same_value (const struct sframe_xlate_ctx *xlate_ctx,
+ 
+   if (sframe_ra_tracking_p () && cfi_insn->u.r == SFRAME_CFA_RA_REG)
+     {
+-      cur_fre->ra_loc = SFRAME_FRE_ELEM_LOC_REG;
++      cur_fre->ra_loc = SFRAME_FRE_ELEM_LOC_NONE;
+       cur_fre->ra_offset = 0;
+       cur_fre->ra_undefined_p = false;
+       cur_fre->merge_candidate = false;
+     }
+   else if (cfi_insn->u.r == SFRAME_CFA_FP_REG)
+     {
+-      cur_fre->fp_loc = SFRAME_FRE_ELEM_LOC_REG;
++      cur_fre->fp_loc = SFRAME_FRE_ELEM_LOC_NONE;
+       cur_fre->fp_offset = 0;
+       cur_fre->merge_candidate = false;
+     }
+diff --git a/gas/gen-sframe.h b/gas/gen-sframe.h
+index eff089f6a24..fe7f3961fc9 100644
+--- a/gas/gen-sframe.h
++++ b/gas/gen-sframe.h
+@@ -31,8 +31,14 @@
+       as_bad (format, __VA_ARGS__);            \
+   } while (0)
+ 
+-#define SFRAME_FRE_ELEM_LOC_REG		0
+-#define SFRAME_FRE_ELEM_LOC_STACK	1
++/* The entity is not tracked.  */
++#define SFRAME_FRE_ELEM_LOC_NONE	0
++/* The location of the tracked entity is based on a register.  May or may not
++   involve dereferencing.  */
++#define SFRAME_FRE_ELEM_LOC_REG		1
++/* The location of the tracked entity is based on the CFA.  In theory, may or
++   may not involve dereferencing.  */
++#define SFRAME_FRE_ELEM_LOC_STACK	2
+ 
+ /* An invalid register number.  */
+ #define SFRAME_FRE_REG_INVALID		((unsigned int)-1)
+-- 
+2.52.0
+

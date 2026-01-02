@@ -1,0 +1,937 @@
+From f24ec6d7e3cbde555345b36b6c24a04986f04c49 Mon Sep 17 00:00:00 2001
+Message-ID: <f24ec6d7e3cbde555345b36b6c24a04986f04c49.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Tue, 28 Oct 2025 01:39:55 -0700
+Subject: [PATCH 10/40] [SFrame-V3] include: libsframe: bfd: gas: testsuite:
+ support for signed 64-bit offset in SFrame FDE
+
+This change enables support text > 2 GiB in SFrame format.
+
+Each SFrame FDE needs to hold information about the start PC of the
+function it pertains to.  Currently, the field 'sfde_func_start_address'
+in SFrame FDE is encoded as a 32-bit offset to the start PC of the
+function from the field itself.
+
+In SFrame V2, this offset was a signed 32-bit offset.  The signedness
+gives the flexibility of having .sframe ELF section before or after the
+.text* sections.  But the size of 32-bit puts the limitation that
+.sframe togther with the .text* sections must fit the 2 GiB range.
+
+Currently, if the linker sees the offset not representable as 32-bit
+signed offset, it issues an error (not seen in the wild, simulated by
+forcing a function to align via an '.align  2147483648' directive):
+
+  test.o:(.sframe+0x1c): relocation truncated to fit: R_X86_64_PC32 against `.text'
+  make: *** [Makefile:7: all] Error 1
+
+ATM, EH Frame also suffers with the same issue.
+
+Moving forward, some cloud applications have been shown to be nearing
+1.5 GiB threshold.  Extending the offset to int64_t now seems to be good
+choice to make now for future-proof'ing the sections.
+
+The use of int64_t offset is done for all SFrame V3 sections.  This
+bump from int32_t to int64_t should not lead to an increase in the size
+of SFrame sections, because of the following additional changes to the
+SFrame FDE specification:
+  - Reduce the type of sfde_func_num_fres (from uint32_t to uint16_t)
+  - Remove the 2 bytes of padding (sfde_func_padding2). These served the
+    two-fold purpose of keeping FDE data aligned _and_ unused space for
+    future needs.
+
+Now that the offset is int64_t, start using the
+sframe_decoder_get_funcdesc_v3 () instead of
+sframe_decoder_get_funcdesc_v2 () in GNU ld.
+
+This patch changes the offset type in the SFrame FDE definition to an
+int64_t.  No further changes in gas are necessary because the code
+already accounts for writing out as per the size of the member of the
+struct:
+
+  emit_expr (&exp, sizeof_member (sframe_func_desc_entry,
+                                  sfde_func_start_address));
+
+bfd/
+	* elf-sframe.c (sframe_read_value): Signed offset for start PC
+	is 8-bytes now.
+	(_bfd_elf_merge_section_sframe): Likewise.
+	* elf64-s390.c (_bfd_s390_elf_create_sframe_plt): Use V3 API.
+	(elf_s390_finish_dynamic_sections): Signed offset for start PC
+	is 8-bytes now.
+	* elfxx-x86.c (_bfd_x86_elf_create_sframe_plt): Use V3 API.
+	(_bfd_x86_elf_finish_dynamic_sections): Signed offset for start
+	PC is 8-bytes now.
+gas/
+	* sframe.c (output_sframe_funcdesc): Rename to
+	sfde_func_start_offset.
+libsframe/
+	* libsframe/sframe.c (sframe_fde_tbl_init): Rename to
+	sfde_func_start_offset.
+	(flip_fde): Likewise.
+	(sframe_decoder_get_secrel_func_start_addr): Use int64_t.
+	(sframe_fre_check_range_p): Likewise.
+	(sframe_decoder_get_offsetof_fde_start_addr): Rename to
+	sfde_func_start_offset.
+	(sframe_get_funcdesc_with_addr_internal): Use int64_t.
+	(sframe_find_fre): Likewise.
+	(sframe_encoder_get_offsetof_fde_start_addr): Rename to
+	sfde_func_start_offset.
+	(sframe_encoder_add_funcdesc_internal): Use int64_t.
+	(sframe_encoder_add_funcdesc): Likewise.  And rename to
+	sfde_func_start_offset.
+	(sframe_encoder_write_fde): Rename to sfde_func_start_offset.
+libsframe/testsuite/
+	* libsframe.decode/DATA2: Regenerate the data file.
+	* libsframe.encode/encode-1.c: Use int64_t for start pc offset.
+	* libsframe.find/findfre-1.c: Likewise.
+	* libsframe.find/findfunc-1.c: Likewise.
+	* libsframe.find/plt-findfre-1.c: Likewise.
+	* libsframe.find/plt-findfre-2.c: Likewise.
+include/
+	* sframe-api.h (sframe_find_fre): Update arg type to int64_t.
+	(sframe_encoder_add_funcdesc): Likewise.
+	* sframe.h: Change data type to int64_t.
+
+---
+[Changes from RFC]
+  - Rename sfde_func_start_address to sfde_func_start_offset [Jan].
+  - Update the Changelog to reflect additional diffs due to rename.
+[End of changes from RFC]
+---
+ bfd/elf-sframe.c                              |  22 +++++----
+ bfd/elf64-s390.c                              |   6 +--
+ bfd/elfxx-x86.c                               |  10 ++--
+ gas/gen-sframe.c                              |   2 +-
+ include/sframe-api.h                          |   4 +-
+ include/sframe.h                              |   6 +--
+ libsframe/sframe-dump.c                       |  24 ++++++++--
+ libsframe/sframe.c                            |  28 +++++------
+ libsframe/testsuite/libsframe.decode/DATA2    | Bin 90 -> 98 bytes
+ .../testsuite/libsframe.encode/encode-1.c     |  22 ++++-----
+ .../testsuite/libsframe.find/findfre-1.c      |  34 +++++++-------
+ .../testsuite/libsframe.find/findfunc-1.c     |  44 +++++++++---------
+ .../testsuite/libsframe.find/plt-findfre-1.c  |  20 ++++----
+ .../testsuite/libsframe.find/plt-findfre-2.c  |  28 +++++------
+ 14 files changed, 133 insertions(+), 117 deletions(-)
+
+diff --git a/bfd/elf-sframe.c b/bfd/elf-sframe.c
+index 5a9cc45435f..8842efe6fe6 100644
+--- a/bfd/elf-sframe.c
++++ b/bfd/elf-sframe.c
+@@ -162,12 +162,12 @@ sframe_read_value (bfd *abfd, bfd_byte *contents, unsigned int offset,
+ 		   unsigned int width)
+ {
+   BFD_ASSERT (contents && offset);
+-  /* Supporting the usecase of reading only the 4-byte relocated
+-     value (signed offset for func start addr) for now.  */
+-  BFD_ASSERT (width == 4);
++  /* ATM, for SFrame, the sole usecase is of reading only the 8-byte relocated
++     value (signed offset for func start addr).  */
++  BFD_ASSERT (width == 8);
+   /* FIXME endianness ?? */
+   unsigned char *buf = contents + offset;
+-  bfd_vma value = bfd_get_signed_32 (abfd, buf);
++  bfd_vma value = bfd_get_signed_64 (abfd, buf);
+   return value;
+ }
+ 
+@@ -479,11 +479,12 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
+ 
+   uint32_t num_fidx = sframe_decoder_get_num_fidx (sfd_ctx);
+   uint32_t num_enc_fidx = sframe_encoder_get_num_fidx (sfe_ctx);
++  uint8_t reloc_size = 8;
+ 
+   for (i = 0; i < num_fidx; i++)
+     {
+       unsigned int num_fres = 0;
+-      int32_t func_start_addr;
++      int64_t func_start_addr;
+       bfd_vma address;
+       uint32_t func_size = 0;
+       unsigned char func_info = 0;
+@@ -492,7 +493,7 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
+       unsigned int pltn_r_offset = 0;
+       uint8_t rep_block_size = 0;
+ 
+-      if (!sframe_decoder_get_funcdesc_v2 (sfd_ctx, i, &num_fres, &func_size,
++      if (!sframe_decoder_get_funcdesc_v3 (sfd_ctx, i, &num_fres, &func_size,
+ 					   &func_start_addr, &func_info,
+ 					   &rep_block_size))
+ 	{
+@@ -536,10 +537,11 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
+ 		}
+ 
+ 	      /* Get the SFrame FDE function start address after relocation.  */
+-	      address = sframe_read_value (abfd, contents, r_offset, 4);
++	      address = sframe_read_value (abfd, contents, r_offset,
++					   reloc_size);
+ 	      if (pltn_reloc_by_hand)
+-		address += sframe_read_value (abfd, contents,
+-					      pltn_r_offset, 4);
++		address += sframe_read_value (abfd, contents, pltn_r_offset,
++					      reloc_size);
+ 	      address += (sec->output_offset + r_offset);
+ 	      /* SFrame FDE function start address is an offset from the
+ 		 sfde_func_start_address field to the start PC.  The
+@@ -558,7 +560,7 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
+ 	    }
+ 
+ 	  /* Update the encoder context with updated content.  */
+-	  int err = sframe_encoder_add_funcdesc_v2 (sfe_ctx, func_start_addr,
++	  int err = sframe_encoder_add_funcdesc_v3 (sfe_ctx, func_start_addr,
+ 						    func_size, func_info,
+ 						    rep_block_size, num_fres);
+ 	  cur_fidx++;
+diff --git a/bfd/elf64-s390.c b/bfd/elf64-s390.c
+index ea06b52fed8..eec232c0c94 100644
+--- a/bfd/elf64-s390.c
++++ b/bfd/elf64-s390.c
+@@ -1612,7 +1612,7 @@ _bfd_s390_elf_create_sframe_plt (struct bfd_link_info *info)
+     {
+       /* Add SFrame FDE for PLT0, the function start address is updated later
+ 	 at _bfd_elf_merge_section_sframe time.  */
+-      sframe_encoder_add_funcdesc_v2 (*ectx,
++      sframe_encoder_add_funcdesc_v3 (*ectx,
+ 				      0, /* func start addr.  */
+ 				      plt0_entry_size,
+ 				      func_info,
+@@ -1640,7 +1640,7 @@ _bfd_s390_elf_create_sframe_plt (struct bfd_link_info *info)
+ 	 function start address = plt0_entry_size.  As usual, this will be
+ 	 updated later at _bfd_elf_merge_section_sframe, by when the
+ 	 sections are relocated.  */
+-      sframe_encoder_add_funcdesc_v2 (*ectx,
++      sframe_encoder_add_funcdesc_v3 (*ectx,
+ 				      plt0_entry_size, /* func start addr.  */
+ 				      dpltsec->size - plt0_entry_size,
+ 				      func_info,
+@@ -4030,7 +4030,7 @@ elf_s390_finish_dynamic_sections (bfd *output_bfd,
+ 	  bfd_vma sframe_start = htab->plt_sframe->output_section->vma
+ 				   + htab->plt_sframe->output_offset
+ 				   + PLT_SFRAME_FDE_START_OFFSET;
+-	  bfd_put_signed_32 (dynobj, plt_start - sframe_start,
++	  bfd_put_signed_64 (dynobj, plt_start - sframe_start,
+ 			     htab->plt_sframe->contents
+ 			     + PLT_SFRAME_FDE_START_OFFSET);
+ 	}
+diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
+index 2271edd40ba..12ecce5ecfa 100644
+--- a/bfd/elfxx-x86.c
++++ b/bfd/elfxx-x86.c
+@@ -1923,7 +1923,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+     {
+       /* Add SFrame FDE for plt0, the function start address is updated later
+ 	 at _bfd_elf_merge_section_sframe time.  */
+-      sframe_encoder_add_funcdesc_v2 (*ectx,
++      sframe_encoder_add_funcdesc_v3 (*ectx,
+ 				      0, /* func start addr.  */
+ 				      plt0_entry_size,
+ 				      func_info,
+@@ -1952,7 +1952,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+ 	 function start address = plt0_entry_size.  As usual, this will be
+ 	 updated later at _bfd_elf_merge_section_sframe, by when the
+ 	 sections are relocated.  */
+-      sframe_encoder_add_funcdesc_v2 (*ectx,
++      sframe_encoder_add_funcdesc_v3 (*ectx,
+ 				      plt0_entry_size, /* func start addr.  */
+ 				      dpltsec->size - plt0_entry_size,
+ 				      func_info,
+@@ -3007,7 +3007,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
+ 	    + PLT_SFRAME_FDE_START_OFFSET;
+ 	  bfd_put_signed_32 (dynobj, test_value,
+ #endif
+-	  bfd_put_signed_32 (dynobj, plt_start - sframe_start,
++	  bfd_put_signed_64 (dynobj, plt_start - sframe_start,
+ 			     htab->plt_sframe->contents
+ 			     + PLT_SFRAME_FDE_START_OFFSET);
+ 	}
+@@ -3041,7 +3041,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
+ 	    + PLT_SFRAME_FDE_START_OFFSET;
+ 	  bfd_put_signed_32 (dynobj, test_value,
+ #endif
+-	  bfd_put_signed_32 (dynobj, plt_start - sframe_start,
++	  bfd_put_signed_64 (dynobj, plt_start - sframe_start,
+ 			     htab->plt_second_sframe->contents
+ 			     + PLT_SFRAME_FDE_START_OFFSET);
+ 	}
+@@ -3068,7 +3068,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
+ 	    = (htab->plt_got_sframe->output_section->vma
+ 	       + htab->plt_got_sframe->output_offset
+ 	       + PLT_SFRAME_FDE_START_OFFSET);
+-	  bfd_put_signed_32 (dynobj, plt_start - sframe_start,
++	  bfd_put_signed_64 (dynobj, plt_start - sframe_start,
+ 			     htab->plt_got_sframe->contents
+ 			     + PLT_SFRAME_FDE_START_OFFSET);
+ 	}
+diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
+index dfd7f420066..50878e54831 100644
+--- a/gas/gen-sframe.c
++++ b/gas/gen-sframe.c
+@@ -701,7 +701,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+   exp.X_op_symbol = symbol_temp_new_now (); /* from location.  */
+   exp.X_add_number = 0;
+   emit_expr (&exp, sizeof_member (sframe_func_desc_entry,
+-				  sfde_func_start_address));
++				  sfde_func_start_offset));
+ 
+   /* Size of the function in bytes.  */
+   exp.X_op = O_subtract;
+diff --git a/include/sframe-api.h b/include/sframe-api.h
+index 3bcb92b0664..71130eb12f1 100644
+--- a/include/sframe-api.h
++++ b/include/sframe-api.h
+@@ -157,7 +157,7 @@ sframe_decoder_get_fixed_ra_offset (const sframe_decoder_ctx *dctx);
+    SFRAME_ERR if failure.  */
+ 
+ extern int
+-sframe_find_fre (const sframe_decoder_ctx *ctx, int32_t pc,
++sframe_find_fre (const sframe_decoder_ctx *ctx, int64_t pc,
+ 		 sframe_frame_row_entry *frep);
+ 
+ /* Get the FRE_IDX'th FRE of the function at FUNC_IDX'th function
+@@ -293,7 +293,7 @@ sframe_encoder_add_fre (sframe_encoder_ctx *ectx,
+    the encoder context ECTX.  */
+ extern int
+ sframe_encoder_add_funcdesc (sframe_encoder_ctx *ectx,
+-			     int32_t start_addr,
++			     int64_t start_addr,
+ 			     uint32_t func_size);
+ 
+ /* Add a new SFrame function descriptor entry with START_ADDR, FUNC_SIZE,
+diff --git a/include/sframe.h b/include/sframe.h
+index daf5918ec3f..5d01e3ec26d 100644
+--- a/include/sframe.h
++++ b/include/sframe.h
+@@ -242,9 +242,9 @@ typedef struct sframe_func_desc_entry_v2
+ 
+ typedef struct sframe_func_desc_entry_v3
+ {
+-  /* Function start address.  Encoded as a signed offset, relative to the
+-     beginning of the current FDE.  */
+-  int32_t sfde_func_start_address;
++  /* Offset to the function start address.  Encoded as a signed offset,
++     relative to the beginning of the current FDE.  */
++  int64_t sfde_func_start_offset;
+   /* Size of the function in bytes.  */
+   uint32_t sfde_func_size;
+   /* Offset of the first SFrame Frame Row Entry of the function, relative to the
+diff --git a/libsframe/sframe-dump.c b/libsframe/sframe-dump.c
+index 94e5a0a5213..757997608b9 100644
+--- a/libsframe/sframe-dump.c
++++ b/libsframe/sframe-dump.c
+@@ -125,7 +125,6 @@ dump_sframe_func_with_fres (const sframe_decoder_ctx *sfd_ctx,
+   uint32_t j = 0;
+   uint32_t num_fres = 0;
+   uint32_t func_size = 0;
+-  int32_t func_start_address = 0;
+   unsigned char func_info = 0;
+   uint8_t rep_block_size = 0;
+ 
+@@ -141,15 +140,30 @@ dump_sframe_func_with_fres (const sframe_decoder_ctx *sfd_ctx,
+ 
+   sframe_frame_row_entry fre;
+ 
++  uint8_t ver = sframe_decoder_get_version (sfd_ctx);
++  sframe_assert (ver == SFRAME_VERSION_3 || ver == SFRAME_VERSION_2);
+   /* Get the SFrame function descriptor.  */
+-  sframe_decoder_get_funcdesc_v2 (sfd_ctx, funcidx, &num_fres,
+-				  &func_size, &func_start_address,
+-				  &func_info, &rep_block_size);
++  if (ver == SFRAME_VERSION_3)
++    {
++      int64_t func_start_addr = 0;
++      sframe_decoder_get_funcdesc_v3 (sfd_ctx, funcidx, &num_fres,
++				      &func_size, &func_start_addr,
++				      &func_info, &rep_block_size);
++      func_start_pc_vma = func_start_addr + sec_addr;
++    }
++  else
++    {
++      int32_t func_start_addr = 0;
++      sframe_decoder_get_funcdesc_v2 (sfd_ctx, funcidx, &num_fres, &func_size,
++				      &func_start_addr, &func_info,
++				      &rep_block_size);
++      func_start_pc_vma = func_start_addr + sec_addr;
++    }
++
+ /* Calculate the virtual memory address for function start pc.  Some older
+    SFrame V2 sections in ET_DYN or ET_EXEC may still have the
+    SFRAME_F_FDE_FUNC_START_PCREL flag unset, and hence may be using the
+    old encoding.  Continue to support dumping the sections at least.  */
+-  func_start_pc_vma = func_start_address + sec_addr;
+   if (sframe_decoder_get_flags (sfd_ctx) & SFRAME_F_FDE_FUNC_START_PCREL)
+     func_start_pc_vma += sframe_decoder_get_offsetof_fde_start_addr (sfd_ctx,
+ 								     funcidx,
+diff --git a/libsframe/sframe.c b/libsframe/sframe.c
+index 0f1e4412cb4..e4e25c17cb3 100644
+--- a/libsframe/sframe.c
++++ b/libsframe/sframe.c
+@@ -148,7 +148,7 @@ sframe_fde_tbl_init (sf_fde_tbl *fde_tbl, const char *fde_buf,
+ 	{
+ 	  const sframe_func_desc_entry_v3 *fdep
+ 	    = (sframe_func_desc_entry_v3 *)fde_buf + i;
+-	  fde_tbl->entry[i].func_start_pc_offset = fdep->sfde_func_start_address;
++	  fde_tbl->entry[i].func_start_pc_offset = fdep->sfde_func_start_offset;
+ 	  fde_tbl->entry[i].func_size = fdep->sfde_func_size;
+ 	  fde_tbl->entry[i].func_start_fre_off = fdep->sfde_func_start_fre_off;
+ 	  fde_tbl->entry[i].func_num_fres = fdep->sfde_func_num_fres;
+@@ -310,7 +310,7 @@ flip_fde (char *buf, size_t buf_size, uint8_t ver, size_t *fde_size)
+   if (ver == SFRAME_VERSION_3)
+     {
+       sframe_func_desc_entry_v3 *fdep = (sframe_func_desc_entry_v3 *) buf;
+-      swap_thing (fdep->sfde_func_start_address);
++      swap_thing (fdep->sfde_func_start_offset);
+       swap_thing (fdep->sfde_func_size);
+       swap_thing (fdep->sfde_func_start_fre_off);
+       swap_thing (fdep->sfde_func_num_fres);
+@@ -508,7 +508,7 @@ sframe_decoder_get_funcdesc_at_index (const sframe_decoder_ctx *ctx,
+ 
+    If FUNC_IDX is not a valid index in the given decoder object, returns 0.  */
+ 
+-static int32_t
++static int64_t
+ sframe_decoder_get_secrel_func_start_addr (const sframe_decoder_ctx *dctx,
+ 					   uint32_t func_idx)
+ {
+@@ -520,7 +520,7 @@ sframe_decoder_get_secrel_func_start_addr (const sframe_decoder_ctx *dctx,
+     return 0;
+ 
+   const sframe_func_desc_entry_int *fdep = &dctx->sfd_funcdesc->entry[func_idx];
+-  int32_t func_start_pc_offset = fdep->func_start_pc_offset;
++  int64_t func_start_pc_offset = fdep->func_start_pc_offset;
+ 
+   return func_start_pc_offset + offsetof_fde_in_sec;
+ }
+@@ -532,10 +532,10 @@ sframe_decoder_get_secrel_func_start_addr (const sframe_decoder_ctx *dctx,
+ static bool
+ sframe_fre_check_range_p (const sframe_decoder_ctx *dctx, uint32_t func_idx,
+ 			  uint32_t start_ip_offset, uint32_t end_ip_offset,
+-			  int32_t pc)
++			  int64_t pc)
+ {
+   sframe_func_desc_entry_int *fdep;
+-  int32_t func_start_pc_offset;
++  int64_t func_start_pc_offset;
+   uint8_t rep_block_size;
+   uint32_t pc_type;
+   uint32_t pc_offset;
+@@ -1329,7 +1329,7 @@ sframe_decoder_get_offsetof_fde_start_addr (const sframe_decoder_ctx *dctx,
+   if (sframe_decoder_get_version (dctx) == SFRAME_VERSION_3)
+     return (sframe_decoder_get_hdr_size (dctx)
+ 	    + func_idx * sizeof (sframe_func_desc_entry_v3)
+-	    + offsetof (sframe_func_desc_entry_v3, sfde_func_start_address));
++	    + offsetof (sframe_func_desc_entry_v3, sfde_func_start_offset));
+   else if (sframe_decoder_get_version (dctx) == SFRAME_VERSION_2)
+     return (sframe_decoder_get_hdr_size (dctx)
+ 	    + func_idx * sizeof (sframe_func_desc_entry_v2)
+@@ -1345,7 +1345,7 @@ sframe_decoder_get_offsetof_fde_start_addr (const sframe_decoder_ctx *dctx,
+ 
+ static sframe_func_desc_entry_int *
+ sframe_get_funcdesc_with_addr_internal (const sframe_decoder_ctx *ctx,
+-					int32_t addr, int *errp,
++					int64_t addr, int *errp,
+ 					uint32_t *func_idx)
+ {
+   sframe_func_desc_entry_int *fdp;
+@@ -1421,14 +1421,14 @@ sframe_fre_get_end_ip_offset (sframe_func_desc_entry_int *fdep, unsigned int i,
+    SFRAME_ERR if failure.  */
+ 
+ int
+-sframe_find_fre (const sframe_decoder_ctx *ctx, int32_t pc,
++sframe_find_fre (const sframe_decoder_ctx *ctx, int64_t pc,
+ 		 sframe_frame_row_entry *frep)
+ {
+   sframe_frame_row_entry cur_fre;
+   sframe_func_desc_entry_int *fdep;
+   uint32_t func_idx;
+   uint32_t fre_type, i;
+-  int32_t func_start_pc_offset;
++  int64_t func_start_pc_offset;
+   uint32_t start_ip_offset, end_ip_offset;
+   const char *fres;
+   size_t size = 0;
+@@ -1779,7 +1779,7 @@ sframe_encoder_get_offsetof_fde_start_addr (sframe_encoder_ctx *ectx,
+ 
+   return (sframe_encoder_get_hdr_size (ectx)
+ 	  + func_idx * sizeof (sframe_func_desc_entry_v3)
+-	  + offsetof (sframe_func_desc_entry_v3, sfde_func_start_address));
++	  + offsetof (sframe_func_desc_entry_v3, sfde_func_start_offset));
+ }
+ 
+ /* Add an SFrame FRE to function at FUNC_IDX'th function descriptor entry in
+@@ -1866,7 +1866,7 @@ bad:
+ 
+ static int
+ sframe_encoder_add_funcdesc_internal (sframe_encoder_ctx *ectx,
+-				      int32_t start_addr,
++				      int64_t start_addr,
+ 				      uint32_t func_size)
+ {
+   sframe_header *ehp;
+@@ -1937,7 +1937,7 @@ bad:
+    FUNC_SIZE to the encoder context ECTX.  */
+ 
+ int
+-sframe_encoder_add_funcdesc (sframe_encoder_ctx *ectx, int32_t start_pc_offset,
++sframe_encoder_add_funcdesc (sframe_encoder_ctx *ectx, int64_t start_pc_offset,
+ 			     uint32_t func_size)
+ {
+   int err = 0;
+@@ -2128,7 +2128,7 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
+ {
+   sframe_func_desc_entry_v3 *fdep = (sframe_func_desc_entry_v3 *)contents;
+ 
+-  fdep->sfde_func_start_address = (int32_t)fde->func_start_pc_offset;
++  fdep->sfde_func_start_offset = fde->func_start_pc_offset;
+   fdep->sfde_func_size = fde->func_size;
+   fdep->sfde_func_start_fre_off = fde->func_start_fre_off;
+   fdep->sfde_func_num_fres = (uint16_t)fde->func_num_fres;
+diff --git a/libsframe/testsuite/libsframe.decode/DATA2 b/libsframe/testsuite/libsframe.decode/DATA2
+index b1069c3c4d106a6d6985832fa8c1610548155b90..06fd11bd8bf5423db874283e7a73e2464d981083 100644
+GIT binary patch
+delta 38
+hcmaz_njj&k!N9<v^x;1kNCVj*zyidYV6lmMIsg!F4%Pqw
+
+delta 30
+gcmYd_njj&jz`($u^x^-1X&?;(EI_RLVWOE10C2Dd+5i9m
+
+diff --git a/libsframe/testsuite/libsframe.encode/encode-1.c b/libsframe/testsuite/libsframe.encode/encode-1.c
+index 9ced70259e2..284177df805 100644
+--- a/libsframe/testsuite/libsframe.encode/encode-1.c
++++ b/libsframe/testsuite/libsframe.encode/encode-1.c
+@@ -18,8 +18,8 @@
+ #include "sframe-test.h"
+ 
+ static int
+-add_fde1 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+-	  uint32_t sframe_vaddr, int idx, uint32_t *func_size)
++add_fde1 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
++	  int64_t sframe_vaddr, int idx, uint32_t *func_size)
+ {
+ #define FDE1_NUM_FRES    4
+   /* A contiguous block containing 4 FREs.  */
+@@ -35,11 +35,11 @@ add_fde1 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ 
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (encode, idx, NULL);
+-  int32_t func1_start_addr = (start_pc_vaddr
++  int64_t func1_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+ 						     SFRAME_FDE_TYPE_PCINC);
+-  int err = sframe_encoder_add_funcdesc_v2 (encode, func1_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (encode, func1_start_addr,
+ 					    *func_size, finfo, 0,
+ 					    FDE1_NUM_FRES);
+   if (err == -1)
+@@ -53,8 +53,8 @@ add_fde1 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ }
+ 
+ static int
+-add_fde2 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+-	  uint32_t sframe_vaddr, int idx, uint32_t *func_size)
++add_fde2 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
++	  int64_t sframe_vaddr, int idx, uint32_t *func_size)
+ 
+ {
+   /* A contiguous block containing 4 FREs.  */
+@@ -71,11 +71,11 @@ add_fde2 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ 
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (encode, idx, NULL);
+-  int32_t func1_start_addr = (start_pc_vaddr
++  int64_t func1_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+ 						     SFRAME_FDE_TYPE_PCINC);
+-  int err = sframe_encoder_add_funcdesc_v2 (encode, func1_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (encode, func1_start_addr,
+ 					    *func_size, finfo, 0,
+ 					    FDE1_NUM_FRES);
+   if (err == -1)
+@@ -140,9 +140,9 @@ int main (void)
+ {
+   sframe_encoder_ctx *encode;
+   sframe_frame_row_entry frep;
+-  uint32_t sframe_vaddr;
+-  uint32_t func1_start_vaddr;
+-  uint32_t func2_start_vaddr;
++  int64_t sframe_vaddr;
++  int64_t func1_start_vaddr;
++  int64_t func2_start_vaddr;
+   uint32_t func1_size = 0;
+   uint32_t func2_size = 0;
+   char *sframe_buf;
+diff --git a/libsframe/testsuite/libsframe.find/findfre-1.c b/libsframe/testsuite/libsframe.find/findfre-1.c
+index cf1475eb74f..996a943e679 100644
+--- a/libsframe/testsuite/libsframe.find/findfre-1.c
++++ b/libsframe/testsuite/libsframe.find/findfre-1.c
+@@ -18,8 +18,8 @@
+ #include "sframe-test.h"
+ 
+ static int
+-add_fde1 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+-	  uint32_t sframe_vaddr, int idx, uint32_t *func_size)
++add_fde1 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
++	  int64_t sframe_vaddr, int idx, uint32_t *func_size)
+ {
+   /* A contiguous block containing 4 FREs.  */
+ #define FDE1_NUM_FRES    4
+@@ -35,11 +35,11 @@ add_fde1 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ 
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (encode, idx, NULL);
+-  int32_t func1_start_addr = (start_pc_vaddr
++  int64_t func1_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+ 						     SFRAME_FDE_TYPE_PCINC);
+-  int err = sframe_encoder_add_funcdesc_v2 (encode, func1_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (encode, func1_start_addr,
+ 					    *func_size, finfo, 0,
+ 					    FDE1_NUM_FRES);
+   if (err == -1)
+@@ -53,8 +53,8 @@ add_fde1 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ }
+ 
+ static int
+-add_fde2 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+-	  uint32_t sframe_vaddr, int idx, uint32_t *func_size)
++add_fde2 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
++	  int64_t sframe_vaddr, int idx, uint32_t *func_size)
+ {
+   /* A contiguous block containing 4 FREs.  */
+ #define FDE2_NUM_FRES    4
+@@ -70,11 +70,11 @@ add_fde2 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ 
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (encode, idx, NULL);
+-  int32_t func2_start_addr = (start_pc_vaddr
++  int64_t func2_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+ 						     SFRAME_FDE_TYPE_PCINC);
+-  int err = sframe_encoder_add_funcdesc_v2 (encode, func2_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (encode, func2_start_addr,
+ 					    *func_size, finfo, 0,
+ 					    FDE2_NUM_FRES);
+   if (err == -1)
+@@ -88,18 +88,18 @@ add_fde2 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ }
+ 
+ static
+-void test_text_findfre (const char suffix, uint32_t text_vaddr,
+-			uint32_t sframe_vaddr)
++void test_text_findfre (const char suffix, int64_t text_vaddr,
++			int64_t sframe_vaddr)
+ {
+   sframe_encoder_ctx *encode;
+   sframe_decoder_ctx *dctx;
+   sframe_frame_row_entry frep;
+-  uint32_t func1_start_vaddr;
+-  uint32_t func2_start_vaddr;
++  int64_t func1_start_vaddr;
++  int64_t func2_start_vaddr;
+   uint32_t func1_size = 0;
+   uint32_t func2_size = 0;
+   uint32_t fde_cnt = 0;
+-  int32_t lookup_pc;
++  int64_t lookup_pc;
+   char *sframe_buf;
+   size_t sf_size;
+   int err = 0;
+@@ -171,15 +171,15 @@ void test_text_findfre (const char suffix, uint32_t text_vaddr,
+ 
+ int main (void)
+ {
+-  uint32_t sframe_vaddr = 0x402220;
+-  uint32_t text_vaddr = 0x401020;
+-  printf ("Testing with text_vaddr = %#x; sframe_vaddr = %#x\n", text_vaddr,
++  int64_t sframe_vaddr = 0x402220;
++  int64_t text_vaddr = 0x401020;
++  printf ("Testing with text_vaddr = %#lx; sframe_vaddr = %#lx\n", text_vaddr,
+ 	  sframe_vaddr);
+   test_text_findfre ('a', text_vaddr, sframe_vaddr);
+ 
+   sframe_vaddr = 0x401020;
+   text_vaddr = 0x402220;
+-  printf ("Testing with text_vaddr = %#x; sframe_vaddr = %#x\n", text_vaddr,
++  printf ("Testing with text_vaddr = %#lx; sframe_vaddr = %#lx\n", text_vaddr,
+ 	  sframe_vaddr);
+   test_text_findfre ('b', text_vaddr, sframe_vaddr);
+ }
+diff --git a/libsframe/testsuite/libsframe.find/findfunc-1.c b/libsframe/testsuite/libsframe.find/findfunc-1.c
+index d5b99a9420e..364c9673ba4 100644
+--- a/libsframe/testsuite/libsframe.find/findfunc-1.c
++++ b/libsframe/testsuite/libsframe.find/findfunc-1.c
+@@ -25,8 +25,8 @@
+ #include "sframe-test.h"
+ 
+ static int
+-add_fde1 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+-	  uint32_t sframe_vaddr, int idx, uint32_t *func_size)
++add_fde1 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
++	  int64_t sframe_vaddr, int idx, uint32_t *func_size)
+ {
+   /* A contiguous block containing 4 FREs.  */
+ #define FDE1_NUM_FRES    4
+@@ -42,11 +42,11 @@ add_fde1 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ 
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (encode, idx, NULL);
+-  int32_t func1_start_addr = (start_pc_vaddr
++  int64_t func1_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+ 						     SFRAME_FDE_TYPE_PCINC);
+-  int err = sframe_encoder_add_funcdesc_v2 (encode, func1_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (encode, func1_start_addr,
+ 					    *func_size, finfo, 0,
+ 					    FDE1_NUM_FRES);
+   if (err == -1)
+@@ -60,8 +60,8 @@ add_fde1 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ }
+ 
+ static int
+-add_fde2 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+-	  uint32_t sframe_vaddr, int idx, uint32_t *func_size)
++add_fde2 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
++	  int64_t sframe_vaddr, int idx, uint32_t *func_size)
+ {
+   /* A contiguous block containing 4 FREs.  */
+ #define FDE2_NUM_FRES    4
+@@ -77,11 +77,11 @@ add_fde2 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ 
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (encode, idx, NULL);
+-  int32_t func2_start_addr = (start_pc_vaddr
++  int64_t func2_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+ 						     SFRAME_FDE_TYPE_PCINC);
+-  int err = sframe_encoder_add_funcdesc_v2 (encode, func2_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (encode, func2_start_addr,
+ 					    *func_size, finfo, 0,
+ 					    FDE2_NUM_FRES);
+   if (err == -1)
+@@ -95,8 +95,8 @@ add_fde2 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ }
+ 
+ static int
+-add_fde3 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+-	  uint32_t sframe_vaddr, int idx, uint32_t *func_size)
++add_fde3 (sframe_encoder_ctx *encode, int64_t start_pc_vaddr,
++	  int64_t sframe_vaddr, int idx, uint32_t *func_size)
+ {
+   /* A contiguous block containing 4 FREs.  */
+ #define FDE3_NUM_FRES    4
+@@ -112,11 +112,11 @@ add_fde3 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ 
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (encode, idx, NULL);
+-  int32_t func3_start_addr = (start_pc_vaddr
++  int64_t func3_start_addr = (start_pc_vaddr
+ 			      - (sframe_vaddr + offsetof_fde_in_sec));
+   unsigned char finfo = sframe_fde_create_func_info (SFRAME_FRE_TYPE_ADDR1,
+ 						     SFRAME_FDE_TYPE_PCINC);
+-  int err = sframe_encoder_add_funcdesc_v2 (encode, func3_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (encode, func3_start_addr,
+ 					    *func_size, finfo, 0,
+ 					    FDE3_NUM_FRES);
+   if (err == -1)
+@@ -130,20 +130,20 @@ add_fde3 (sframe_encoder_ctx *encode, uint32_t start_pc_vaddr,
+ }
+ 
+ static
+-void test_text_findfre (const char suffix, uint32_t text_vaddr,
+-			uint32_t sframe_vaddr)
++void test_text_findfre (const char suffix, int64_t text_vaddr,
++			int64_t sframe_vaddr)
+ {
+   sframe_encoder_ctx *encode;
+   sframe_decoder_ctx *dctx;
+   sframe_frame_row_entry frep;
+-  uint32_t func1_start_vaddr;
+-  uint32_t func2_start_vaddr;
+-  uint32_t func3_start_vaddr;
++  int64_t func1_start_vaddr;
++  int64_t func2_start_vaddr;
++  int64_t func3_start_vaddr;
+   uint32_t func1_size = 0;
+   uint32_t func2_size = 0;
+   uint32_t func3_size = 0;
+   uint32_t fde_cnt = 0;
+-  int32_t lookup_pc = 0;
++  int64_t lookup_pc = 0;
+   char *sframe_buf;
+   size_t sf_size;
+   int err = 0;
+@@ -233,15 +233,15 @@ void test_text_findfre (const char suffix, uint32_t text_vaddr,
+ 
+ int main (void)
+ {
+-  uint32_t sframe_vaddr = 0x4b5620;
+-  uint32_t text_vaddr = 0x4038b0;
+-  printf ("Testing with text_vaddr = %#x; sframe_vaddr = %#x\n", text_vaddr,
++  int64_t sframe_vaddr = 0x4b5620;
++  int64_t text_vaddr = 0x4038b0;
++  printf ("Testing with text_vaddr = %#lx; sframe_vaddr = %#lx\n", text_vaddr,
+ 	  sframe_vaddr);
+   test_text_findfre ('a', text_vaddr, sframe_vaddr);
+ 
+   sframe_vaddr = 0x4038b0;
+   text_vaddr = 0x4b5620;
+-  printf ("Testing with text_vaddr = %#x; sframe_vaddr = %#x\n", text_vaddr,
++  printf ("Testing with text_vaddr = %#lx; sframe_vaddr = %#lx\n", text_vaddr,
+ 	  sframe_vaddr);
+   test_text_findfre ('b', text_vaddr, sframe_vaddr);
+ }
+diff --git a/libsframe/testsuite/libsframe.find/plt-findfre-1.c b/libsframe/testsuite/libsframe.find/plt-findfre-1.c
+index e9cb3ac8c4a..c2a5e2f8de9 100644
+--- a/libsframe/testsuite/libsframe.find/plt-findfre-1.c
++++ b/libsframe/testsuite/libsframe.find/plt-findfre-1.c
+@@ -18,8 +18,8 @@
+ #include "sframe-test.h"
+ 
+ static int
+-add_plt_fde1 (sframe_encoder_ctx *ectx, uint32_t plt_vaddr,
+-	      uint32_t sframe_vaddr, int idx)
++add_plt_fde1 (sframe_encoder_ctx *ectx, int64_t plt_vaddr,
++	      int64_t sframe_vaddr, int idx)
+ {
+   /* A contiguous block containing 3 FREs.  The start_ip_offset must remain
+      less than 16 bytes.  */
+@@ -34,11 +34,11 @@ add_plt_fde1 (sframe_encoder_ctx *ectx, uint32_t plt_vaddr,
+ 						     SFRAME_FDE_TYPE_PCMASK);
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (ectx, idx, NULL);
+-  int32_t func_start_addr = (plt_vaddr
++  int64_t func_start_addr = (plt_vaddr
+ 			     - (sframe_vaddr + offsetof_fde_in_sec));
+ 
+   /* 5 pltN entries of 16 bytes each.  */
+-  int err = sframe_encoder_add_funcdesc_v2 (ectx, func_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (ectx, func_start_addr,
+ 					    16 * 5 /* func size in bytes.  */,
+ 					    finfo,
+ 					    16 /* rep block size in bytes.  */,
+@@ -54,8 +54,8 @@ add_plt_fde1 (sframe_encoder_ctx *ectx, uint32_t plt_vaddr,
+ }
+ 
+ static
+-void test_plt_findfre (const char suffix, uint32_t plt_vaddr,
+-		       uint32_t sframe_vaddr)
++void test_plt_findfre (const char suffix, int64_t plt_vaddr,
++		       int64_t sframe_vaddr)
+ {
+   sframe_encoder_ctx *ectx;
+   sframe_decoder_ctx *dctx;
+@@ -123,15 +123,15 @@ void test_plt_findfre (const char suffix, uint32_t plt_vaddr,
+ 
+ int main (void)
+ {
+-  uint32_t sframe_vaddr = 0x402220;
+-  uint32_t plt_vaddr = 0x401020;
+-  printf ("Testing with plt_vaddr = %#x; sframe_vaddr = %#x\n", plt_vaddr,
++  int64_t sframe_vaddr = 0x402220;
++  int64_t plt_vaddr = 0x401020;
++  printf ("Testing with plt_vaddr = %#lx; sframe_vaddr = %#lx\n", plt_vaddr,
+ 	  sframe_vaddr);
+   test_plt_findfre ('a', plt_vaddr, sframe_vaddr);
+ 
+   sframe_vaddr = 0x401020;
+   plt_vaddr = 0x402220;
+-  printf ("Testing with plt_vaddr = %#x; sframe_vaddr = %#x\n", plt_vaddr,
++  printf ("Testing with plt_vaddr = %#lx; sframe_vaddr = %#lx\n", plt_vaddr,
+ 	  sframe_vaddr);
+   test_plt_findfre ('b', plt_vaddr, sframe_vaddr);
+ }
+diff --git a/libsframe/testsuite/libsframe.find/plt-findfre-2.c b/libsframe/testsuite/libsframe.find/plt-findfre-2.c
+index 25e76a599ce..c1ad7f08505 100644
+--- a/libsframe/testsuite/libsframe.find/plt-findfre-2.c
++++ b/libsframe/testsuite/libsframe.find/plt-findfre-2.c
+@@ -27,8 +27,8 @@
+ #define PLTN_CFA_OFFSET_MAGIC 8
+ 
+ static int
+-add_plt0_fde (sframe_encoder_ctx *ectx, uint32_t plt_vaddr,
+-	      uint32_t sframe_vaddr, int idx)
++add_plt0_fde (sframe_encoder_ctx *ectx, int64_t plt_vaddr,
++	      int64_t sframe_vaddr, int idx)
+ {
+   /* 1 single FRE.  */
+   sframe_frame_row_entry fre
+@@ -41,11 +41,11 @@ add_plt0_fde (sframe_encoder_ctx *ectx, uint32_t plt_vaddr,
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (ectx, idx, NULL);
+ 
+-  int32_t func_start_addr = (plt_vaddr
++  int64_t func_start_addr = (plt_vaddr
+ 			     - (sframe_vaddr + offsetof_fde_in_sec));
+ 
+   /* 1 PCINC-type FDE for 1 plt0 entry of 32 bytes.  */
+-  int err = sframe_encoder_add_funcdesc_v2 (ectx, func_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (ectx, func_start_addr,
+ 					    PLT_SIZE /* func size.  */,
+ 					    finfo,
+ 					    0 /* rep block size.  */,
+@@ -60,8 +60,8 @@ add_plt0_fde (sframe_encoder_ctx *ectx, uint32_t plt_vaddr,
+ }
+ 
+ static int
+-add_pltn_fde (sframe_encoder_ctx *ectx, uint32_t plt_vaddr,
+-	      uint32_t sframe_vaddr, int idx)
++add_pltn_fde (sframe_encoder_ctx *ectx, int64_t plt_vaddr,
++	      int64_t sframe_vaddr, int idx)
+ {
+   /* 1 single FRE.  */
+   sframe_frame_row_entry fre
+@@ -74,11 +74,11 @@ add_pltn_fde (sframe_encoder_ctx *ectx, uint32_t plt_vaddr,
+   uint32_t offsetof_fde_in_sec
+     = sframe_encoder_get_offsetof_fde_start_addr (ectx, idx, NULL);
+ 
+-  int32_t func_start_addr = (plt_vaddr
++  int64_t func_start_addr = (plt_vaddr
+ 			     - (sframe_vaddr + offsetof_fde_in_sec));
+ 
+   /* 1 PCMASK-type FDE for 5 pltN entries of 32 bytes each.  */
+-  int err = sframe_encoder_add_funcdesc_v2 (ectx, func_start_addr,
++  int err = sframe_encoder_add_funcdesc_v3 (ectx, func_start_addr,
+ 					    5 * PLT_SIZE /* func size.  */,
+ 					    finfo,
+ 					    PLT_SIZE /* rep block size.  */,
+@@ -93,8 +93,8 @@ add_pltn_fde (sframe_encoder_ctx *ectx, uint32_t plt_vaddr,
+ }
+ 
+ static
+-void test_plt_findfre (const char suffix, const uint32_t plt_vaddr,
+-		       const uint32_t sframe_vaddr)
++void test_plt_findfre (const char suffix, const int64_t plt_vaddr,
++		       const int64_t sframe_vaddr)
+ {
+   sframe_encoder_ctx *ectx;
+   sframe_decoder_ctx *dctx;
+@@ -165,15 +165,15 @@ void test_plt_findfre (const char suffix, const uint32_t plt_vaddr,
+ int
+ main (void)
+ {
+-  uint32_t sframe_vaddr = 0x402220;
+-  uint32_t plt_vaddr = 0x401020;
+-  printf ("plt-findfre-2a: Testing with plt_vaddr = %#x; sframe_vaddr = %#x\n",
++  int64_t sframe_vaddr = 0x402220;
++  int64_t plt_vaddr = 0x401020;
++  printf ("plt-findfre-2a: Testing with plt_vaddr = %#lx; sframe_vaddr = %#lx\n",
+ 	  plt_vaddr, sframe_vaddr);
+   test_plt_findfre ('a', plt_vaddr, sframe_vaddr);
+ 
+   sframe_vaddr = 0x401020;
+   plt_vaddr = 0x402220;
+-  printf ("plt-findfre-2b: Testing with plt_vaddr = %#x; sframe_vaddr = %#x\n",
++  printf ("plt-findfre-2b: Testing with plt_vaddr = %#lx; sframe_vaddr = %#lx\n",
+ 	  plt_vaddr, sframe_vaddr);
+   test_plt_findfre ('b', plt_vaddr, sframe_vaddr);
+ 
+-- 
+2.52.0
+

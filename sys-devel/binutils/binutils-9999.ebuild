@@ -139,6 +139,8 @@ src_prepare() {
 			einfo "Done."
 
 			#eapply "${FILESDIR}/sframe"
+			git config user.email "you@example.com"
+			git config user.name "Your Name"
 			git am "${FILESDIR}/sframe/"*.patch || die
 
 			# This is applied conditionally for now just out of caution.

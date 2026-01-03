@@ -1039,10 +1039,10 @@ glibc_do_configure() {
 	esac
 
 	# XXX: Temporary for testing SFrame v3
-	#case ${ABI}-${CTARGET} in
-	#	amd64-x86_64-*) myconf+=( --disable-sframe ) ;;
-	#	*) ;;
-	#esac
+	case ${ABI}-${CTARGET} in
+		amd64-x86_64-*) myconf+=( --disable-sframe ) ;;
+		*) ;;
+	esac
 
 	[[ $(tc-is-softfloat) == "yes" ]] && myconf+=( --without-fp )
 

@@ -532,6 +532,11 @@ setup_flags() {
 				;;
 		esac
 	fi
+
+	# XXX: Hack to allow rebuilding for SFrame v3 w/o breaking multilib
+	if [[ ${ABI} == amd64 ]] ; then
+		append-ldflags -Wl,--discard-sframe-sections
+	fi
 }
 
 use_multiarch() {

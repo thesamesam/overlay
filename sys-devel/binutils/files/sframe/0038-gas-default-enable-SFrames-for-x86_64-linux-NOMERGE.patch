@@ -1,0 +1,61 @@
+From 9b86b7bb6a03be65ccf0dcb58a047b883b8c4575 Mon Sep 17 00:00:00 2001
+Message-ID: <9b86b7bb6a03be65ccf0dcb58a047b883b8c4575.1767385715.git.sam@gentoo.org>
+In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From: Sam James <sam@gentoo.org>
+Date: Sat, 26 Jul 2025 00:09:57 +0100
+Subject: [PATCH 38/40] gas: default-enable SFrames for x86_64-*-linux-*
+ [NOMERGE]
+
+(I don't intend for this to be merged at this point, I've just included
+it for testing.)
+
+gas/
+	PR gas/33126
+	* configure: Regenerate.
+	* configure.ac (ac_default_sframe): Initialize to 1 for
+	x86_64-*-linux-*.
+---
+ gas/configure    | 7 +++++++
+ gas/configure.ac | 7 +++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/gas/configure b/gas/configure
+index 2bcb85bb666..55ccf64cf95 100755
+--- a/gas/configure
++++ b/gas/configure
+@@ -12524,6 +12524,13 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
+ 	   && test ${ac_default_generate_x86_used_note} = unset; then
+ 	  ac_default_generate_x86_used_note=1
+ 	fi
++
++	# If unset on x86_64-*-linux-*, let's enable it.
++	if test ${this_target} = $target \
++	   && test ${ac_default_sframe} = unset; then
++	  ac_default_sframe=1
++	fi
++
+ 	;;
+ 
+       microblaze*)
+diff --git a/gas/configure.ac b/gas/configure.ac
+index 613f85016c5..742067ca7ba 100644
+--- a/gas/configure.ac
++++ b/gas/configure.ac
+@@ -263,6 +263,13 @@ for this_target in $target $canon_targets ; do
+ 	   && test ${ac_default_generate_x86_used_note} = unset; then
+ 	  ac_default_generate_x86_used_note=1
+ 	fi
++
++	# If unset on x86_64-*-linux-*, let's enable it.
++	if test ${this_target} = $target \
++	   && test ${ac_default_sframe} = unset; then
++	  ac_default_sframe=1
++	fi
++
+ 	;;
+ 
+       microblaze*)
+-- 
+2.52.0
+

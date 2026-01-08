@@ -1,10 +1,10 @@
-From 6d181c3602bf4a9544712e75dc04dc0e619c469e Mon Sep 17 00:00:00 2001
-Message-ID: <6d181c3602bf4a9544712e75dc04dc0e619c469e.1767385714.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 4e0b51c686bdafeafd1cb958f0aa4389248a968b Mon Sep 17 00:00:00 2001
+Message-ID: <4e0b51c686bdafeafd1cb958f0aa4389248a968b.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 28 Nov 2025 11:50:14 -0800
-Subject: [PATCH 08/40] [SFrame-V3] sframe: gas: libsframe: use uint16_t for
+Subject: [PATCH 09/41] [SFrame-V3] sframe: gas: libsframe: use uint16_t for
  num_fres of FDE
 
 Reduce the size of the num_fres field in the Function Descriptor Entry
@@ -43,10 +43,14 @@ libsframe/
 	* testsuite/libsframe.decode/DATA2: Update binary test data.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Remove unnecessary typecast for num_fres [Jens].
   - Fixed up the commit log to reflect the minor shifting of the patch.
-[End of changes from RFC]
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/gen-sframe.c                           |  19 +++++++++++++++++--
  include/sframe.h                           |   2 +-
@@ -55,7 +59,7 @@ libsframe/
  4 files changed, 19 insertions(+), 4 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 70cba9a2765..7f2636477aa 100644
+index d101da61781..aba87c90930 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -725,8 +725,9 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
@@ -70,7 +74,7 @@ index 70cba9a2765..7f2636477aa 100644
  
    /* SFrame FDE function info.  */
    unsigned char func_info;
-@@ -2040,6 +2041,20 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
+@@ -2044,6 +2045,20 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
  	= get_dw_fde_end_addrS (xlate_ctx->dw_fde);
      }
  
@@ -92,10 +96,10 @@ index 70cba9a2765..7f2636477aa 100644
    if (sframe_ra_tracking_p ()
        && sframe_get_abi_arch () != SFRAME_ABI_S390X_ENDIAN_BIG)
 diff --git a/include/sframe.h b/include/sframe.h
-index c519a4930ba..118fa125835 100644
+index 7d3d9840e03..aa3c0872e0c 100644
 --- a/include/sframe.h
 +++ b/include/sframe.h
-@@ -251,7 +251,7 @@ typedef struct sframe_func_desc_entry_v3
+@@ -256,7 +256,7 @@ typedef struct sframe_func_desc_entry_v3
       beginning of the SFrame Frame Row Entry sub-section.  */
    uint32_t sfde_func_start_fre_off;
    /* Number of frame row entries for the function.  */
@@ -105,10 +109,10 @@ index c519a4930ba..118fa125835 100644
       - 4-bits: Identify the FRE type used for the function.
       - 1-bit: Identify the PC type of the function - mask or inc.
 diff --git a/libsframe/sframe.c b/libsframe/sframe.c
-index 851f43d17a1..cf0071e75ff 100644
+index 7dccdc097d4..b942a2c3810 100644
 --- a/libsframe/sframe.c
 +++ b/libsframe/sframe.c
-@@ -2131,7 +2131,7 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
+@@ -2140,7 +2140,7 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
    fdep->sfde_func_start_address = (int32_t)fde->func_start_pc_offset;
    fdep->sfde_func_size = fde->func_size;
    fdep->sfde_func_start_fre_off = fde->func_start_fre_off;

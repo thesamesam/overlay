@@ -1,10 +1,10 @@
-From 08636a0cc2e85fe4660cea9a968aebc153606381 Mon Sep 17 00:00:00 2001
-Message-ID: <08636a0cc2e85fe4660cea9a968aebc153606381.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 887cbcd85f75a6027e0f6e3e270389fff80d1a2e Mon Sep 17 00:00:00 2001
+Message-ID: <887cbcd85f75a6027e0f6e3e270389fff80d1a2e.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Tue, 16 Dec 2025 12:50:04 -0800
-Subject: [PATCH 26/40] [SFrame-V3] gas: sframe: testsuite: reject
+Subject: [PATCH 26/41] [SFrame-V3] gas: sframe: testsuite: reject
  .cfi_register REG_SP, REG
 
 gas/
@@ -19,9 +19,13 @@ gas/testsuite/
 	* gas/cfi-sframe/cfi-sframe.exp: Add new tests.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - New in V1.
-[End of changes from RFC]
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/gen-sframe.c                              | 20 +++++++++++++++----
  .../gas/cfi-sframe/cfi-sframe-s390x-err-4.d   | 15 ++++++++++++++
@@ -36,10 +40,10 @@ gas/testsuite/
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index eedc00e3003..f9fd807e14c 100644
+index e41bac7cc36..2829fa52e4a 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -1481,6 +1481,13 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1482,6 +1482,13 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
  	   && cfi_insn->u.rr.reg1 == SFRAME_CFA_RA_REG)
      sframe_fre_set_ra_track (cur_fre,
  			     SFRAME_V3_S390X_OFFSET_ENCODE_REGNUM (cfi_insn->u.rr.reg2));
@@ -53,7 +57,7 @@ index eedc00e3003..f9fd807e14c 100644
  
    return SFRAME_XLATE_OK;
  }
-@@ -1519,6 +1526,7 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1520,6 +1527,7 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
  	  cur_fre->fp_deref_p = false;
  	  cur_fre->merge_candidate = false;
  	  xlate_ctx->flex_p = true;
@@ -61,7 +65,7 @@ index eedc00e3003..f9fd807e14c 100644
  	}
        else if (cfi_insn->u.rr.reg1 == SFRAME_CFA_RA_REG)
  	{
-@@ -1528,12 +1536,16 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1529,12 +1537,16 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
  	  cur_fre->ra_deref_p = false;
  	  cur_fre->merge_candidate = false;
  	  xlate_ctx->flex_p = true;
@@ -152,7 +156,7 @@ index 00000000000..fbfee957bea
 +	.long 0
 +	.cfi_endproc
 diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
-index e0da78892ac..cd43edef087 100644
+index a8fd4447c17..16e598c1753 100644
 --- a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
 +++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
 @@ -73,6 +73,7 @@ if { [istarget "x86_64-*-*"] && [gas_sframe_check] } then {
@@ -162,8 +166,8 @@ index e0da78892ac..cd43edef087 100644
 +	run_dump_test "cfi-sframe-x86_64-empty-5"
  	run_dump_test "cfi-sframe-x86_64-empty-pr33277"
  	run_dump_test "cfi-sframe-x86_64-ra-undefined-1"
- 	set ASFLAGS "$old_ASFLAGS"
-@@ -97,6 +98,7 @@ if { [istarget "s390x*-*-*"] && [gas_sframe_check] } then {
+ 	run_dump_test "cfi-sframe-x86_64-ra-undefined-flex-1"
+@@ -98,6 +99,7 @@ if { [istarget "s390x*-*-*"] && [gas_sframe_check] } then {
      run_dump_test "cfi-sframe-s390x-err-1"
      run_dump_test "cfi-sframe-s390x-err-2"
      run_dump_test "cfi-sframe-s390x-err-3"

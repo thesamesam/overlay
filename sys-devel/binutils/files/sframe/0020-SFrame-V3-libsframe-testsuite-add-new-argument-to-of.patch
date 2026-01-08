@@ -1,10 +1,10 @@
-From 4e996a7df0252ff4f574f02eea7c0a7f68e980c3 Mon Sep 17 00:00:00 2001
-Message-ID: <4e996a7df0252ff4f574f02eea7c0a7f68e980c3.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From d6b813f6f5bb4a3dcf26089f564bc35485068c23 Mon Sep 17 00:00:00 2001
+Message-ID: <d6b813f6f5bb4a3dcf26089f564bc35485068c23.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 17 Nov 2025 10:36:27 -0800
-Subject: [PATCH 19/40] [SFrame-V3] libsframe: testsuite: add new argument to
+Subject: [PATCH 20/41] [SFrame-V3] libsframe: testsuite: add new argument to
  offset access APIs
 
 For FDE type SFRAME_FDE_TYPE_FLEX, the offsets are not only laid out
@@ -37,26 +37,37 @@ libsframe/
 	(sframe_fre_get_fp_offset): Likewise.
 	(sframe_fre_get_ra_offset): Likewise.
 libsframe/testsuite/
-	* libsframe.find/findfre-1.c: Pass 0 for FDE type.
+	* libsframe.find/findfre-1.c: Pass SFRAME_FDE_TYPE_DEFAULT for
+	FDE type.
 	* libsframe.find/findfunc-1.c: Likewise.
 	* libsframe.find/plt-findfre-1.c: Likewise.
 	* libsframe.find/plt-findfre-2.c: Likewise.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Now that the RA offset for flex FDE is not two dummy offsets when
     padding, adjust the offset access APIs.
-[End of changes from RFC]
+[End of changes in V1]
+
+[Changes in V2]
+  - Remove !flex_p check for s390x.  It was initially added when flex
+    FDE generation was limited to AMD64.  But even if flex FDE is not
+    generated for s390x, this is unnecessarily restrictive [Indu].
+  - Use var initialized with SFRAME_FDE_TYPE_DEFAULT instead of magic
+    constant 0 in testcases [Indu].
+[End of changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  include/sframe-api.h                          |  17 ++-
  libsframe/libsframe.ver                       |   1 +
  libsframe/sframe-dump.c                       |  10 +-
  libsframe/sframe.c                            | 103 +++++++++++++-----
- .../testsuite/libsframe.find/findfre-1.c      |  10 +-
- .../testsuite/libsframe.find/findfunc-1.c     |   6 +-
- .../testsuite/libsframe.find/plt-findfre-1.c  |  12 +-
- .../testsuite/libsframe.find/plt-findfre-2.c  |   8 +-
- 8 files changed, 114 insertions(+), 53 deletions(-)
+ .../testsuite/libsframe.find/findfre-1.c      |  11 +-
+ .../testsuite/libsframe.find/findfunc-1.c     |   7 +-
+ .../testsuite/libsframe.find/plt-findfre-1.c  |  13 ++-
+ .../testsuite/libsframe.find/plt-findfre-2.c  |   9 +-
+ 8 files changed, 118 insertions(+), 53 deletions(-)
 
 diff --git a/include/sframe-api.h b/include/sframe-api.h
 index 07de850017a..825cef154a6 100644
@@ -148,10 +159,10 @@ index b20771a6a2c..ab979c16eef 100644
        /* Dump VMA.  */
        printf ("\n");
 diff --git a/libsframe/sframe.c b/libsframe/sframe.c
-index ddf289c44ca..8d5dba76f2c 100644
+index 178e65c59f9..e14bf486c81 100644
 --- a/libsframe/sframe.c
 +++ b/libsframe/sframe.c
-@@ -823,7 +823,7 @@ fde_func (const void *p1, const void *p2)
+@@ -832,7 +832,7 @@ fde_func (const void *p1, const void *p2)
  
  /* Get IDX'th offset from FRE.  Set errp as applicable.  */
  
@@ -160,7 +171,7 @@ index ddf289c44ca..8d5dba76f2c 100644
  sframe_get_fre_offset (const sframe_frame_row_entry *fre, int idx, int *errp)
  {
    uint8_t offset_cnt, offset_size;
-@@ -940,13 +940,18 @@ sframe_fre_get_base_reg_id (const sframe_frame_row_entry *fre, int *errp)
+@@ -949,13 +949,18 @@ sframe_fre_get_base_reg_id (const sframe_frame_row_entry *fre, int *errp)
  
  int32_t
  sframe_fre_get_cfa_offset (const sframe_decoder_ctx *dctx,
@@ -177,12 +188,12 @@ index ddf289c44ca..8d5dba76f2c 100644
  
    /* For s390x undo adjustment of CFA offset (to enable 8-bit offsets).  */
 -  if (!err && sframe_decoder_get_abi_arch (dctx) == SFRAME_ABI_S390X_ENDIAN_BIG)
-+  if (!err && !flex_p
++  if (!err
 +      && sframe_decoder_get_abi_arch (dctx) == SFRAME_ABI_S390X_ENDIAN_BIG)
      offset = SFRAME_V2_S390X_CFA_OFFSET_DECODE (offset);
  
    if (errp)
-@@ -961,28 +966,51 @@ sframe_fre_get_cfa_offset (const sframe_decoder_ctx *dctx,
+@@ -970,28 +975,51 @@ sframe_fre_get_cfa_offset (const sframe_decoder_ctx *dctx,
  
  int32_t
  sframe_fre_get_fp_offset (const sframe_decoder_ctx *dctx,
@@ -249,7 +260,7 @@ index ddf289c44ca..8d5dba76f2c 100644
  }
  
  /* Get the RA offset from the FRE.  If the offset is invalid, sets errp.
-@@ -994,21 +1022,40 @@ sframe_fre_get_fp_offset (const sframe_decoder_ctx *dctx,
+@@ -1003,21 +1031,40 @@ sframe_fre_get_fp_offset (const sframe_decoder_ctx *dctx,
  
  int32_t
  sframe_fre_get_ra_offset (const sframe_decoder_ctx *dctx,
@@ -300,147 +311,179 @@ index ddf289c44ca..8d5dba76f2c 100644
  
  /* Get whether the RA is mangled.  */
 diff --git a/libsframe/testsuite/libsframe.find/findfre-1.c b/libsframe/testsuite/libsframe.find/findfre-1.c
-index 2c1abc68ae1..7f54ac0c2eb 100644
+index 2c1abc68ae1..ab966689f63 100644
 --- a/libsframe/testsuite/libsframe.find/findfre-1.c
 +++ b/libsframe/testsuite/libsframe.find/findfre-1.c
-@@ -132,31 +132,31 @@ void test_text_findfre (const char suffix, int64_t text_vaddr,
+@@ -103,6 +103,7 @@ void test_text_findfre (const char suffix, int64_t text_vaddr,
+   char *sframe_buf;
+   size_t sf_size;
+   int err = 0;
++  uint32_t dfde = SFRAME_FDE_TYPE_DEFAULT;
+ 
+   encode = sframe_encode (SFRAME_VERSION,
+ 			  SFRAME_F_FDE_FUNC_START_PCREL,
+@@ -132,31 +133,31 @@ void test_text_findfre (const char suffix, int64_t text_vaddr,
    /* Find the third FRE in first FDE.  */
    lookup_pc = func1_start_vaddr + 0x15 - sframe_vaddr;
    err = sframe_find_fre (dctx, lookup_pc, &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x3),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x3),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x3),
  	"findfre-1%c: Find third FRE", suffix);
  
    /* Find an FRE for PC at the end of range covered by FRE.  */
    lookup_pc = func1_start_vaddr + 0x9 - sframe_vaddr;
    err = sframe_find_fre (dctx, lookup_pc, &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x2),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x2),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x2),
  	"findfre-1%c: Find FRE for last PC covered by FRE", suffix);
  
    /* Find the last FRE in first FDE.  */
    lookup_pc = func1_start_vaddr + 0x39 - sframe_vaddr;
    err = sframe_find_fre (dctx, lookup_pc, &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x8),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x8),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x8),
  	"findfre-1%c: Find last FRE", suffix);
  
    /* Find the second FRE in second FDE.  */
    lookup_pc = func2_start_vaddr + 0x11 - sframe_vaddr;
    err = sframe_find_fre (dctx, lookup_pc, &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x12),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x12),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x12),
  	"findfre-1%c: Find second FRE", suffix);
  
    /* Find the first FRE in second FDE.  */
    lookup_pc = func2_start_vaddr + 0x0 - sframe_vaddr;
    err = sframe_find_fre (dctx, lookup_pc, &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x10),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x10),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x10),
  	"findfre-1%c: Find first FRE", suffix);
  
    /* Find FRE for PC out of range.  Expect error code.  */
 diff --git a/libsframe/testsuite/libsframe.find/findfunc-1.c b/libsframe/testsuite/libsframe.find/findfunc-1.c
-index ba9cb2b9238..4d637acc9fb 100644
+index ba9cb2b9238..5a79ba60c11 100644
 --- a/libsframe/testsuite/libsframe.find/findfunc-1.c
 +++ b/libsframe/testsuite/libsframe.find/findfunc-1.c
-@@ -212,19 +212,19 @@ void test_text_findfre (const char suffix, int64_t text_vaddr,
+@@ -147,6 +147,7 @@ void test_text_findfre (const char suffix, int64_t text_vaddr,
+   char *sframe_buf;
+   size_t sf_size;
+   int err = 0;
++  uint32_t dfde = SFRAME_FDE_TYPE_DEFAULT;
+ 
+   encode = sframe_encode (SFRAME_VERSION,
+ 			  SFRAME_F_FDE_FUNC_START_PCREL,
+@@ -212,19 +213,19 @@ void test_text_findfre (const char suffix, int64_t text_vaddr,
    /* Find an FRE for PC in FDE1.  */
    lookup_pc = func1_start_vaddr + 0x9 - sframe_vaddr;
    err = sframe_find_fre (dctx, lookup_pc, &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x2),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x2),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x2),
  	"findfunc-1%c: Find FRE in FDE1", suffix);
  
    /* Find an FRE for PC in FDE2.  */
    lookup_pc = func2_start_vaddr + 0x11 - sframe_vaddr;
    err = sframe_find_fre (dctx, lookup_pc, &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x12),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x12),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x12),
  	"findfunc-1%c: Find FRE in FDE2", suffix);
  
    /* Find an FRE for PC in FDE3.  */
    lookup_pc = func3_start_vaddr + 0x10 - sframe_vaddr;
    err = sframe_find_fre (dctx, lookup_pc, &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x18),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x18),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x18),
  	"findfunc-1%c: Find FRE in FDE3", suffix);
  
    sframe_encoder_free (&encode);
 diff --git a/libsframe/testsuite/libsframe.find/plt-findfre-1.c b/libsframe/testsuite/libsframe.find/plt-findfre-1.c
-index 9ede7f5ba1c..66b49a1b411 100644
+index 9ede7f5ba1c..c0677a9afbf 100644
 --- a/libsframe/testsuite/libsframe.find/plt-findfre-1.c
 +++ b/libsframe/testsuite/libsframe.find/plt-findfre-1.c
-@@ -86,32 +86,32 @@ void test_plt_findfre (const char suffix, int64_t plt_vaddr,
+@@ -65,6 +65,7 @@ void test_plt_findfre (const char suffix, int64_t plt_vaddr,
+   size_t sf_size;
+   int err = 0;
+   uint32_t fde_cnt = 0;
++  uint32_t dfde = SFRAME_FDE_TYPE_DEFAULT;
+ 
+   ectx = sframe_encode (SFRAME_VERSION, SFRAME_F_FDE_FUNC_START_PCREL,
+ 			SFRAME_ABI_AMD64_ENDIAN_LITTLE,
+@@ -86,32 +87,32 @@ void test_plt_findfre (const char suffix, int64_t plt_vaddr,
  
    /* Find the first FRE in PLT1.  */
    err = sframe_find_fre (dctx, (plt_vaddr + 0x0 - sframe_vaddr), &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x1),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x1),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x1),
         "plt-findfre-1%c: Find first FRE in PLT1", suffix);
  
    /* Find the second FRE.  */
    err = sframe_find_fre (dctx, (plt_vaddr + 0x6 - sframe_vaddr), &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x2),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x2),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x2),
  	"plt-findfre-1%c: Find second FRE in PLT1", suffix);
  
    /* Find the last FRE.  */
    err = sframe_find_fre (dctx, (plt_vaddr + 0xc - sframe_vaddr), &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x3),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x3),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x3),
  	"plt-findfre-1%c: Find last FRE in PLT1", suffix);
  
    /* Find the first FRE in PLT4.  */
    err = sframe_find_fre (dctx, (plt_vaddr + 16*3 + 0x0 - sframe_vaddr), &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x1),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x1),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x1),
  	"plt-findfre-1%c: Find first FRE in PLT4", suffix);
  
    /* Find the second FRE in PLT4.  */
    err = sframe_find_fre (dctx, (plt_vaddr + 16*3 + 0x6 - sframe_vaddr), &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x2),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x2),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x2),
  	"plt-findfre-1%c: Find second FRE in PLT4", suffix);
  
    /* Find the last FRE in PLT4.  */
    err = sframe_find_fre (dctx, (plt_vaddr + 16*3 + 0xc - sframe_vaddr), &frep);
 -  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 0x3),
-+  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 0x3),
++  TEST ((err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 0x3),
  	"plt-findfre-1%c: Find last FRE in PLT4", suffix);
  
    /* Find no FRE for out of range PLT6.  */
 diff --git a/libsframe/testsuite/libsframe.find/plt-findfre-2.c b/libsframe/testsuite/libsframe.find/plt-findfre-2.c
-index 5044f8daef5..37c04515ae8 100644
+index 5044f8daef5..5c013683733 100644
 --- a/libsframe/testsuite/libsframe.find/plt-findfre-2.c
 +++ b/libsframe/testsuite/libsframe.find/plt-findfre-2.c
-@@ -134,12 +134,12 @@ void test_plt_findfre (const char suffix, const int64_t plt_vaddr,
+@@ -106,6 +106,7 @@ void test_plt_findfre (const char suffix, const int64_t plt_vaddr,
+   int err = 0;
+   unsigned int fde_cnt = 0;
+   int i;
++  uint32_t dfde = SFRAME_FDE_TYPE_DEFAULT;
+ 
+   ectx = sframe_encode (SFRAME_VERSION, SFRAME_F_FDE_FUNC_START_PCREL,
+ 			SFRAME_ABI_S390X_ENDIAN_BIG,
+@@ -134,12 +135,12 @@ void test_plt_findfre (const char suffix, const int64_t plt_vaddr,
  
    /* Find the only FRE in PLT0 at offset 0.  */
    err = sframe_find_fre (dctx, (plt_vaddr + 0 - sframe_vaddr), &frep);
 -  TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 160 + PLT0_CFA_OFFSET_MAGIC,
-+  TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 160 + PLT0_CFA_OFFSET_MAGIC,
++  TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 160 + PLT0_CFA_OFFSET_MAGIC,
  	"plt-findfre-2%c: Find only FRE in PLT0 at offset 0", suffix);
  
    /* Find the only FRE in PLT0 at offset PLT_SIZE-1.  */
    err = sframe_find_fre (dctx, (plt_vaddr + (PLT_SIZE-1) - sframe_vaddr), &frep);
 -  TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 160 + PLT0_CFA_OFFSET_MAGIC,
-+  TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 160 + PLT0_CFA_OFFSET_MAGIC,
++  TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 160 + PLT0_CFA_OFFSET_MAGIC,
  	"plt-findfre-2%c: Find only FRE in PLT0 at offset PLT_SIZE-1", suffix);
  
    /* Find the only FRE in PLT1-5 at offset 0 and PLT_SIZE-1.  */
-@@ -147,12 +147,12 @@ void test_plt_findfre (const char suffix, const int64_t plt_vaddr,
+@@ -147,12 +148,12 @@ void test_plt_findfre (const char suffix, const int64_t plt_vaddr,
      {
        /* Find the only FRE in PLTN at offset 0.  */
        err = sframe_find_fre (dctx, (plt_vaddr + i * PLT_SIZE + 0 - sframe_vaddr), &frep);
 -      TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 160 + PLTN_CFA_OFFSET_MAGIC,
-+      TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 160 + PLTN_CFA_OFFSET_MAGIC,
++      TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 160 + PLTN_CFA_OFFSET_MAGIC,
  	    "plt-findfre-2%c: Find only FRE in PLT%d at offset 0", suffix, i);
  
        /* Find the only FRE in PLTN at offset 31.  */
        err = sframe_find_fre (dctx, (plt_vaddr + i * PLT_SIZE + (PLT_SIZE-1) - sframe_vaddr), &frep);
 -      TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, &err) == 160 + PLTN_CFA_OFFSET_MAGIC,
-+      TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, 0, &err) == 160 + PLTN_CFA_OFFSET_MAGIC,
++      TEST (err == 0 && sframe_fre_get_cfa_offset (dctx, &frep, dfde, &err) == 160 + PLTN_CFA_OFFSET_MAGIC,
  	    "plt-findfre-2%c: Find only FRE in PLT%d at offset PLT_SIZE-1", suffix, i);
      }
  

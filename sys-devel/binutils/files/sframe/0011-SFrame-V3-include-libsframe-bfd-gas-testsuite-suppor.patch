@@ -1,10 +1,10 @@
-From f24ec6d7e3cbde555345b36b6c24a04986f04c49 Mon Sep 17 00:00:00 2001
-Message-ID: <f24ec6d7e3cbde555345b36b6c24a04986f04c49.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From ab53d2e037eea01797bac02347957540d9aa6321 Mon Sep 17 00:00:00 2001
+Message-ID: <ab53d2e037eea01797bac02347957540d9aa6321.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Tue, 28 Oct 2025 01:39:55 -0700
-Subject: [PATCH 10/40] [SFrame-V3] include: libsframe: bfd: gas: testsuite:
+Subject: [PATCH 11/41] [SFrame-V3] include: libsframe: bfd: gas: testsuite:
  support for signed 64-bit offset in SFrame FDE
 
 This change enables support text > 2 GiB in SFrame format.
@@ -51,7 +51,7 @@ already accounts for writing out as per the size of the member of the
 struct:
 
   emit_expr (&exp, sizeof_member (sframe_func_desc_entry,
-                                  sfde_func_start_address));
+                                  sfde_func_start_offset));
 
 bfd/
 	* elf-sframe.c (sframe_read_value): Signed offset for start PC
@@ -95,10 +95,14 @@ include/
 	* sframe.h: Change data type to int64_t.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Rename sfde_func_start_address to sfde_func_start_offset [Jan].
   - Update the Changelog to reflect additional diffs due to rename.
-[End of changes from RFC]
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  bfd/elf-sframe.c                              |  22 +++++----
  bfd/elf64-s390.c                              |   6 +--
@@ -185,7 +189,7 @@ index 5a9cc45435f..8842efe6fe6 100644
  						    rep_block_size, num_fres);
  	  cur_fidx++;
 diff --git a/bfd/elf64-s390.c b/bfd/elf64-s390.c
-index ea06b52fed8..eec232c0c94 100644
+index 6bf19c408f4..dbeee7f66e4 100644
 --- a/bfd/elf64-s390.c
 +++ b/bfd/elf64-s390.c
 @@ -1612,7 +1612,7 @@ _bfd_s390_elf_create_sframe_plt (struct bfd_link_info *info)
@@ -216,7 +220,7 @@ index ea06b52fed8..eec232c0c94 100644
  			     + PLT_SFRAME_FDE_START_OFFSET);
  	}
 diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
-index 2271edd40ba..12ecce5ecfa 100644
+index 663649d7a41..717d892775e 100644
 --- a/bfd/elfxx-x86.c
 +++ b/bfd/elfxx-x86.c
 @@ -1923,7 +1923,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
@@ -237,7 +241,7 @@ index 2271edd40ba..12ecce5ecfa 100644
  				      plt0_entry_size, /* func start addr.  */
  				      dpltsec->size - plt0_entry_size,
  				      func_info,
-@@ -3007,7 +3007,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
+@@ -3006,7 +3006,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
  	    + PLT_SFRAME_FDE_START_OFFSET;
  	  bfd_put_signed_32 (dynobj, test_value,
  #endif
@@ -246,7 +250,7 @@ index 2271edd40ba..12ecce5ecfa 100644
  			     htab->plt_sframe->contents
  			     + PLT_SFRAME_FDE_START_OFFSET);
  	}
-@@ -3041,7 +3041,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
+@@ -3040,7 +3040,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
  	    + PLT_SFRAME_FDE_START_OFFSET;
  	  bfd_put_signed_32 (dynobj, test_value,
  #endif
@@ -255,7 +259,7 @@ index 2271edd40ba..12ecce5ecfa 100644
  			     htab->plt_second_sframe->contents
  			     + PLT_SFRAME_FDE_START_OFFSET);
  	}
-@@ -3068,7 +3068,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
+@@ -3067,7 +3067,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
  	    = (htab->plt_got_sframe->output_section->vma
  	       + htab->plt_got_sframe->output_offset
  	       + PLT_SFRAME_FDE_START_OFFSET);
@@ -265,7 +269,7 @@ index 2271edd40ba..12ecce5ecfa 100644
  			     + PLT_SFRAME_FDE_START_OFFSET);
  	}
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index dfd7f420066..50878e54831 100644
+index 97701af77fa..de3ba409114 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -701,7 +701,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
@@ -300,10 +304,10 @@ index 3bcb92b0664..71130eb12f1 100644
  
  /* Add a new SFrame function descriptor entry with START_ADDR, FUNC_SIZE,
 diff --git a/include/sframe.h b/include/sframe.h
-index daf5918ec3f..5d01e3ec26d 100644
+index c137b49e806..bda96e8be5b 100644
 --- a/include/sframe.h
 +++ b/include/sframe.h
-@@ -242,9 +242,9 @@ typedef struct sframe_func_desc_entry_v2
+@@ -247,9 +247,9 @@ typedef struct sframe_func_desc_entry_v2
  
  typedef struct sframe_func_desc_entry_v3
  {
@@ -364,7 +368,7 @@ index 94e5a0a5213..757997608b9 100644
      func_start_pc_vma += sframe_decoder_get_offsetof_fde_start_addr (sfd_ctx,
  								     funcidx,
 diff --git a/libsframe/sframe.c b/libsframe/sframe.c
-index 0f1e4412cb4..e4e25c17cb3 100644
+index eb68ddfc1d8..292058f7c17 100644
 --- a/libsframe/sframe.c
 +++ b/libsframe/sframe.c
 @@ -148,7 +148,7 @@ sframe_fde_tbl_init (sf_fde_tbl *fde_tbl, const char *fde_buf,
@@ -385,7 +389,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
        swap_thing (fdep->sfde_func_size);
        swap_thing (fdep->sfde_func_start_fre_off);
        swap_thing (fdep->sfde_func_num_fres);
-@@ -508,7 +508,7 @@ sframe_decoder_get_funcdesc_at_index (const sframe_decoder_ctx *ctx,
+@@ -517,7 +517,7 @@ sframe_decoder_get_funcdesc_at_index (const sframe_decoder_ctx *ctx,
  
     If FUNC_IDX is not a valid index in the given decoder object, returns 0.  */
  
@@ -394,7 +398,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
  sframe_decoder_get_secrel_func_start_addr (const sframe_decoder_ctx *dctx,
  					   uint32_t func_idx)
  {
-@@ -520,7 +520,7 @@ sframe_decoder_get_secrel_func_start_addr (const sframe_decoder_ctx *dctx,
+@@ -529,7 +529,7 @@ sframe_decoder_get_secrel_func_start_addr (const sframe_decoder_ctx *dctx,
      return 0;
  
    const sframe_func_desc_entry_int *fdep = &dctx->sfd_funcdesc->entry[func_idx];
@@ -403,7 +407,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
  
    return func_start_pc_offset + offsetof_fde_in_sec;
  }
-@@ -532,10 +532,10 @@ sframe_decoder_get_secrel_func_start_addr (const sframe_decoder_ctx *dctx,
+@@ -541,10 +541,10 @@ sframe_decoder_get_secrel_func_start_addr (const sframe_decoder_ctx *dctx,
  static bool
  sframe_fre_check_range_p (const sframe_decoder_ctx *dctx, uint32_t func_idx,
  			  uint32_t start_ip_offset, uint32_t end_ip_offset,
@@ -416,7 +420,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
    uint8_t rep_block_size;
    uint32_t pc_type;
    uint32_t pc_offset;
-@@ -1329,7 +1329,7 @@ sframe_decoder_get_offsetof_fde_start_addr (const sframe_decoder_ctx *dctx,
+@@ -1338,7 +1338,7 @@ sframe_decoder_get_offsetof_fde_start_addr (const sframe_decoder_ctx *dctx,
    if (sframe_decoder_get_version (dctx) == SFRAME_VERSION_3)
      return (sframe_decoder_get_hdr_size (dctx)
  	    + func_idx * sizeof (sframe_func_desc_entry_v3)
@@ -425,7 +429,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
    else if (sframe_decoder_get_version (dctx) == SFRAME_VERSION_2)
      return (sframe_decoder_get_hdr_size (dctx)
  	    + func_idx * sizeof (sframe_func_desc_entry_v2)
-@@ -1345,7 +1345,7 @@ sframe_decoder_get_offsetof_fde_start_addr (const sframe_decoder_ctx *dctx,
+@@ -1354,7 +1354,7 @@ sframe_decoder_get_offsetof_fde_start_addr (const sframe_decoder_ctx *dctx,
  
  static sframe_func_desc_entry_int *
  sframe_get_funcdesc_with_addr_internal (const sframe_decoder_ctx *ctx,
@@ -434,7 +438,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
  					uint32_t *func_idx)
  {
    sframe_func_desc_entry_int *fdp;
-@@ -1421,14 +1421,14 @@ sframe_fre_get_end_ip_offset (sframe_func_desc_entry_int *fdep, unsigned int i,
+@@ -1430,14 +1430,14 @@ sframe_fre_get_end_ip_offset (sframe_func_desc_entry_int *fdep, unsigned int i,
     SFRAME_ERR if failure.  */
  
  int
@@ -451,7 +455,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
    uint32_t start_ip_offset, end_ip_offset;
    const char *fres;
    size_t size = 0;
-@@ -1779,7 +1779,7 @@ sframe_encoder_get_offsetof_fde_start_addr (sframe_encoder_ctx *ectx,
+@@ -1788,7 +1788,7 @@ sframe_encoder_get_offsetof_fde_start_addr (sframe_encoder_ctx *ectx,
  
    return (sframe_encoder_get_hdr_size (ectx)
  	  + func_idx * sizeof (sframe_func_desc_entry_v3)
@@ -460,7 +464,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
  }
  
  /* Add an SFrame FRE to function at FUNC_IDX'th function descriptor entry in
-@@ -1866,7 +1866,7 @@ bad:
+@@ -1875,7 +1875,7 @@ bad:
  
  static int
  sframe_encoder_add_funcdesc_internal (sframe_encoder_ctx *ectx,
@@ -469,7 +473,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
  				      uint32_t func_size)
  {
    sframe_header *ehp;
-@@ -1937,7 +1937,7 @@ bad:
+@@ -1946,7 +1946,7 @@ bad:
     FUNC_SIZE to the encoder context ECTX.  */
  
  int
@@ -478,7 +482,7 @@ index 0f1e4412cb4..e4e25c17cb3 100644
  			     uint32_t func_size)
  {
    int err = 0;
-@@ -2128,7 +2128,7 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
+@@ -2137,7 +2137,7 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
  {
    sframe_func_desc_entry_v3 *fdep = (sframe_func_desc_entry_v3 *)contents;
  

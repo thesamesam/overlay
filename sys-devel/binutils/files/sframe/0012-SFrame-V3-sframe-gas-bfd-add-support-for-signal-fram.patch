@@ -1,10 +1,10 @@
-From 0ca8f41d8cd0b952ccc5b13daef09493d7b08bf8 Mon Sep 17 00:00:00 2001
-Message-ID: <0ca8f41d8cd0b952ccc5b13daef09493d7b08bf8.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From bffff583b84a57f96f87d5aa9199162d2ec8d979 Mon Sep 17 00:00:00 2001
+Message-ID: <bffff583b84a57f96f87d5aa9199162d2ec8d979.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 24 Oct 2025 09:39:15 -0700
-Subject: [PATCH 11/40] [SFrame-V3] sframe: gas: bfd: add support for signal
+Subject: [PATCH 12/41] [SFrame-V3] sframe: gas: bfd: add support for signal
  frames
 
 Reserve a bit in function info byte in the SFrame FDE to designate
@@ -39,10 +39,14 @@ libsframe/
 	and print "S" attribute in the dump output.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Rename newly added SFRAME_V3_FUNC_* macro to SFRAME_V3_FDE_*
     [Jens].
-[No changes from RFC]
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/gen-sframe.c                              | 30 +++++++++++++------
  gas/gen-sframe.h                              |  3 +-
@@ -57,7 +61,7 @@ libsframe/
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-common-13.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 50878e54831..4b6b7d4b8a6 100644
+index de3ba409114..0e636967989 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -116,6 +116,13 @@ get_dw_fde_pauth_b_key_p (const struct fde_entry *dw_fde ATTRIBUTE_UNUSED)
@@ -223,7 +227,7 @@ index 00000000000..0009281d059
 +	.cfi_signal_frame
 +	.cfi_endproc
 diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
-index d2fa2d82f18..efe16babc1c 100644
+index 3e5d8967b40..166cac17290 100644
 --- a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
 +++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
 @@ -48,6 +48,7 @@ if  { ([istarget "x86_64-*-*"] || [istarget "aarch64*-*-*"]
@@ -232,13 +236,13 @@ index d2fa2d82f18..efe16babc1c 100644
      run_dump_test "cfi-sframe-common-12"
 +    run_dump_test "cfi-sframe-common-13"
  
-     run_dump_test "common-empty-1"
      run_dump_test "common-empty-2"
+     run_dump_test "common-empty-3"
 diff --git a/include/sframe.h b/include/sframe.h
-index 5d01e3ec26d..3cf316dbff4 100644
+index bda96e8be5b..8e3510fdd86 100644
 --- a/include/sframe.h
 +++ b/include/sframe.h
-@@ -256,12 +256,13 @@ typedef struct sframe_func_desc_entry_v3
+@@ -261,12 +261,13 @@ typedef struct sframe_func_desc_entry_v3
       - 4-bits: Identify the FRE type used for the function.
       - 1-bit: Identify the PC type of the function - mask or inc.
       - 1-bit: PAC authorization A/B key (aarch64).
@@ -258,7 +262,7 @@ index 5d01e3ec26d..3cf316dbff4 100644
    uint8_t sfde_func_info;
    /* Size of the block of repeating insns.  Used for SFrame FDEs of type
       SFRAME_FDE_TYPE_PCMASK.  */
-@@ -274,10 +275,14 @@ typedef struct sframe_func_desc_entry_v3
+@@ -279,10 +280,14 @@ typedef struct sframe_func_desc_entry_v3
  #define SFRAME_V3_FDE_FRE_TYPE(info)          (SFRAME_V2_FUNC_FRE_TYPE (info))
  #define SFRAME_V3_FDE_PC_TYPE(info)           (SFRAME_V2_FUNC_PC_TYPE (info))
  #define SFRAME_V3_AARCH64_FDE_PAUTH_KEY(info) (SFRAME_V2_FUNC_PAUTH_KEY (info))

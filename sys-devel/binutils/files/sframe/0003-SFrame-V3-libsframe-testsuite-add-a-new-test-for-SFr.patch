@@ -1,10 +1,10 @@
-From 51b085bb61d7a7efc6f0b8785f7a4289f8203ef2 Mon Sep 17 00:00:00 2001
-Message-ID: <51b085bb61d7a7efc6f0b8785f7a4289f8203ef2.1767385714.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From ac5ff8f607ab45ad3762fa3f4f2749ef3e2d5f96 Mon Sep 17 00:00:00 2001
+Message-ID: <ac5ff8f607ab45ad3762fa3f4f2749ef3e2d5f96.1767884019.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 5 Dec 2025 01:29:47 -0800
-Subject: [PATCH 02/40] [SFrame-V3] libsframe: testsuite: add a new test for
+Subject: [PATCH 03/41] [SFrame-V3] libsframe: testsuite: add a new test for
  SFrame V2
 
 The existing frecnt-2.c testcase reads the SFrame section from the
@@ -36,7 +36,9 @@ libsframe/testsuite/
 	* libsframe.decode/frecnt-v2.c: New test.
 
 ---
-[No Changes from RFC]
+[No Changes in V1, V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  libsframe/Makefile.in                         |  34 +++++++
  libsframe/testsuite/libsframe.decode/DATA-V2  | Bin 0 -> 98 bytes
@@ -48,7 +50,7 @@ libsframe/testsuite/
  create mode 100644 libsframe/testsuite/libsframe.decode/frecnt-v2.c
 
 diff --git a/libsframe/Makefile.in b/libsframe/Makefile.in
-index 660b3e38116..87236b9b48d 100644
+index cb6895d1dcb..308ec16d97d 100644
 --- a/libsframe/Makefile.in
 +++ b/libsframe/Makefile.in
 @@ -115,6 +115,7 @@ check_PROGRAMS = $(am__EXEEXT_1)

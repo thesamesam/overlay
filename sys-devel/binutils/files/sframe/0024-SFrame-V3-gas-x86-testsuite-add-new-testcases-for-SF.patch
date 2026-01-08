@@ -1,10 +1,10 @@
-From 4fb4ed3fa08fb0823c5e0c2411fa0566443776ee Mon Sep 17 00:00:00 2001
-Message-ID: <4fb4ed3fa08fb0823c5e0c2411fa0566443776ee.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 4cac40d5086de19e08afec1e18eaf94f5513035f Mon Sep 17 00:00:00 2001
+Message-ID: <4cac40d5086de19e08afec1e18eaf94f5513035f.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 19 Nov 2025 09:28:02 -0800
-Subject: [PATCH 24/40] [SFrame-V3] gas: x86: testsuite: add new testcases for
+Subject: [PATCH 24/41] [SFrame-V3] gas: x86: testsuite: add new testcases for
  SFRAME_FDE_TYPE_FLEX
 
 gas/testsuite/
@@ -19,13 +19,17 @@ gas/testsuite/
 	* gas/cfi-sframe/cfi-sframe.exp: Add new tests.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Textual dump of SFrame FDEs of type SFRAME_FDE_TYPE_FLEX are now
     marked with "F".
   - Fix cosmetic issues in the assembly input files.
   - Use register names in CFI directives instead of cryptic numbers
     [Jan].
-[End of Changes from RFC]
+[End of Changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  .../gas/cfi-sframe/cfi-sframe-x86_64-4.d      | 29 +++++++
  .../gas/cfi-sframe/cfi-sframe-x86_64-4.s      | 80 +++++++++++++++++++
@@ -294,10 +298,10 @@ index 00000000000..180aa7f66b6
 +	.cfi_endproc
 +	.size	foo, .-foo
 diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
-index e706f173da1..b3ea65e0f70 100644
+index 0d8db0d834d..b8b3e1284d6 100644
 --- a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
 +++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
-@@ -62,6 +62,9 @@ if { [istarget "x86_64-*-*"] && [gas_sframe_check] } then {
+@@ -61,6 +61,9 @@ if { [istarget "x86_64-*-*"] && [gas_sframe_check] } then {
  	run_dump_test "cfi-sframe-x86_64-1"
  	run_dump_test "cfi-sframe-x86_64-2"
  	run_dump_test "cfi-sframe-x86_64-3"
@@ -305,8 +309,8 @@ index e706f173da1..b3ea65e0f70 100644
 +	run_dump_test "cfi-sframe-x86_64-esc-expr-1"
 +	run_dump_test "cfi-sframe-x86_64-esc-expr-2"
  	run_dump_test "cfi-sframe-x86_64-pr33170"
+ 	run_dump_test "cfi-sframe-x86_64-pr33756"
  	run_dump_test "cfi-sframe-x86_64-signal-1"
- 	run_dump_test "cfi-sframe-x86_64-empty-1"
 -- 
 2.52.0
 

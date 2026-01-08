@@ -1,10 +1,10 @@
-From 958701f2530ba14d20bef52f283f2a1079666ccc Mon Sep 17 00:00:00 2001
-Message-ID: <958701f2530ba14d20bef52f283f2a1079666ccc.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 6064c5f00c8b6d2d1d6ff8e524a825e28046259c Mon Sep 17 00:00:00 2001
+Message-ID: <6064c5f00c8b6d2d1d6ff8e524a825e28046259c.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 24 Nov 2025 12:16:05 -0800
-Subject: [PATCH 30/40] [SFrame-V3] gas: sframe: doc: testsuite: add new
+Subject: [PATCH 30/41] [SFrame-V3] gas: sframe: doc: testsuite: add new
  command line option --gsframe-3
 
 This option will allow users to select emission of SFrame stack trace
@@ -29,7 +29,9 @@ gas/testsuite/
 	* gas/cfi-sframe/cfi-sframe-common-1d.s: Likewise.
 
 ---
-[No Changes from RFC]
+[No Changes in V1, V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/as.c                                      | 15 +++++++++++-
  gas/as.h                                      |  7 ++++++
@@ -140,7 +142,7 @@ index d4080d73a79..29c05437679 100644
  @end ifset
  
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 9b7c580ef0d..e6f4b173fc2 100644
+index 6c8c9c55c87..e839c9ea783 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -334,16 +334,17 @@ sframe_v3_set_func_info (unsigned int fde_pc_type, unsigned int fre_type,
@@ -170,7 +172,7 @@ index 9b7c580ef0d..e6f4b173fc2 100644
  }
  
  /* SFrame set FRE info.  */
-@@ -2547,8 +2548,10 @@ output_sframe (segT sframe_seg)
+@@ -2552,8 +2553,10 @@ output_sframe (segT sframe_seg)
  {
    (void) sframe_seg;
  
@@ -211,7 +213,7 @@ index 00000000000..ac9c6ca2cf3
 +	.cfi_startproc
 +	.cfi_endproc
 diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
-index 91b23877931..7b57fec7cc5 100644
+index 42ccba3ad20..519a0f41ae4 100644
 --- a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
 +++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
 @@ -37,6 +37,7 @@ if  { ([istarget "x86_64-*-*"] || [istarget "aarch64*-*-*"]

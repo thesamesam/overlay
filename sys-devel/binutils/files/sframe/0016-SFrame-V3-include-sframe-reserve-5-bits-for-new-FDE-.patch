@@ -1,10 +1,10 @@
-From 79d4ac127d21f0712daad0036852342ed02490cf Mon Sep 17 00:00:00 2001
-Message-ID: <79d4ac127d21f0712daad0036852342ed02490cf.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 62c6b81127c17aad1e2f7be773686b8743899f3f Mon Sep 17 00:00:00 2001
+Message-ID: <62c6b81127c17aad1e2f7be773686b8743899f3f.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 24 Nov 2025 16:27:30 -0800
-Subject: [PATCH 15/40] [SFrame-V3] include: sframe: reserve 5 bits for new FDE
+Subject: [PATCH 16/41] [SFrame-V3] include: sframe: reserve 5 bits for new FDE
  types
 
 In SFrame V2, the FDE representation caters to the most common cases of
@@ -89,7 +89,7 @@ include/
 	(SFRAME_V3_FLEX_FDE_OFFSET_REG_P): Likewise.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Increase the number of bits for FDE type from 4 to 5 [Indu].
   - Adjust the macro names to V3_FDE_TYPE etc [Jens].
   - Removed the TBD From commit log regarding the terminology concern of
@@ -97,16 +97,20 @@ include/
     the PC Types for the functions (SFRAME_FDE_TYPE_PCINC,
     SFRAME_FDE_TYPE_PCMASK).  This is fixed in a subsequent commit in
     the series [Indu].
-[End of changes from RFC]
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
- include/sframe.h | 42 +++++++++++++++++++++++++++++++++++++-----
- 1 file changed, 37 insertions(+), 5 deletions(-)
+ include/sframe.h | 38 +++++++++++++++++++++++++++++++++++---
+ 1 file changed, 35 insertions(+), 3 deletions(-)
 
 diff --git a/include/sframe.h b/include/sframe.h
-index 9f1a329834a..33ae25ba0ae 100644
+index 0d8c1123d6b..222b6a5fcc6 100644
 --- a/include/sframe.h
 +++ b/include/sframe.h
-@@ -135,6 +135,19 @@ extern "C"
+@@ -140,6 +140,19 @@ extern "C"
     matching FRE.  */
  #define SFRAME_FDE_TYPE_PCMASK  1
  
@@ -126,26 +130,24 @@ index 9f1a329834a..33ae25ba0ae 100644
  typedef struct sframe_preamble
  {
    uint16_t sfp_magic;	/* Magic number (SFRAME_MAGIC).  */
-@@ -265,11 +278,13 @@ typedef struct sframe_func_desc_entry_v3
+@@ -270,11 +283,13 @@ typedef struct sframe_func_desc_entry_v3
       8        7             6                             5         4              0     */
    uint8_t sfde_func_info;
    /* Additional information for stack tracing from the function:
 -     - 8-bits: Unused.
--     -------------------------------------------------------------------------
--     |                            Unused                                     |
--     -------------------------------------------------------------------------
--     8        7         6                  5           4              0     */
 +     - 5-bits: FDE type.
 +     - 3-bits: Unused.
-+     ------------------------------------------------------------
+      ------------------------------------------------------------
+-     |                         Unused                           |
 +     |                     Unused                 |  FDE Type   |
 +     |                                            |             |
-+     ------------------------------------------------------------
-+     8        7         6                         5             0     */
+      ------------------------------------------------------------
+-     8        7         6                         5             0     */
++     8                7             6             5             0     */
    uint8_t sfde_func_info2;
    /* Size of the block of repeating insns.  Used for SFrame FDEs of type
       SFRAME_FDE_TYPE_PCMASK.  */
-@@ -279,17 +294,34 @@ typedef struct sframe_func_desc_entry_v3
+@@ -284,17 +299,34 @@ typedef struct sframe_func_desc_entry_v3
  #define SFRAME_V3_FDE_FUNC_INFO(fde_pc_type, fre_type) \
    (SFRAME_V2_FUNC_INFO (fde_pc_type, fre_type))
  

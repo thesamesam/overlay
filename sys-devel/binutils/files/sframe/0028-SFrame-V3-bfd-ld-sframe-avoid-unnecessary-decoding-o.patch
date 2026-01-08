@@ -1,24 +1,25 @@
-From e95919385584414c494c1a2219e72db68f1f049c Mon Sep 17 00:00:00 2001
-Message-ID: <e95919385584414c494c1a2219e72db68f1f049c.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 5bd37b460473396fb6785f73f61ce8e5cf140117 Mon Sep 17 00:00:00 2001
+Message-ID: <5bd37b460473396fb6785f73f61ce8e5cf140117.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Thu, 20 Nov 2025 09:32:32 -0800
-Subject: [PATCH 28/40] [SFrame-V3] bfd: ld: sframe: avoid unnecessary decoding
+Subject: [PATCH 28/41] [SFrame-V3] bfd: ld: sframe: avoid unnecessary decoding
  of SFrame FREs at link time
 
 At link time, in _bfd_elf_merge_section_sframe (), it suffices to bring
-over the function metadata (FDE attr and all FREs) as a blob into the
-SFrame encoder object.  There is no need to "decode" each SFrame FRE,
-only to add them in a serial fashion.
+over the all per-function stack trace metadata (all FREs) as a blob into
+the SFrame encoder object.  There is no need to "decode" each SFrame
+FRE, only to add them in a serial fashion.
 
 This is an optimization, and not directly related to any SFrame V3
 related changes to the specification.  This should also bring us a step
 closer to supporting SFrame for targets which use linker relaxations.
 Removing the need to decode the input FREs can allow the linker to
-simply use the available set of FREs from (relocated) contents.  Other
-changes in the work done at SFrame parse time may also be necessary, but
-this brings us just a step closer.
+simply use the available set of FREs from (relocated) contents.  To
+support targets using linker relaxations in SFrame, other changes in the
+SFrame parse functionality time may also be necessary, but this brings
+us just a step closer.
 
 Add two new APIs to accomplish this:
  - sframe_decoder_get_fres_buf, and
@@ -39,16 +40,27 @@ include/
 	(sframe_encoder_add_fres_buf): New declaration.
 
 ---
-[No changes from RFC]
+[No changes in V1]
+
+[Changes in V2]
+  - Continue to use sframe_decoder_get_funcdesc_v3 and
+    sframe_encoder_add_funcdesc_v3 APIs to get and set func_info,
+    func_info2, and rep_block_size.  The correct point to switch over to
+    sframe_encoder_add_funcdesc instead is when the FDE is split into idx,
+    attr, i.e., a a following commit.   Doing so fixes ld testsuite fails
+    seen with this patch [Indu].
+[End of changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
- bfd/elf-sframe.c        |  38 +++++------
+ bfd/elf-sframe.c        |  24 +++----
  include/sframe-api.h    |  23 +++++++
  libsframe/libsframe.ver |   2 +
  libsframe/sframe.c      | 143 ++++++++++++++++++++++++++++++++++++++++
- 4 files changed, 184 insertions(+), 22 deletions(-)
+ 4 files changed, 180 insertions(+), 12 deletions(-)
 
 diff --git a/bfd/elf-sframe.c b/bfd/elf-sframe.c
-index 1ef53120543..b5d1e28d5e2 100644
+index 1ef53120543..af6356f49fe 100644
 --- a/bfd/elf-sframe.c
 +++ b/bfd/elf-sframe.c
 @@ -475,7 +475,7 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
@@ -60,37 +72,7 @@ index 1ef53120543..b5d1e28d5e2 100644
  
    uint32_t num_fidx = sframe_decoder_get_num_fidx (sfd_ctx);
    uint32_t num_enc_fidx = sframe_encoder_get_num_fidx (sfe_ctx);
-@@ -487,16 +487,12 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
-       int64_t func_start_addr;
-       bfd_vma address;
-       uint32_t func_size = 0;
--      unsigned char func_info = 0;
--      unsigned char func_info2 = 0;
-       unsigned int r_offset = 0;
-       bool pltn_reloc_by_hand = false;
-       unsigned int pltn_r_offset = 0;
--      uint8_t rep_block_size = 0;
- 
-       if (!sframe_decoder_get_funcdesc_v3 (sfd_ctx, i, &num_fres, &func_size,
--					   &func_start_addr, &func_info,
--					   &func_info2, &rep_block_size))
-+					   &func_start_addr, NULL, NULL, NULL))
- 	{
- 	  /* If function belongs to a deleted section, skip editing the
- 	     function descriptor entry.  */
-@@ -560,27 +556,25 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
- 	      func_start_addr = address;
- 	    }
- 
--	  /* Update the encoder context with updated content.  */
--	  int err = sframe_encoder_add_funcdesc_v3 (sfe_ctx, func_start_addr,
--						    func_size, func_info,
--						    func_info2, rep_block_size,
--						    num_fres);
-+	  /* Update the encoder context with FDE index entry.  */
-+	  int err = sframe_encoder_add_funcdesc (sfe_ctx, func_start_addr,
-+						 func_size);
- 	  cur_fidx++;
+@@ -569,18 +569,18 @@ _bfd_elf_merge_section_sframe (bfd *abfd,
  	  BFD_ASSERT (!err);
  	}
  
@@ -182,10 +164,10 @@ index f6dbde273de..8bad0e733f5 100644
      dump_sframe;
      sframe_errmsg;
 diff --git a/libsframe/sframe.c b/libsframe/sframe.c
-index 8d5dba76f2c..439ff70b0ce 100644
+index e14bf486c81..d79035b052c 100644
 --- a/libsframe/sframe.c
 +++ b/libsframe/sframe.c
-@@ -482,6 +482,21 @@ sframe_fre_entry_size (sframe_frame_row_entry *frep, uint32_t fre_type)
+@@ -491,6 +491,21 @@ sframe_fre_entry_size (sframe_frame_row_entry *frep, uint32_t fre_type)
  	  + sframe_fre_offset_bytes_size (fre_info));
  }
  
@@ -207,7 +189,7 @@ index 8d5dba76f2c..439ff70b0ce 100644
  /* Get the function descriptor entry at index FUNC_IDX in the decoder
     context CTX.  */
  
-@@ -1663,6 +1678,52 @@ sframe_decoder_get_fre (const sframe_decoder_ctx *ctx,
+@@ -1672,6 +1687,52 @@ sframe_decoder_get_fre (const sframe_decoder_ctx *ctx,
    return sframe_set_errno (&err, SFRAME_ERR_FDE_NOTFOUND);
  }
  
@@ -260,7 +242,7 @@ index 8d5dba76f2c..439ff70b0ce 100644
  
  /* SFrame Encoder.  */
  
-@@ -1913,6 +1974,88 @@ bad:
+@@ -1922,6 +1983,88 @@ bad:
    return -1;
  }
  

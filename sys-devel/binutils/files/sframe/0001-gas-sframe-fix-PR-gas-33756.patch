@@ -1,0 +1,193 @@
+From 71148ee5f0390fb3a35743a6fc45285b965384af Mon Sep 17 00:00:00 2001
+Message-ID: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Fri, 2 Jan 2026 14:32:29 -0800
+Subject: [PATCH 01/41] gas: sframe: fix PR gas/33756
+
+Previously, sframe_xlate_do_remember_state () relied exclusively on
+last_fre (the last fully constructed Frame Row Entry).  At the start of
+a function (before an advance in location), last_fre is NULL.  The
+intent of DW_CFA_remember_state, however, is to simply snapshot the
+state of the call frame information at the time.  In terms of SFrame
+generation, this means that we should simply look at cur_fre (the
+scratchpad FRE currently being built from initial CFI instructions),
+should last_fre be NULL.
+
+Remove the common-empty-1.s which assumed that .cfi_startproc,
+immediately followed by a .cfi_remember_state is not present out in the
+wild.  Its best to not make such an assumption, as such a sequence is
+valid CFI, FWIW.
+
+Initial CFI are arch-specific, so add a new testcase for x86_64 to check
+.cfi_remember_state handling for SFrame is sensible.
+
+gas/
+	PR gas/33756
+	* gen-sframe.c (sframe_xlate_do_remember_state): Use cur_fre if
+	last_fre is not set.
+gas/testsuite/
+	* gas/cfi-sframe/cfi-sframe.exp: Adjust common-empty-1 test to
+	be repurposed as cfi-sframe-x86_64-pr33756.
+	* gas/cfi-sframe/common-empty-1.d: Removed.
+	* gas/cfi-sframe/common-empty-1.s: Removed.
+	* gas/cfi-sframe/cfi-sframe-x86_64-pr33756.d: New test.
+	* gas/cfi-sframe/cfi-sframe-x86_64-pr33756.s: New test.
+
+Signed-off-by: Sam James <sam@gentoo.org>
+---
+ gas/gen-sframe.c                              | 20 +++++++++-------
+ .../cfi-sframe/cfi-sframe-x86_64-pr33756.d    | 24 +++++++++++++++++++
+ .../cfi-sframe/cfi-sframe-x86_64-pr33756.s    | 13 ++++++++++
+ gas/testsuite/gas/cfi-sframe/cfi-sframe.exp   |  2 +-
+ gas/testsuite/gas/cfi-sframe/common-empty-1.d | 17 -------------
+ gas/testsuite/gas/cfi-sframe/common-empty-1.s |  5 ----
+ 6 files changed, 50 insertions(+), 31 deletions(-)
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33756.d
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33756.s
+ delete mode 100644 gas/testsuite/gas/cfi-sframe/common-empty-1.d
+ delete mode 100644 gas/testsuite/gas/cfi-sframe/common-empty-1.s
+
+diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
+index 3e329c92001..aa2500eea66 100644
+--- a/gas/gen-sframe.c
++++ b/gas/gen-sframe.c
+@@ -1349,21 +1349,25 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+ static int
+ sframe_xlate_do_remember_state (struct sframe_xlate_ctx *xlate_ctx)
+ {
+-  const struct sframe_row_entry *last_fre = xlate_ctx->last_fre;
++  if (!xlate_ctx->remember_fre)
++    xlate_ctx->remember_fre = sframe_row_entry_new ();
+ 
+-  /* If there is no FRE state to remember, nothing to do here.  Return
+-     early with non-zero error code, this will cause no SFrame stack trace
+-     info for the function involved.  */
+-  if (!last_fre)
++  const struct sframe_row_entry *prev_fre = xlate_ctx->last_fre;
++  /* If there is no previous saved FRE, use the state so far for the snapshot.
++     .cfi_startproc followed by .cfi_remember_state is a valid sequence.  */
++  if (!prev_fre)
++    prev_fre = xlate_ctx->cur_fre;
++  /* If there is no previous FRE state to remember, nothing to do here.  Return
++     early with non-zero error code, this will cause no SFrame stack trace info
++     for the function involved.  */
++  if (!prev_fre)
+     {
+       as_warn (_("no SFrame FDE emitted; "
+ 		 ".cfi_remember_state without prior SFrame FRE state"));
+       return SFRAME_XLATE_ERR_INVAL;
+     }
+ 
+-  if (!xlate_ctx->remember_fre)
+-    xlate_ctx->remember_fre = sframe_row_entry_new ();
+-  sframe_row_entry_initialize (xlate_ctx->remember_fre, last_fre);
++  sframe_row_entry_initialize (xlate_ctx->remember_fre, prev_fre);
+ 
+   return SFRAME_XLATE_OK;
+ }
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33756.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33756.d
+new file mode 100644
+index 00000000000..3ae3aeb0e57
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33756.d
+@@ -0,0 +1,24 @@
++#as: --gsframe
++#objdump: --sframe=.sframe
++#name: cfi_remember_state after cfi_startproc PR gas/33756
++#...
++Contents of the SFrame section .sframe:
++
++  Header :
++
++    Version: SFRAME_VERSION_2
++    Flags: SFRAME_F_FDE_FUNC_START_PCREL
++#?    CFA fixed FP offset: \-?\d+
++#?    CFA fixed RA offset: \-?\d+
++    Num FDEs: 1
++    Num FREs: 3
++
++  Function Index :
++
++    func idx \[0\]: pc = 0x0, size = 16 bytes
++    STARTPC +CFA +FP +RA +
++    0+0000 +sp\+8 +u +[uf] +
++    0+0004 +sp\+16 +u +[uf] +
++    0+000c +sp\+8 +u +[uf] +
++
++#pass
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33756.s b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33756.s
+new file mode 100644
+index 00000000000..c31b443932d
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-pr33756.s
+@@ -0,0 +1,13 @@
++	.text
++	.type	foo, @function
++foo:
++	.cfi_startproc
++	.cfi_remember_state
++	.long 0
++	.cfi_def_cfa_offset 16
++	.long 0
++	.long 0
++	.cfi_restore_state
++	.long 0
++	.cfi_endproc
++	.size	foo, .-foo
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
+index d2fa2d82f18..3e5d8967b40 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
+@@ -49,7 +49,6 @@ if  { ([istarget "x86_64-*-*"] || [istarget "aarch64*-*-*"]
+     run_dump_test "cfi-sframe-common-11"
+     run_dump_test "cfi-sframe-common-12"
+ 
+-    run_dump_test "common-empty-1"
+     run_dump_test "common-empty-2"
+     run_dump_test "common-empty-3"
+ }
+@@ -62,6 +61,7 @@ if { [istarget "x86_64-*-*"] && [gas_sframe_check] } then {
+ 	run_dump_test "cfi-sframe-x86_64-2"
+ 	run_dump_test "cfi-sframe-x86_64-3"
+ 	run_dump_test "cfi-sframe-x86_64-pr33170"
++	run_dump_test "cfi-sframe-x86_64-pr33756"
+ 	run_dump_test "cfi-sframe-x86_64-empty-1"
+ 	run_dump_test "cfi-sframe-x86_64-empty-2"
+ 	run_dump_test "cfi-sframe-x86_64-empty-3"
+diff --git a/gas/testsuite/gas/cfi-sframe/common-empty-1.d b/gas/testsuite/gas/cfi-sframe/common-empty-1.d
+deleted file mode 100644
+index c64dd92e003..00000000000
+--- a/gas/testsuite/gas/cfi-sframe/common-empty-1.d
++++ /dev/null
+@@ -1,17 +0,0 @@
+-#as: --gsframe
+-#warning: \.cfi_remember_state without prior SFrame FRE state
+-#objdump: --sframe=.sframe
+-#name: Uninteresting cfi directives generate an empty SFrame section
+-#...
+-Contents of the SFrame section .sframe:
+-
+-  Header :
+-
+-    Version: SFRAME_VERSION_2
+-    Flags: SFRAME_F_FDE_FUNC_START_PCREL
+-#?    CFA fixed FP offset: \-?\d+
+-#?    CFA fixed RA offset: \-?\d+
+-    Num FDEs: 0
+-    Num FREs: 0
+-
+-#pass
+diff --git a/gas/testsuite/gas/cfi-sframe/common-empty-1.s b/gas/testsuite/gas/cfi-sframe/common-empty-1.s
+deleted file mode 100644
+index e26e998189f..00000000000
+--- a/gas/testsuite/gas/cfi-sframe/common-empty-1.s
++++ /dev/null
+@@ -1,5 +0,0 @@
+-      .cfi_sections .sframe
+-      .cfi_startproc
+-      .cfi_remember_state
+-      .cfi_restore_state
+-      .cfi_endproc
+-- 
+2.52.0
+

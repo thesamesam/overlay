@@ -1,15 +1,17 @@
-From 05ea8472c35ee7dc1acf7e0bf7f028436500c50f Mon Sep 17 00:00:00 2001
-Message-ID: <05ea8472c35ee7dc1acf7e0bf7f028436500c50f.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From cbafeadb9e38f023edf81e417f5136adf455943f Mon Sep 17 00:00:00 2001
+Message-ID: <cbafeadb9e38f023edf81e417f5136adf455943f.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Fri, 15 Aug 2025 15:12:25 +0100
-Subject: [PATCH 39/40] gas: TODO wrt enable-default-sframe vs unsupported
+Subject: [PATCH 40/41] gas: TODO wrt enable-default-sframe vs unsupported
  targets
 
 TODO: Where's the best place to do this check? Or maybe we ought not
 to do it at all, and instead fix cfi_finish to have another conditional
 s.t. it errors if the target never supports SFrames (which)?
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/configure.ac | 1 +
  1 file changed, 1 insertion(+)

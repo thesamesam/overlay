@@ -1,10 +1,10 @@
-From d51b8c4721ea3108e59bc6d364ea4f10e761ba30 Mon Sep 17 00:00:00 2001
-Message-ID: <d51b8c4721ea3108e59bc6d364ea4f10e761ba30.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 966d582b18c143f09db5b767cb8b1b6f48ce667f Mon Sep 17 00:00:00 2001
+Message-ID: <966d582b18c143f09db5b767cb8b1b6f48ce667f.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 10 Nov 2025 14:44:48 -0800
-Subject: [PATCH 14/40] [SFrame-V3] include: gas: libsframe: add 8-bits of
+Subject: [PATCH 15/41] [SFrame-V3] include: gas: libsframe: add 8-bits of
  func_info2 for extensibility in FDE
 
 The existing field func_info (in the SFrame FDE) is used to convey important
@@ -62,9 +62,13 @@ include/
 	(sframe_encoder_add_funcdesc_v3): Likewise.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Add more details to the commit log to make it more useful.
-[End of changes from RFC]
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  bfd/elf-sframe.c                                 |   6 ++++--
  bfd/elf64-s390.c                                 |   2 ++
@@ -114,7 +118,7 @@ index 8842efe6fe6..1ef53120543 100644
  	  BFD_ASSERT (!err);
  	}
 diff --git a/bfd/elf64-s390.c b/bfd/elf64-s390.c
-index eec232c0c94..90a5b9cb52a 100644
+index dbeee7f66e4..c172b9b5287 100644
 --- a/bfd/elf64-s390.c
 +++ b/bfd/elf64-s390.c
 @@ -1616,6 +1616,7 @@ _bfd_s390_elf_create_sframe_plt (struct bfd_link_info *info)
@@ -134,7 +138,7 @@ index eec232c0c94..90a5b9cb52a 100644
  				      0 /* Num FREs.  */);
  
 diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
-index 12ecce5ecfa..c1cf75000b6 100644
+index 717d892775e..06e658012bb 100644
 --- a/bfd/elfxx-x86.c
 +++ b/bfd/elfxx-x86.c
 @@ -1927,6 +1927,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
@@ -154,7 +158,7 @@ index 12ecce5ecfa..c1cf75000b6 100644
  				      0 /* Num FREs.  */);
  
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 91c275ef5f5..940a40efe26 100644
+index 2e05c444642..140e0ab455f 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -765,6 +765,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
@@ -204,19 +208,19 @@ index 71130eb12f1..07de850017a 100644
  				uint32_t num_fres);
  
 diff --git a/include/sframe.h b/include/sframe.h
-index 8cc032b681f..9f1a329834a 100644
+index c1ee8c9d813..0d8c1123d6b 100644
 --- a/include/sframe.h
 +++ b/include/sframe.h
-@@ -264,6 +264,13 @@ typedef struct sframe_func_desc_entry_v3
+@@ -269,6 +269,13 @@ typedef struct sframe_func_desc_entry_v3
       -------------------------------------------------------------------------------
       8        7             6                             5         4              0     */
    uint8_t sfde_func_info;
 +  /* Additional information for stack tracing from the function:
 +     - 8-bits: Unused.
-+     -------------------------------------------------------------------------
-+     |                            Unused                                     |
-+     -------------------------------------------------------------------------
-+     8        7         6                  5           4              0     */
++     ------------------------------------------------------------
++     |                         Unused                           |
++     ------------------------------------------------------------
++     8        7         6                         5             0     */
 +  uint8_t sfde_func_info2;
    /* Size of the block of repeating insns.  Used for SFrame FDEs of type
       SFRAME_FDE_TYPE_PCMASK.  */
@@ -236,7 +240,7 @@ index 63611fbf6f4..2e001b6f28f 100644
      }
    else
 diff --git a/libsframe/sframe.c b/libsframe/sframe.c
-index e4e25c17cb3..fd9f123445f 100644
+index 292058f7c17..e8f499bd7f3 100644
 --- a/libsframe/sframe.c
 +++ b/libsframe/sframe.c
 @@ -34,6 +34,7 @@ typedef struct sframe_func_desc_entry_int
@@ -263,7 +267,7 @@ index e4e25c17cb3..fd9f123445f 100644
  	  fde_tbl->entry[i].func_rep_size = fdep->sfde_func_rep_size;
  	}
        fde_tbl->count = num_fdes;
-@@ -1528,6 +1531,7 @@ sframe_decoder_get_funcdesc_v3 (const sframe_decoder_ctx *dctx,
+@@ -1537,6 +1540,7 @@ sframe_decoder_get_funcdesc_v3 (const sframe_decoder_ctx *dctx,
  				uint32_t *func_size,
  				int64_t *start_pc_offset,
  				unsigned char *func_info,
@@ -271,7 +275,7 @@ index e4e25c17cb3..fd9f123445f 100644
  				uint8_t *rep_block_size)
  {
    int err = 0;
-@@ -1547,6 +1551,8 @@ sframe_decoder_get_funcdesc_v3 (const sframe_decoder_ctx *dctx,
+@@ -1556,6 +1560,8 @@ sframe_decoder_get_funcdesc_v3 (const sframe_decoder_ctx *dctx,
      *func_size = fdp->func_size;
    if (func_info)
      *func_info = fdp->func_info;
@@ -280,7 +284,7 @@ index e4e25c17cb3..fd9f123445f 100644
    if (rep_block_size)
      *rep_block_size = fdp->func_rep_size;
  
-@@ -1979,14 +1985,15 @@ sframe_encoder_add_funcdesc_v2 (sframe_encoder_ctx *ectx,
+@@ -1988,14 +1994,15 @@ sframe_encoder_add_funcdesc_v2 (sframe_encoder_ctx *ectx,
  }
  
  /* Add a new SFrame function descriptor entry with START_PC_OFFSET, FUNC_SIZE,
@@ -298,7 +302,7 @@ index e4e25c17cb3..fd9f123445f 100644
  				uint8_t rep_block_size,
  				uint32_t num_fres ATTRIBUTE_UNUSED)
  {
-@@ -2004,6 +2011,7 @@ sframe_encoder_add_funcdesc_v3 (sframe_encoder_ctx *ectx,
+@@ -2013,6 +2020,7 @@ sframe_encoder_add_funcdesc_v3 (sframe_encoder_ctx *ectx,
  
    sf_fde_tbl *fd_info = ectx->sfe_funcdesc;
    fd_info->entry[fd_info->count-1].func_info = func_info;
@@ -306,7 +310,7 @@ index e4e25c17cb3..fd9f123445f 100644
    fd_info->entry[fd_info->count-1].func_rep_size = rep_block_size;
  
    return 0;
-@@ -2133,6 +2141,7 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
+@@ -2142,6 +2150,7 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
    fdep->sfde_func_start_fre_off = fde->func_start_fre_off;
    fdep->sfde_func_num_fres = (uint16_t)fde->func_num_fres;
    fdep->sfde_func_info = fde->func_info;

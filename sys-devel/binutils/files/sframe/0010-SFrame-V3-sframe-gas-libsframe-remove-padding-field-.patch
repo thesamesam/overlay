@@ -1,10 +1,10 @@
-From e87b9b34ce5d79f1bc64679f7e1482c61a50cd51 Mon Sep 17 00:00:00 2001
-Message-ID: <e87b9b34ce5d79f1bc64679f7e1482c61a50cd51.1767385714.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From dc4136cc16f444f1d7941ae9fa27351b359decc5 Mon Sep 17 00:00:00 2001
+Message-ID: <dc4136cc16f444f1d7941ae9fa27351b359decc5.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 28 Nov 2025 12:31:17 -0800
-Subject: [PATCH 09/40] [SFrame-V3] sframe: gas: libsframe: remove padding
+Subject: [PATCH 10/41] [SFrame-V3] sframe: gas: libsframe: remove padding
  field from FDE
 
 Remove the unused sfde_func_padding2 member from the
@@ -28,7 +28,9 @@ libsframe/
 	* testsuite/libsframe.decode/DATA2: Regenerate binary test data.
 
 ---
-[No changes since RFC]
+[No changes in V1, V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/gen-sframe.c                           |   1 -
  include/sframe.h                           |   1 -
@@ -37,7 +39,7 @@ libsframe/
  4 files changed, 3 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 7f2636477aa..dfd7f420066 100644
+index aba87c90930..97701af77fa 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -748,7 +748,6 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
@@ -49,10 +51,10 @@ index 7f2636477aa..dfd7f420066 100644
  
  static void
 diff --git a/include/sframe.h b/include/sframe.h
-index 118fa125835..daf5918ec3f 100644
+index aa3c0872e0c..c137b49e806 100644
 --- a/include/sframe.h
 +++ b/include/sframe.h
-@@ -266,7 +266,6 @@ typedef struct sframe_func_desc_entry_v3
+@@ -271,7 +271,6 @@ typedef struct sframe_func_desc_entry_v3
    /* Size of the block of repeating insns.  Used for SFrame FDEs of type
       SFRAME_FDE_TYPE_PCMASK.  */
    uint8_t sfde_func_rep_size;
@@ -61,10 +63,10 @@ index 118fa125835..daf5918ec3f 100644
  
  #define SFRAME_V3_FDE_FUNC_INFO(fde_pc_type, fre_type) \
 diff --git a/libsframe/sframe.c b/libsframe/sframe.c
-index cf0071e75ff..0f1e4412cb4 100644
+index b942a2c3810..eb68ddfc1d8 100644
 --- a/libsframe/sframe.c
 +++ b/libsframe/sframe.c
-@@ -2134,7 +2134,6 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
+@@ -2143,7 +2143,6 @@ sframe_encoder_write_fde (const sframe_header *sfhp ATTRIBUTE_UNUSED,
    fdep->sfde_func_num_fres = (uint16_t)fde->func_num_fres;
    fdep->sfde_func_info = fde->func_info;
    fdep->sfde_func_rep_size = fde->func_rep_size;

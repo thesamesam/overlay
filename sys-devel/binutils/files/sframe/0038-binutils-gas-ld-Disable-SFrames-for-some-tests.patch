@@ -1,10 +1,10 @@
-From b2fe7366bd04e2b9981c056807992268ed83b656 Mon Sep 17 00:00:00 2001
-Message-ID: <b2fe7366bd04e2b9981c056807992268ed83b656.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 0a3b255a087d81db81587fae735dbbd26c6e7b24 Mon Sep 17 00:00:00 2001
+Message-ID: <0a3b255a087d81db81587fae735dbbd26c6e7b24.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
-Subject: [PATCH 37/40] binutils, gas, ld: Disable SFrames for some tests
+Subject: [PATCH 38/41] binutils, gas, ld: Disable SFrames for some tests
 
 These break with a gas configured to emit SFrames by default.
 
@@ -53,6 +53,8 @@ ld/
 	* testsuite/ld-x86-64/pr20830a.d: Ditto.
 	* testsuite/ld-x86-64/pr27016a.d: Ditto.
 	* testsuite/ld-x86-64/pr27016b.d: Ditto.
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  binutils/testsuite/binutils-all/x86-64/compressed-1b.d | 2 +-
  binutils/testsuite/binutils-all/x86-64/compressed-1c.d | 2 +-

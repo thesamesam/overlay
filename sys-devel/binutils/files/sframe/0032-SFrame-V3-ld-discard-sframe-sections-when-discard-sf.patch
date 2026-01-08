@@ -1,31 +1,35 @@
-From eaa8aad22a23cbc165dc4f18bb36575fd51b46d6 Mon Sep 17 00:00:00 2001
-Message-ID: <eaa8aad22a23cbc165dc4f18bb36575fd51b46d6.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From d87d457919e7d6b0de3c7e13b9370344c35a04f1 Mon Sep 17 00:00:00 2001
+Message-ID: <d87d457919e7d6b0de3c7e13b9370344c35a04f1.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 3 Dec 2025 15:45:20 -0800
-Subject: [PATCH 32/40] [SFrame-V3] ld: discard sframe sections when
- --discard-sframe-sections
+Subject: [PATCH 32/41] [SFrame-V3] ld: discard sframe sections when
+ --discard-sframe
 
-Mark SFrame sections with SEC_EXCLUDE if --discard-sframe-sections is in
-effect.
+Mark SFrame sections with SEC_EXCLUDE if --discard-sframe is in effect.
 
 TBD:
   - This does generate an empty .sframe section though!  A problem ? No
     segment marker PT_GNU_SFRAME is created, which is good
-  - Rename option to --discard-sframe [Jan, Indu].
 
 bfd/
 	* elf-sframe.c (_bfd_elf_parse_sframe): Mark with SEC_EXCLUDE if
-	--discard-sframe-sections is in effect.
+	--discard-sframe is in effect.
 ld/testsuite/
 	* ld-x86-64/x86-64.exp: New test.
 	* ld-x86-64/sframe-command-line-1.d: New test.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Rename to --discard-sframe-sections [Jan].
-[End of changes from RFC]
+[End of changes in V1]
+
+[Changes in V2]
+ - Rename to --discard-sframe [Jan, Indu].
+[End of changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  bfd/elf-sframe.c                               | 3 +++
  ld/testsuite/ld-x86-64/sframe-command-line-1.d | 8 ++++++++
@@ -34,14 +38,14 @@ ld/testsuite/
  create mode 100644 ld/testsuite/ld-x86-64/sframe-command-line-1.d
 
 diff --git a/bfd/elf-sframe.c b/bfd/elf-sframe.c
-index 511a297054b..e30716d7f6f 100644
+index 511a297054b..33e4df5b1c7 100644
 --- a/bfd/elf-sframe.c
 +++ b/bfd/elf-sframe.c
 @@ -211,6 +211,9 @@ _bfd_elf_parse_sframe (bfd *abfd,
    bfd_size_type sf_size;
    int decerr = 0;
  
-+  if (info->discard_sframe_sections)
++  if (info->discard_sframe)
 +    sec->flags |= SEC_EXCLUDE;
 +
    /* Prior versions of assembler and ld were generating SFrame sections with
@@ -49,7 +53,7 @@ index 511a297054b..e30716d7f6f 100644
       objects now.  Even if section size is zero, a valid section type is
 diff --git a/ld/testsuite/ld-x86-64/sframe-command-line-1.d b/ld/testsuite/ld-x86-64/sframe-command-line-1.d
 new file mode 100644
-index 00000000000..64e0473d170
+index 00000000000..3f54ff9f83a
 --- /dev/null
 +++ b/ld/testsuite/ld-x86-64/sframe-command-line-1.d
 @@ -0,0 +1,8 @@
@@ -57,8 +61,8 @@ index 00000000000..64e0473d170
 +#source: sframe-foo.s
 +#source: sframe-bar.s
 +#readelf: --sframe
-+#ld: -shared --no-rosegment -z separate-code --discard-sframe-sections
-+#name: Command line option --discard-sframe-sections
++#ld: -shared --no-rosegment -z separate-code --discard-sframe
++#name: Command line option --discard-sframe
 +
 +Section '.sframe' has no debugging data.
 diff --git a/ld/testsuite/ld-x86-64/x86-64.exp b/ld/testsuite/ld-x86-64/x86-64.exp

@@ -1,14 +1,14 @@
-From 635d4018f1ce6ac18d5ed536f704deeec6ee5ff1 Mon Sep 17 00:00:00 2001
-Message-ID: <635d4018f1ce6ac18d5ed536f704deeec6ee5ff1.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 20a100a6ea2a449fe073d569b3e1aa0a56abfefb Mon Sep 17 00:00:00 2001
+Message-ID: <20a100a6ea2a449fe073d569b3e1aa0a56abfefb.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 26 Dec 2025 18:45:43 -0800
-Subject: [PATCH 27/40] [SFrame-V3] gas: sframe: testsuite: handle .cfi_offset
- for REG_RA
+Subject: [PATCH 27/41] [SFrame-V3] gas: sframe: testsuite: handle .cfi_offset
+ for RA
 
 With the introduction of flex FDE type, handling .cfi_offset for
-REG_RA needs adjustment.
+RA needs adjustment.
 
 On architectures like x86_64, the return address (RA) is typically saved
 at a fixed offset from the CFA. Previous versions of the SFrame format
@@ -25,7 +25,7 @@ processing a .cfi_offset for the RA register:
   - The check for non-representable RA offsets is relaxed. If the ABI
     supports Flex FDEs (SFrame V3), GAS proceeds instead of issuing a
     warning.
-  - For ABIs without explicit RA tracking (like x86_64), if the RA
+  - For ABIs without explicit RA tracking (like AMD64), if the RA
     offset differs from the default fixed offset, the FDE is marked as a
     Flex FDE, and the new stack location is recorded.
   - Logic is added to detect when the RA is restored to its standard
@@ -45,6 +45,10 @@ gas/testsuite/
 
 ---
 [New in V1. Not present in RFC.]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/gen-sframe.c                              | 47 +++++++++++++++----
  .../gas/cfi-sframe/cfi-sframe-x86_64-6.d      | 25 ++++++++++
@@ -55,10 +59,10 @@ gas/testsuite/
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-6.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index f9fd807e14c..baad18c5ee6 100644
+index 2829fa52e4a..61b80b471b8 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -1389,8 +1389,10 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1390,8 +1390,10 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
  
    /* For ABIs not tracking RA, the return address is expected to be in a
       specific location.  Explicit manourvering to a different offset (than the
@@ -71,7 +75,7 @@ index f9fd807e14c..baad18c5ee6 100644
        && cfi_insn->u.ri.offset != sframe_cfa_ra_offset ())
      {
        as_warn (_("no SFrame FDE emitted; %s register %u in .cfi_offset"),
-@@ -1408,13 +1410,42 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1409,13 +1411,42 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
        cur_fre->fp_deref_p = true;
        cur_fre->merge_candidate = false;
      }
@@ -174,10 +178,10 @@ index 00000000000..a4600dce66f
 +	.cfi_endproc
 +	.size	foo, .-foo
 diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
-index cd43edef087..91b23877931 100644
+index 16e598c1753..42ccba3ad20 100644
 --- a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
 +++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
-@@ -64,6 +64,7 @@ if { [istarget "x86_64-*-*"] && [gas_sframe_check] } then {
+@@ -63,6 +63,7 @@ if { [istarget "x86_64-*-*"] && [gas_sframe_check] } then {
  	run_dump_test "cfi-sframe-x86_64-3"
  	run_dump_test "cfi-sframe-x86_64-4"
  	run_dump_test "cfi-sframe-x86_64-5"

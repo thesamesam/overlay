@@ -1,19 +1,19 @@
-From 702ce8bd55239afa379f6e8b8fbb793a1f187c1e Mon Sep 17 00:00:00 2001
-Message-ID: <702ce8bd55239afa379f6e8b8fbb793a1f187c1e.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From a598189f2c8a06aee9ed4baa8bed5ce988b858a8 Mon Sep 17 00:00:00 2001
+Message-ID: <a598189f2c8a06aee9ed4baa8bed5ce988b858a8.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 19 Dec 2025 10:02:05 -0800
-Subject: [PATCH 21/40] [SFrame-V3] sframe: gas: s390: aarch64: x86: add new
+Subject: [PATCH 22/41] [SFrame-V3] sframe: gas: s390: aarch64: x86: add new
  backend hooks for FLEX FDE
 
-For the newly added SFrame FDE type SFRAME_FDE_TYPE_FLEX, add new
-backend hooks to that the respective ABI/arch can opt out of the
+For the newly added SFrame FDE type SFRAME_FDE_TYPE_FLEX, add a new
+backend hook so that the respective ABI/arch can opt out of the
 generation of SFRAME_FDE_TYPE_FLEX in GAS.
 
 AArch64 is an example of an ABI for which SFrame is supported, but one
 that does not need the flexible FDE representation for any of the
-current usecases.
+current usecases currently.
 
 TBD:
   - split out into arch specific patches ?
@@ -33,6 +33,10 @@ gas/
 
 ---
 [New in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/config/tc-aarch64.c | 8 ++++++++
  gas/config/tc-aarch64.h | 4 ++++
@@ -43,10 +47,10 @@ gas/
  6 files changed, 35 insertions(+)
 
 diff --git a/gas/config/tc-aarch64.c b/gas/config/tc-aarch64.c
-index 41ee673751a..684d4cd9f3c 100644
+index 6a03dfe41ec..dbac47c7ff2 100644
 --- a/gas/config/tc-aarch64.c
 +++ b/gas/config/tc-aarch64.c
-@@ -9247,6 +9247,14 @@ aarch64_sframe_ra_tracking_p (void)
+@@ -9282,6 +9282,14 @@ aarch64_sframe_ra_tracking_p (void)
    return true;
  }
  

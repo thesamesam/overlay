@@ -1,10 +1,10 @@
-From 5de85a4ab3a1080986f7b76c2f55dea92c340b69 Mon Sep 17 00:00:00 2001
-Message-ID: <5de85a4ab3a1080986f7b76c2f55dea92c340b69.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 2eb09ce26c759acb61dd3f9a7a9cfc3e95e04bf2 Mon Sep 17 00:00:00 2001
+Message-ID: <2eb09ce26c759acb61dd3f9a7a9cfc3e95e04bf2.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 5 Dec 2025 20:57:30 -0800
-Subject: [PATCH 33/40] [SFrame-V3] ld: testsuite: x86: sframe: check link of
+Subject: [PATCH 33/41] [SFrame-V3] ld: testsuite: x86: sframe: check link of
  signal frame and outermost frames
 
 In this test, two "special" case FDEs are linked:
@@ -23,10 +23,14 @@ ld/testsuite/
 	* ld-x86-64/x86-64.exp: Add new test.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Use register name in .cfi_* directives and clarify whats going on.
     [Jan].
-[End of changes from RFC]
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  ld/testsuite/ld-x86-64/sframe-link-1.d | 38 ++++++++++++++++++++++++++
  ld/testsuite/ld-x86-64/sframe-signal.s | 19 +++++++++++++

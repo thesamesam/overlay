@@ -1,13 +1,13 @@
-From 76efac38f49a338b72c74c0435b076e1c07634f5 Mon Sep 17 00:00:00 2001
-Message-ID: <76efac38f49a338b72c74c0435b076e1c07634f5.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 708c93b4be41434b3a4ab6660929edcc09ed6aa2 Mon Sep 17 00:00:00 2001
+Message-ID: <708c93b4be41434b3a4ab6660929edcc09ed6aa2.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 3 Dec 2025 12:50:33 -0800
-Subject: [PATCH 31/40] [SFrame-V3] ld: add --discard-sframe-sections command
- line option
+Subject: [PATCH 31/41] [SFrame-V3] ld: add --discard-sframe command line
+ option
 
-Add a new command line option `--discard-sframe-sections` to the linker.
+Add a new command line option --discard-sframe to the linker.
 This option allows users to prevent the linker from generating an output
 .sframe section.
 
@@ -20,10 +20,10 @@ application.  Adding such an option to the linker, gives user a way to
 turn off the .sframe section completely without relying on a linker
 script.
 
-Previously, the existing `--no-ld-generated-unwind-info` option
+Previously, the existing --no-ld-generated-unwind-info option
 controlled whether (not just .eh_frame for PLT entries, but also) SFrame
 for PLT entries. The new command line option,
-`--discard-sframe-sections` now decouples SFrame from other unwind
+--discard-sframe now decouples SFrame from other unwind
 formats (like .eh_frame), allowing for more control over the output
 binary's SFrame data.
 
@@ -38,34 +38,40 @@ TBD:
     aarch64elf.sh and aarch64linux.sh necessary?  The desired outcome is
     to allow the new command line for aarch64 elf, amd64 elf, s390x elf
     only.  Confirm.
-  - Rename option to --discard-sframe [Jan, Indu].
 
 bfd/
 	* elf64-s390.c (elf_s390_create_dynamic_sections): Use
-	no_ld_sframe_info to guard .sframe section creation.
+	discard_sframe to guard .sframe section creation.
 	* elfxx-x86.c (_bfd_x86_elf_link_setup_gnu_properties): Likewise.
 include/
-	* bfdlink.h (struct bfd_link_info): Add no_ld_sframe_info bitfield.
+	* bfdlink.h (struct bfd_link_info): Add discard_sframe bitfield.
 ld/
 	* ldlex.h (enum option_values): Add OPTION_NO_LD_SFRAME_INFO.
 	* lexsup.c (elf_sframe_list_options): New function.
 	(ld_list_options): Add sframe_info argument. Update callers.
-	* emulparams/sframe_info.sh: New file.
-	* emulparams/aarch64elf.sh: Source sframe_info.sh.
+	* emulparams/sframe-info.sh: New file.
+	* emulparams/aarch64elf.sh: Source sframe-info.sh.
 	* emulparams/aarch64linux.sh: Likewise.
 	* emulparams/elf64_s390.sh: Likewise.
 	* emulparams/elf_x86_64.sh: Likewise.
-	* Makefile.am: Update to handle sframe_info.sh and new list options.
+	* Makefile.am: Update to handle sframe-info.sh and new list options.
 	* configure.ac: Handle SFRAME_INFO target variable.
 	* Makefile.in: Regenerate.
 	* configure: Regenerate.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Use dash in new files instead of underscore [Jan].
   - Rename to --discard-sframe-sections [Jan, Augustine].
   - Added documentation in ld.texi [Jan].
-[End of Changes from RFC]
+[End of Changes in V1]
+
+[Changes in V2]
+  - Rename --discard-sframe-sections to --discard-sframe [Jan, Indu].
+  - Commit log adjustments.
+[End of changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  bfd/elf64-s390.c              |  2 +-
  bfd/elfxx-x86.c               |  2 +-
@@ -86,7 +92,7 @@ ld/
  create mode 100644 ld/emulparams/sframe-info.sh
 
 diff --git a/bfd/elf64-s390.c b/bfd/elf64-s390.c
-index 41bdf6c4d8d..011d408e310 100644
+index 012457827e0..8ad10ce6bd1 100644
 --- a/bfd/elf64-s390.c
 +++ b/bfd/elf64-s390.c
 @@ -4309,7 +4309,7 @@ elf_s390_create_dynamic_sections (bfd *dynobj,
@@ -94,25 +100,25 @@ index 41bdf6c4d8d..011d408e310 100644
  
        /* Create .sframe section for .plt section.  */
 -      if (!info->no_ld_generated_unwind_info)
-+      if (!info->discard_sframe_sections)
++      if (!info->discard_sframe)
  	{
  	  flagword flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY
  			    | SEC_HAS_CONTENTS | SEC_IN_MEMORY
 diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
-index 595538591f1..72f2e51d143 100644
+index f2ace269f3e..0c61b61830a 100644
 --- a/bfd/elfxx-x86.c
 +++ b/bfd/elfxx-x86.c
-@@ -4840,7 +4840,7 @@ _bfd_x86_elf_link_setup_gnu_properties
+@@ -4837,7 +4837,7 @@ _bfd_x86_elf_link_setup_gnu_properties
  	}
  
        /* .sframe sections are emitted for AMD64 ABI only.  */
 -      if (ABI_64_P (info->output_bfd) && !info->no_ld_generated_unwind_info)
-+      if (ABI_64_P (info->output_bfd) && !info->discard_sframe_sections)
++      if (ABI_64_P (info->output_bfd) && !info->discard_sframe)
  	{
  	  flagword flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY
  			    | SEC_HAS_CONTENTS | SEC_IN_MEMORY
 diff --git a/include/bfdlink.h b/include/bfdlink.h
-index d715fcbd6fb..cb6bfa45a77 100644
+index d715fcbd6fb..eac72b8c388 100644
 --- a/include/bfdlink.h
 +++ b/include/bfdlink.h
 @@ -475,6 +475,10 @@ struct bfd_link_info
@@ -121,7 +127,7 @@ index d715fcbd6fb..cb6bfa45a77 100644
  
 +  /* TRUE if no .sframe stack trace info should be generated for the output.
 +     This includes linker generated SFrame info as well.  */
-+  unsigned int discard_sframe_sections: 1;
++  unsigned int discard_sframe: 1;
 +
    /* TRUE if BFD should generate a "task linked" object file,
       similar to relocatable but also with globals converted to
@@ -304,27 +310,27 @@ index fb4fcd6ae17..747114bc4b4 100644
  source_sh ${srcdir}/emulparams/reloc_overflow.sh
 diff --git a/ld/emulparams/sframe-info.sh b/ld/emulparams/sframe-info.sh
 new file mode 100644
-index 00000000000..7ee80af5d25
+index 00000000000..b7cc10bd981
 --- /dev/null
 +++ b/ld/emulparams/sframe-info.sh
 @@ -0,0 +1,15 @@
 +SFRAME_INFO=yes
 +
 +PARSE_AND_LIST_LONGOPTS_SFRAME='
-+  {"discard-sframe-sections", no_argument, NULL,
-+   OPTION_DISCARD_SFRAME_SECTIONS},
++  {"discard-sframe", no_argument, NULL,
++   OPTION_DISCARD_SFRAME},
 +'
 +
 +PARSE_AND_LIST_ARGS_CASES_SFRAME='
-+    case OPTION_DISCARD_SFRAME_SECTIONS:
-+      link_info.discard_sframe_sections = true;
++    case OPTION_DISCARD_SFRAME:
++      link_info.discard_sframe = true;
 +      break;
 +'
 +
 +PARSE_AND_LIST_LONGOPTS="$PARSE_AND_LIST_LONGOPTS $PARSE_AND_LIST_LONGOPTS_SFRAME"
 +PARSE_AND_LIST_ARGS_CASES="$PARSE_AND_LIST_ARGS_CASES $PARSE_AND_LIST_ARGS_CASES_SFRAME"
 diff --git a/ld/ld.texi b/ld/ld.texi
-index 85272e4b6f6..28a4a594757 100644
+index 85272e4b6f6..77be53cb317 100644
 --- a/ld/ld.texi
 +++ b/ld/ld.texi
 @@ -3247,9 +3247,13 @@ section and ELF @code{PT_GNU_EH_FRAME} segment header.
@@ -336,8 +342,8 @@ index 85272e4b6f6..28a4a594757 100644
 -generated code sections like PLT.
 +if linker generated unwind info is supported.
 +
-+@kindex --discard-sframe-sections
-+@item --discard-sframe-sections
++@kindex --discard-sframe
++@item --discard-sframe
 +Discard @code{.sframe} stack trace info from the output.  This option also
 +prohibits the creation of SFrame stack trace data for linker generated code
 +sections like PLT.  This option is off by default.
@@ -345,20 +351,20 @@ index 85272e4b6f6..28a4a594757 100644
  @kindex --enable-new-dtags
  @kindex --disable-new-dtags
 diff --git a/ld/ldlex.h b/ld/ldlex.h
-index 1efbe58002b..62ad942333b 100644
+index 1efbe58002b..85e06b6fcc4 100644
 --- a/ld/ldlex.h
 +++ b/ld/ldlex.h
 @@ -215,6 +215,8 @@ enum option_values
    /* Used by emulparams/plt_unwind.sh.  */
    OPTION_LD_GENERATED_UNWIND_INFO,
    OPTION_NO_LD_GENERATED_UNWIND_INFO,
-+  /* Used by emulparams/sframe_info.sh.  */
-+  OPTION_DISCARD_SFRAME_SECTIONS,
++  /* Used by emulparams/sframe-info.sh.  */
++  OPTION_DISCARD_SFRAME,
    /* Used by emultempl/aarch64elf.em.  */
    OPTION_FIX_ERRATUM_835769,
    OPTION_FIX_ERRATUM_843419,
 diff --git a/ld/lexsup.c b/ld/lexsup.c
-index 843b809bacb..96577edf869 100644
+index 843b809bacb..158abb6dd8f 100644
 --- a/ld/lexsup.c
 +++ b/ld/lexsup.c
 @@ -2364,13 +2364,23 @@ elf_plt_unwind_list_options (FILE *file)
@@ -369,7 +375,7 @@ index 843b809bacb..96577edf869 100644
 +elf_sframe_list_options (FILE *file)
 +{
 +  fprintf (file, _("\
-+  --discard-sframe-sections   Don't generate SFrame stack trace info in output\n"));
++  --discard-sframe            Don't generate SFrame stack trace info in output\n"));
 +}
 +
 +static void

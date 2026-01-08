@@ -1,10 +1,10 @@
-From 2bc67df7de84b2f9c22b25cf5341a26d76e54a17 Mon Sep 17 00:00:00 2001
-Message-ID: <2bc67df7de84b2f9c22b25cf5341a26d76e54a17.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 61a820a829b381d68b15ee19952a7e96820835e1 Mon Sep 17 00:00:00 2001
+Message-ID: <61a820a829b381d68b15ee19952a7e96820835e1.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 17 Nov 2025 10:39:14 -0800
-Subject: [PATCH 20/40] [SFrame-V3] libsframe: textual dump of fde type
+Subject: [PATCH 21/41] [SFrame-V3] libsframe: textual dump of fde type
  SFRAME_FDE_TYPE_FLEX
 
 Refactor the SFrame textual dumper in sframe-dump.c to properly handle
@@ -19,28 +19,29 @@ could easily just use a:
 to get the register name.
 
 With the introduction of new SFrame FDE type SFRAME_FDE_TYPE_FLEX, which
-carry DWARF register numbers if applicable.  E.g., for some patterns on
-AMD64, one may see CFA is the value at 'r10+0'; or FP is the value at
-'rbp+8'.  For textual dump, we now need a mapping from:
+carry DWARF register numbers if applicable, this needs to change.  E.g.,
+for some patterns on AMD64, one may see CFA is the value at 'r10+0'; or
+FP is the value at 'rbp+8'.  This means that for textual dump, we now
+need a mapping from:
   - the ABI-specific frame-pointer to string "fp"
   - the ABI-specific stack-pointer to string "sp"
 This is done via the SFRAME_ABI_REG_MAP helper macros and the new
 sframe_get_reg_name () API.
 
 For registers other than stack-pointer and frame-pointer, the SFrame
-textual dump does not print the register name (say, "rax", but just the
+textual dump does not print the register name (say, "rax"), but just the
 number (i.e., "r0").
 
 Check the func_info2 byte and dispatch the stack frame row entry (FRE)
 dumping to the correct function: either dump_sframe_func_fre_simple or
-dump_sframe_func_fre_flex_topmost.
+dump_sframe_func_fre_flex.
 
 Ensure the display is consistent to previous semantics.  When flex FDE
-is in effect, there will always be an RA offset (after the CFA offsets)
-present if FP offsets follow.  So if a padding offset for RA is seen, we
-will display "U".  If no RA offset is seen, however, we will display a
-"u" unless its an ABI where RA offset is fixed (in the latter case we
-display "f").
+is in effect, there may not always be an RA offset (after the CFA
+offsets).  A padding offset for RA is present if FP offsets follow.  So
+if a padding offset for RA is seen, we will display "U".  If no RA
+offset is seen, however, we will display a "u" unless its an ABI where
+RA offset is fixed (in the latter case we display "f").
 
 libsframe/
 	* sframe-dump.c (SFRAME_SP): Define mapping from stack-pointer
@@ -53,11 +54,11 @@ libsframe/
 	(dump_sframe_func_with_fres): Refactor a bit...
 	(dump_sframe_func_fre_simple): ..into this.
 	(sframe_format_fre_disp): New definition.
-	(dump_sframe_func_fre_flex_topmost): Likewise.
+	(dump_sframe_func_fre_flex): Likewise.
 	(dump_sframe): Allow both SFrame version 2 and version 3.
 
 ---
-[Changes from RFC]
+[Changes in V1]
   - Display a "F" char for flexible FDE types.
   - Fix dumping routines to account for one RA padding offset, when
     present.  In RFC, we were forcefully always emitting two offsets for
@@ -69,22 +70,34 @@ libsframe/
     references to "topmost" [Jens].
   - Fix uninitialized errors in sframe-dump.c sframe_get_reg_name.
   - Use SFRAME_V3_FDE_TYPE for flex_p.
-[End of Changes from RFC]
+[End of Changes in V1]
+
+[Changes in V2]
+  - Bugfix flex and undefined_p in dumper.  Move stub to emit "RA
+    undefined" early on, and do not access offsets in case of
+    ra_undefined_p [Indu].
+  - Use unsigned int consistently for regnum [Indu].
+  - For clarity/intent, use explicit typecast uint32_t for
+    sframe_get_fre_offset based retrieval of CFA, FP and RA
+    Register/Control Data [Indu].
+[End of changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
- libsframe/sframe-dump.c | 387 +++++++++++++++++++++++++++++++++-------
- 1 file changed, 320 insertions(+), 67 deletions(-)
+ libsframe/sframe-dump.c | 379 +++++++++++++++++++++++++++++++++-------
+ 1 file changed, 312 insertions(+), 67 deletions(-)
 
 diff --git a/libsframe/sframe-dump.c b/libsframe/sframe-dump.c
-index ab979c16eef..40e256c237d 100644
+index ab979c16eef..afc2394e4ad 100644
 --- a/libsframe/sframe-dump.c
 +++ b/libsframe/sframe-dump.c
-@@ -23,6 +23,75 @@
+@@ -23,6 +23,76 @@
  #include <inttypes.h>
  #include "sframe-impl.h"
  
 +typedef struct
 +{
-+  int reg_num;
++  unsigned int reg_num;
 +  const char *reg_name;
 +} sframe_reg_map_entry;
 +
@@ -114,7 +127,8 @@ index ab979c16eef..40e256c237d 100644
 +SFRAME_ABI_REG_MAP (s390x, SFRAME_SP (15), SFRAME_FP (11));
 +
 +static const char *
-+sframe_get_reg_name (uint8_t abi_arch, int reg_num, char *buf, size_t buf_size)
++sframe_get_reg_name (uint8_t abi_arch, unsigned int reg_num, char *buf,
++		     size_t buf_size)
 +{
 +  const char *reg_name = NULL;
 +  const sframe_abi_reg_map *abi_reg_map = NULL;
@@ -144,7 +158,7 @@ index ab979c16eef..40e256c237d 100644
 +  /* Handle fallback if name is missing or reg num is non-SP/FP.  */
 +  if (reg_name == NULL)
 +    {
-+      snprintf (buf, buf_size, "r%d", reg_num);
++      snprintf (buf, buf_size, "r%u", reg_num);
 +      reg_name = buf;
 +    }
 +
@@ -154,7 +168,7 @@ index ab979c16eef..40e256c237d 100644
  /* Return TRUE if the SFrame section is associated with the aarch64 ABIs.  */
  
  static bool
-@@ -142,18 +211,13 @@ dump_sframe_header (const sframe_decoder_ctx *sfd_ctx)
+@@ -142,18 +212,13 @@ dump_sframe_header (const sframe_decoder_ctx *sfd_ctx)
  }
  
  static void
@@ -178,7 +192,7 @@ index ab979c16eef..40e256c237d 100644
    const char *base_reg_str[] = {"fp", "sp"};
    bool ra_undefined_p = false;
    int32_t cfa_offset = 0;
-@@ -165,68 +229,14 @@ dump_sframe_func_with_fres (const sframe_decoder_ctx *sfd_ctx,
+@@ -165,68 +230,14 @@ dump_sframe_func_with_fres (const sframe_decoder_ctx *sfd_ctx,
    sframe_frame_row_entry fre;
  
    uint8_t ver = sframe_decoder_get_version (sfd_ctx);
@@ -250,7 +264,7 @@ index ab979c16eef..40e256c237d 100644
  
        /* FIXME - fixup the err caching in array.
  	 assert no error for base reg id and RA undefined.  */
-@@ -301,6 +311,249 @@ dump_sframe_func_with_fres (const sframe_decoder_ctx *sfd_ctx,
+@@ -301,6 +312,240 @@ dump_sframe_func_with_fres (const sframe_decoder_ctx *sfd_ctx,
      }
  }
  
@@ -258,7 +272,7 @@ index ab979c16eef..40e256c237d 100644
 +
 +static void
 +sframe_format_fre_disp (char *buf, size_t size, uint8_t abi_arch,
-+			uint8_t reg_num, bool reg_p, int32_t offset,
++			unsigned int reg_num, bool reg_p, int32_t offset,
 +			bool deref_p)
 +{
 +  /* Initialize to string for CFA-based.  */
@@ -285,8 +299,6 @@ index ab979c16eef..40e256c237d 100644
 +{
 +  uint32_t j = 0;
 +  bool ra_undefined_p = false;
-+  uint8_t cfa_reg, ra_reg, fp_reg;
-+  bool cfa_deref_p, ra_deref_p, fp_deref_p;
 +  int64_t fre_start_pc_vma = 0;
 +  uint32_t fde_type = SFRAME_FDE_TYPE_FLEX;
 +
@@ -301,24 +313,30 @@ index ab979c16eef..40e256c237d 100644
 +			  ? fre.fre_start_addr
 +			  : func_start_pc_vma + fre.fre_start_addr);
 +
-+      cfa_reg = 0;
-+      ra_reg = 0;
-+      fp_reg = 0;
-+      cfa_deref_p = 0;
-+      ra_deref_p = 0;
-+      fp_deref_p = 0;
++      /* Dump VMA.  */
++      printf ("\n");
++      printf ("    %016"PRIx64, fre_start_pc_vma);
 +
-+      sframe_decoder_get_fre (sfd_ctx, funcidx, j, &fre);
++      int err_ra_offset = 0;
++      /* Dump RA undefined (FRE without any offsets).  */
++      ra_undefined_p = sframe_fre_get_ra_undefined_p (sfd_ctx, &fre,
++						      &err_ra_offset);
++      sframe_assert (!err_ra_offset);
++      if (ra_undefined_p)
++	{
++	  printf ("  RA undefined");
++	  continue;
++	}
 +
-+      fre_start_pc_vma = (pc_mask_p
-+			  ? fre.fre_start_addr
-+			  : func_start_pc_vma + fre.fre_start_addr);
++      unsigned int cfa_reg = 0, ra_reg = 0, fp_reg = 0;
++      bool cfa_deref_p = 0, ra_deref_p = 0, fp_deref_p = 0;
 +
 +      int err_cfa_reg = 0;
 +      int err_cfa_offset = 0;
-+      int32_t cfa_reg_data = sframe_get_fre_offset (&fre,
-+						    SFRAME_FRE_CFA_OFFSET_IDX,
-+						    &err_cfa_reg);
++      /* Read the Register/Control Data as unsigned.  */
++      uint32_t cfa_reg_data
++	= (uint32_t) sframe_get_fre_offset (&fre, SFRAME_FRE_CFA_OFFSET_IDX,
++					    &err_cfa_reg);
 +      int32_t cfa_offset = sframe_fre_get_cfa_offset (sfd_ctx, &fre, fde_type,
 +						      &err_cfa_offset);
 +      sframe_assert (!err_cfa_reg && !err_cfa_offset);
@@ -330,13 +348,12 @@ index ab979c16eef..40e256c237d 100644
 +	}
 +
 +      int err_ra_reg = 0;
-+      int err_ra_offset = 0;
-+      int32_t ra_reg_data = sframe_get_fre_offset (&fre,
-+						   SFRAME_FRE_RA_OFFSET_IDX * 2,
-+						   &err_ra_reg);
++      /* Read the Register/Control Data as unsigned.  */
++      uint32_t ra_reg_data
++	= (uint32_t) sframe_get_fre_offset (&fre, SFRAME_FRE_RA_OFFSET_IDX * 2,
++					    &err_ra_reg);
 +      int32_t ra_offset = sframe_fre_get_ra_offset (sfd_ctx, &fre, fde_type,
 +						    &err_ra_offset);
-+      // sframe_assert (!err_ra_reg && !err_ra_offset);
 +      bool ra_reg_p = SFRAME_V3_FLEX_FDE_OFFSET_REG_P (ra_reg_data);
 +      if (ra_reg_p)
 +	{
@@ -350,7 +367,9 @@ index ab979c16eef..40e256c237d 100644
 +      if (!err_ra_reg && ra_reg_data == SFRAME_FRE_RA_OFFSET_INVALID)
 +       fp_idx -= 1;
 +
-+      int32_t fp_reg_data = sframe_get_fre_offset (&fre, fp_idx, &err_fp_reg);
++      /* Read the Register/Control Data as unsigned.  */
++      uint32_t fp_reg_data
++	= (uint32_t) sframe_get_fre_offset (&fre, fp_idx, &err_fp_reg);
 +      int32_t fp_offset = sframe_fre_get_fp_offset (sfd_ctx, &fre, fde_type,
 +						    &err_fp_offset);
 +      bool fp_reg_p = SFRAME_V3_FLEX_FDE_OFFSET_REG_P (fp_reg_data);
@@ -358,20 +377,6 @@ index ab979c16eef..40e256c237d 100644
 +	{
 +	  fp_reg = SFRAME_V3_FLEX_FDE_OFFSET_REG_NUM (fp_reg_data);
 +	  fp_deref_p = SFRAME_V3_FLEX_FDE_OFFSET_REG_DEREF_P (fp_reg_data);
-+	}
-+
-+      /* Dump VMA.  */
-+      printf ("\n");
-+      printf ("    %016"PRIx64, fre_start_pc_vma);
-+
-+      /* Dump RA undefined (FRE without any offsets).  */
-+      ra_undefined_p = sframe_fre_get_ra_undefined_p (sfd_ctx, &fre,
-+						      &err_ra_offset);
-+      sframe_assert (!err_ra_offset);
-+      if (ra_undefined_p)
-+	{
-+	  printf ("  RA undefined");
-+	  continue;
 +	}
 +
 +      /* Dump CFA info.  */

@@ -1,16 +1,22 @@
-From b7bd847988347a3b858351de53c9533bd826459a Mon Sep 17 00:00:00 2001
-Message-ID: <b7bd847988347a3b858351de53c9533bd826459a.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 9d0abfaf5535817cfba3f0c8171b7dd02faa1e09 Mon Sep 17 00:00:00 2001
+Message-ID: <9d0abfaf5535817cfba3f0c8171b7dd02faa1e09.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 24 Dec 2025 23:42:54 -0800
-Subject: [PATCH 34/40] [SFrame-V3] gas: binutils: ld: NEWS: add SFrame v3
+Subject: [PATCH 34/41] [SFrame-V3] gas: binutils: ld: NEWS: add SFrame v3
  related announcements
 
 Add NEWS entries related to the SFrame version 3 release.
 
 ---
 [New in V1. Not present in RFC]
+
+[Changes in V2]
+  - Use --discard-sframe in ld/NEWS [Indu].
+[End of changes in V2].
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  binutils/NEWS |  8 ++++++++
  gas/NEWS      |  9 +++++++++
@@ -57,14 +63,14 @@ index 35ae7b94273..0a5926ef0f1 100644
  
  * Add support to generate SFrame stack trace information (.sframe)
 diff --git a/ld/NEWS b/ld/NEWS
-index 3636714868f..800ca7ae7db 100644
+index 3636714868f..650b934acc7 100644
 --- a/ld/NEWS
 +++ b/ld/NEWS
 @@ -13,6 +13,18 @@
  
  * NaCl target support is removed.
  
-+* New command line option `--discard-sframe-sections` which disables the
++* New command line option `--discard-sframe` which disables the
 +  emission of `.sframe` output section in the linked output.  This option also
 +  prohibits the creation of SFrame stack trace info for linker-generated
 +  sections like PLT.  The existing linker option

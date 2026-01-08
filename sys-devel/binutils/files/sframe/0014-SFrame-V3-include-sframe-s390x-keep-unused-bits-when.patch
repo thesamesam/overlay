@@ -1,10 +1,10 @@
-From 50d72ec9958b6b98160bc70fd78dbd11e57c58ff Mon Sep 17 00:00:00 2001
-Message-ID: <50d72ec9958b6b98160bc70fd78dbd11e57c58ff.1767385715.git.sam@gentoo.org>
-In-Reply-To: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
-References: <04d5b2fb02b9e46296d674eff569ef86bbb7a94d.1767385714.git.sam@gentoo.org>
+From 4e81dca82a542cc9553218145d578232925ca4c8 Mon Sep 17 00:00:00 2001
+Message-ID: <4e81dca82a542cc9553218145d578232925ca4c8.1767884020.git.sam@gentoo.org>
+In-Reply-To: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
+References: <71148ee5f0390fb3a35743a6fc45285b965384af.1767884019.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 10 Nov 2025 12:20:16 -0800
-Subject: [PATCH 13/40] [SFrame-V3] include: sframe: s390x: keep unused bits
+Subject: [PATCH 14/41] [SFrame-V3] include: sframe: s390x: keep unused bits
  when possible
 
 TBD:
@@ -28,9 +28,13 @@ include/
 	(SFRAME_V3_S390X_OFFSET_DECODE_REGNUM): Likewise.
 
 ---
-[Changes from RFC]
+[Changes in V1]
  - Use sframe_s390x_offset_regnum_p consistently. [Jens]
-[End of changes from RFC]
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/gen-sframe.c        |  4 ++--
  include/sframe.h        | 13 +++++++++++++
@@ -38,7 +42,7 @@ include/
  3 files changed, 45 insertions(+), 6 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 1aaaf300a46..91c275ef5f5 100644
+index 2bef91e60c9..2e05c444642 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -1322,11 +1322,11 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
@@ -56,10 +60,10 @@ index 1aaaf300a46..91c275ef5f5 100644
    return SFRAME_XLATE_OK;
  }
 diff --git a/include/sframe.h b/include/sframe.h
-index 3cf316dbff4..8cc032b681f 100644
+index 8e3510fdd86..c1ee8c9d813 100644
 --- a/include/sframe.h
 +++ b/include/sframe.h
-@@ -463,6 +463,19 @@ typedef struct sframe_frame_row_entry_addr4
+@@ -468,6 +468,19 @@ typedef struct sframe_frame_row_entry_addr4
  #define SFRAME_V2_S390X_OFFSET_DECODE_REGNUM(offset) \
    ((offset) >> 1)
  

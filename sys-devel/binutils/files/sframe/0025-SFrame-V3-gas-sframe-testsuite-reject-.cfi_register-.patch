@@ -1,0 +1,180 @@
+From ba305b712e2eb390dd2a29852a2a4008004952d9 Mon Sep 17 00:00:00 2001
+Message-ID: <ba305b712e2eb390dd2a29852a2a4008004952d9.1767968092.git.sam@gentoo.org>
+In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Tue, 16 Dec 2025 12:50:04 -0800
+Subject: [PATCH 25/39] [SFrame-V3] gas: sframe: testsuite: reject
+ .cfi_register REG_SP, REG
+
+gas/
+	* gas/gen-sframe.c (s390_sframe_xlate_do_register): Check for
+	REG_SP and reject while generating a warning.
+	(sframe_xlate_do_register): Likewise.
+gas/testsuite/
+	* gas/cfi-sframe/cfi-sframe-s390x-err-4.d: New test.
+	* gas/cfi-sframe/cfi-sframe-s390x-err-4.s: Likewise.
+	* gas/cfi-sframe/cfi-sframe-x86_64-empty-5.d: Likewise.
+	* gas/cfi-sframe/cfi-sframe-x86_64-empty-5.s: Likewise.
+	* gas/cfi-sframe/cfi-sframe.exp: Add new tests.
+
+---
+[Changes in V1]
+  - New in V1.
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
+---
+ gas/gen-sframe.c                              | 20 +++++++++++++++----
+ .../gas/cfi-sframe/cfi-sframe-s390x-err-4.d   | 15 ++++++++++++++
+ .../gas/cfi-sframe/cfi-sframe-s390x-err-4.s   |  5 +++++
+ .../cfi-sframe/cfi-sframe-x86_64-empty-5.d    | 17 ++++++++++++++++
+ .../cfi-sframe/cfi-sframe-x86_64-empty-5.s    |  8 ++++++++
+ gas/testsuite/gas/cfi-sframe/cfi-sframe.exp   |  2 ++
+ 6 files changed, 63 insertions(+), 4 deletions(-)
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-4.d
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-4.s
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.d
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.s
+
+diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
+index 4582c9d89e8..69487ae62cd 100644
+--- a/gas/gen-sframe.c
++++ b/gas/gen-sframe.c
+@@ -1482,6 +1482,13 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+ 	   && cfi_insn->u.rr.reg1 == SFRAME_CFA_RA_REG)
+     sframe_fre_set_ra_track (cur_fre,
+ 			     SFRAME_V3_S390X_OFFSET_ENCODE_REGNUM (cfi_insn->u.rr.reg2));
++  /* SFrame does not track SP explicitly.  */
++  else if (cfi_insn->u.rr.reg1 == SFRAME_CFA_SP_REG)
++    {
++      as_warn (_("no SFrame FDE emitted; %s register %u in .cfi_register"),
++	       sframe_register_name (cfi_insn->u.rr.reg1), cfi_insn->u.rr.reg1);
++      return SFRAME_XLATE_ERR_NOTREPRESENTED;  /* Not represented.  */
++    }
+ 
+   return SFRAME_XLATE_OK;
+ }
+@@ -1520,6 +1527,7 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+ 	  cur_fre->fp_deref_p = false;
+ 	  cur_fre->merge_candidate = false;
+ 	  xlate_ctx->flex_p = true;
++	  return SFRAME_XLATE_OK;
+ 	}
+       else if (cfi_insn->u.rr.reg1 == SFRAME_CFA_RA_REG)
+ 	{
+@@ -1529,12 +1537,16 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+ 	  cur_fre->ra_deref_p = false;
+ 	  cur_fre->merge_candidate = false;
+ 	  xlate_ctx->flex_p = true;
++	  return SFRAME_XLATE_OK;
+ 	}
++      /* Recovering REG_SP from an alternate register is not represented in
++	 SFrame.  Fallthrough if SFRAME_CFA_SP_REG and error out.  */
+     }
+-  else if (cfi_insn->u.rr.reg1 == SFRAME_CFA_RA_REG
+-	   /* Ignore SP reg, as it can be recovered from the CFA tracking
+-	      info.  */
+-	   || cfi_insn->u.rr.reg1 == SFRAME_CFA_FP_REG)
++
++  if (cfi_insn->u.rr.reg1 == SFRAME_CFA_RA_REG
++      /* SFrame does not track SP explicitly.  */
++      || cfi_insn->u.rr.reg1 == SFRAME_CFA_SP_REG
++      || cfi_insn->u.rr.reg1 == SFRAME_CFA_FP_REG)
+     {
+       as_warn (_("no SFrame FDE emitted; %s register %u in .cfi_register"),
+ 	       sframe_register_name (cfi_insn->u.rr.reg1), cfi_insn->u.rr.reg1);
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-4.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-4.d
+new file mode 100644
+index 00000000000..1703d817ea9
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-4.d
+@@ -0,0 +1,15 @@
++#name: SFrame generation on s390x - .cfi_register with SP
++#as: --gsframe
++#warning: SP register 15 in \.cfi\_register
++#objdump: --sframe=.sframe
++#...
++Contents of the SFrame section .sframe:
++
++  Header :
++
++    Version: SFRAME_VERSION_3
++    Flags: SFRAME_F_FDE_FUNC_START_PCREL
++    Num FDEs: 0
++    Num FREs: 0
++
++#pass
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-4.s b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-4.s
+new file mode 100644
+index 00000000000..7c0bedab9f2
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-err-4.s
+@@ -0,0 +1,5 @@
++	.cfi_sections .sframe
++	.cfi_startproc
++	.cfi_register r15, r5
++	br	%r7
++	.cfi_endproc
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.d
+new file mode 100644
+index 00000000000..198e549a5c4
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.d
+@@ -0,0 +1,17 @@
++#as: --gsframe
++#warning: SP register 7 in \.cfi\_register
++#objdump: --sframe=.sframe
++#name: SP register 7 in .cfi_register
++#...
++Contents of the SFrame section .sframe:
++
++  Header :
++
++    Version: SFRAME_VERSION_3
++    Flags: SFRAME_F_FDE_FUNC_START_PCREL
++#?    CFA fixed FP offset: \-?\d+
++#?    CFA fixed RA offset: \-?\d+
++    Num FDEs: 0
++    Num FREs: 0
++
++#pass
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.s b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.s
+new file mode 100644
+index 00000000000..fbfee957bea
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.s
+@@ -0,0 +1,8 @@
++# Currently, SFrame does not track REG_SP explicitly.  Ensure graceful
++# behaviour: generate no SFrame FDE for the function, and warn the user.
++	.cfi_startproc
++	.long 0
++	.cfi_def_cfa_offset 16
++	.cfi_register rsp, rcx
++	.long 0
++	.cfi_endproc
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
+index b516e531fe0..4fbb04f838f 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
+@@ -73,6 +73,7 @@ if { [istarget "x86_64-*-*"] && [gas_sframe_check] } then {
+ 	run_dump_test "cfi-sframe-x86_64-empty-2"
+ 	run_dump_test "cfi-sframe-x86_64-empty-3"
+ 	run_dump_test "cfi-sframe-x86_64-empty-4"
++	run_dump_test "cfi-sframe-x86_64-empty-5"
+ 	run_dump_test "cfi-sframe-x86_64-empty-pr33277"
+ 	run_dump_test "cfi-sframe-x86_64-ra-undefined-1"
+ 	run_dump_test "cfi-sframe-x86_64-ra-undefined-flex-1"
+@@ -98,6 +99,7 @@ if { [istarget "s390x*-*-*"] && [gas_sframe_check] } then {
+     run_dump_test "cfi-sframe-s390x-err-1"
+     run_dump_test "cfi-sframe-s390x-err-2"
+     run_dump_test "cfi-sframe-s390x-err-3"
++    run_dump_test "cfi-sframe-s390x-err-4"
+     run_dump_test "cfi-sframe-s390x-fpra-offset-1"
+     run_dump_test "cfi-sframe-s390x-fpra-offset-2"
+     run_dump_test "cfi-sframe-s390x-fpra-register-1"
+-- 
+2.52.0
+

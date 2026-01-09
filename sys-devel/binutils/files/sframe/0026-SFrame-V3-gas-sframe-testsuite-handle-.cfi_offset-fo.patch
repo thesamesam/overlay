@@ -1,0 +1,194 @@
+From ae7078e99afcefb0e7d092bb172be55d68b60dd2 Mon Sep 17 00:00:00 2001
+Message-ID: <ae7078e99afcefb0e7d092bb172be55d68b60dd2.1767968092.git.sam@gentoo.org>
+In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Fri, 26 Dec 2025 18:45:43 -0800
+Subject: [PATCH 26/39] [SFrame-V3] gas: sframe: testsuite: handle .cfi_offset
+ for RA
+
+With the introduction of flex FDE type, handling .cfi_offset for
+RA needs adjustment.
+
+On architectures like x86_64, the return address (RA) is typically saved
+at a fixed offset from the CFA. Previous versions of the SFrame format
+assumed this fixed offset was invariant for the entire function on such
+architectures. Consequently, GAS would warn and suppress SFrame
+generation if it encountered a .cfi_offset directive for the RA
+register that deviated from this fixed default.
+
+SFrame V3 introduces "Flex FDEs" which allows tracking the RA location
+explicitly even on architectures where it is usually fixed.
+
+This patch updates sframe_xlate_do_offset () to leverage Flex FDEs. When
+processing a .cfi_offset for the RA register:
+  - The check for non-representable RA offsets is relaxed. If the ABI
+    supports Flex FDEs (SFrame V3), GAS proceeds instead of issuing a
+    warning.
+  - For ABIs without explicit RA tracking (like AMD64), if the RA
+    offset differs from the default fixed offset, the FDE is marked as a
+    Flex FDE, and the new stack location is recorded.
+  - Logic is added to detect when the RA is restored to its standard
+    fixed offset. In this case, the tracking state is reset (ra_loc set
+    to SFRAME_FRE_ELEM_LOC_NONE), deferring to the ABI's default fixed RA
+    offset behavior.
+
+gas/
+	* gen-sframe.c (sframe_xlate_do_offset): Support .cfi_offset for RA
+	by switching to Flex FDEs when necessary.
+gas/testsuite/
+	* gas/cfi-sframe/cfi-sframe-x86_64-6.d: New test.
+	* gas/cfi-sframe/cfi-sframe-x86_64-6.s: New test to check
+	transition of location of REG_RA from register to CFA-8 (default
+	location on AMD64).  Flex FDE in effect.
+	* gas/cfi-sframe/cfi-sframe.exp: Add new test.
+
+---
+[New in V1. Not present in RFC.]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
+---
+ gas/gen-sframe.c                              | 47 +++++++++++++++----
+ .../gas/cfi-sframe/cfi-sframe-x86_64-6.d      | 25 ++++++++++
+ .../gas/cfi-sframe/cfi-sframe-x86_64-6.s      | 16 +++++++
+ gas/testsuite/gas/cfi-sframe/cfi-sframe.exp   |  1 +
+ 4 files changed, 81 insertions(+), 8 deletions(-)
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-6.d
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-6.s
+
+diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
+index 69487ae62cd..23c32d0a642 100644
+--- a/gas/gen-sframe.c
++++ b/gas/gen-sframe.c
+@@ -1390,8 +1390,10 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
+ 
+   /* For ABIs not tracking RA, the return address is expected to be in a
+      specific location.  Explicit manourvering to a different offset (than the
+-     default offset) is non-representable in SFrame.  */
+-  if (!sframe_ra_tracking_p () && cfi_insn->u.ri.reg == SFRAME_CFA_RA_REG
++     default offset) is non-representable in SFrame, unless flex FDE generation
++     is supported for the ABI.  */
++  if (!sframe_support_flex_fde_p () && !sframe_ra_tracking_p ()
++      && cfi_insn->u.ri.reg == SFRAME_CFA_RA_REG
+       && cfi_insn->u.ri.offset != sframe_cfa_ra_offset ())
+     {
+       as_warn (_("no SFrame FDE emitted; %s register %u in .cfi_offset"),
+@@ -1409,13 +1411,42 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
+       cur_fre->fp_deref_p = true;
+       cur_fre->merge_candidate = false;
+     }
+-  else if (sframe_ra_tracking_p ()
+-	   && cfi_insn->u.ri.reg == SFRAME_CFA_RA_REG)
++  /* Either the ABI has enabled RA tracking, in which case we must process the
++     DW_CFA_offset opcode for REG_RA like usual.  Or if the ABI has not enabled
++     RA tracking, but flex FDE generation is supported, dintinguish between
++     whether its time to reset the ra tracking state or not.  */
++  else if (cfi_insn->u.ri.reg == SFRAME_CFA_RA_REG)
+     {
+-      sframe_fre_set_ra_track (cur_fre, cfi_insn->u.ri.offset);
+-      cur_fre->ra_reg = SFRAME_FRE_REG_INVALID;
+-      cur_fre->ra_deref_p = true;
+-      cur_fre->merge_candidate = false;
++      if (!sframe_ra_tracking_p ())
++	{
++	  /* RA is restored to its standard fixed offset.  */
++	  if (cfi_insn->u.ri.offset == sframe_cfa_ra_offset ())
++	    {
++	      cur_fre->ra_reg = SFRAME_FRE_REG_INVALID;
++	      cur_fre->ra_loc = SFRAME_FRE_ELEM_LOC_NONE;
++	      cur_fre->ra_deref_p = false;
++	      cur_fre->merge_candidate = false;
++	    }
++	  /* If flex FDE is supported, update the ra tracking info.  */
++	  else if (sframe_support_flex_fde_p ())
++	    {
++	      sframe_fre_set_ra_track (cur_fre, cfi_insn->u.ri.offset);
++	      cur_fre->ra_reg = SFRAME_FRE_REG_INVALID;
++	      cur_fre->ra_loc = SFRAME_FRE_ELEM_LOC_STACK;
++	      cur_fre->ra_deref_p = true;
++	      cur_fre->merge_candidate = false;
++
++	      xlate_ctx->flex_p = true;
++	    }
++	}
++      else if (sframe_ra_tracking_p ())
++	{
++	  sframe_fre_set_ra_track (cur_fre, cfi_insn->u.ri.offset);
++	  cur_fre->ra_reg = SFRAME_FRE_REG_INVALID;
++	  cur_fre->ra_loc = SFRAME_FRE_ELEM_LOC_STACK;
++	  cur_fre->ra_deref_p = true;
++	  cur_fre->merge_candidate = false;
++	}
+     }
+   /* This is used to track changes to non-rsp registers, skip all others
+      except FP / RA for now.  */
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-6.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-6.d
+new file mode 100644
+index 00000000000..a8aa9a61a38
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-6.d
+@@ -0,0 +1,25 @@
++#as: --gsframe
++#objdump: --sframe=.sframe
++#name: Flex FDE with RA state transition
++#...
++Contents of the SFrame section .sframe:
++
++  Header :
++
++    Version: SFRAME_VERSION_3
++    Flags: SFRAME_F_FDE_FUNC_START_PCREL
++    CFA fixed RA offset: \-8
++    Num FDEs: 1
++    Num FREs: 5
++
++  Function Index :
++
++    func idx \[0\]: pc = 0x0, size = 16 bytes, attr = "F"
++    STARTPC +CFA +FP +RA +
++    0+0000 +sp\+8 +u +f +
++    0+0004 +sp\+40 +u +f +
++    0+0008 +sp\+40 +u +r3\+0 +
++    0+000b +sp\+40 +u +f +
++    0+000f +sp\+8 +u +f +
++
++#pass
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-6.s b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-6.s
+new file mode 100644
+index 00000000000..a4600dce66f
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-6.s
+@@ -0,0 +1,16 @@
++# Testcase for transition of tracked entity (rip) from
++# register to CFA+offset.
++	.type	foo, @function
++foo:
++	.cfi_startproc
++	sub	$0x20,%rsp
++	.cfi_adjust_cfa_offset 0x20
++	.long 0
++	.cfi_register rip, 3
++	mov %rax, %rdi
++	.cfi_offset rip, -8
++	.long 0
++	.cfi_def_cfa rsp, 8
++	ret
++	.cfi_endproc
++	.size	foo, .-foo
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
+index 4fbb04f838f..932c1b742cd 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
+@@ -63,6 +63,7 @@ if { [istarget "x86_64-*-*"] && [gas_sframe_check] } then {
+ 	run_dump_test "cfi-sframe-x86_64-3"
+ 	run_dump_test "cfi-sframe-x86_64-4"
+ 	run_dump_test "cfi-sframe-x86_64-5"
++	run_dump_test "cfi-sframe-x86_64-6"
+ 	run_dump_test "cfi-sframe-x86_64-esc-expr-1"
+ 	run_dump_test "cfi-sframe-x86_64-esc-expr-2"
+ 	run_dump_test "cfi-sframe-x86_64-esc-expr-3"
+-- 
+2.52.0
+

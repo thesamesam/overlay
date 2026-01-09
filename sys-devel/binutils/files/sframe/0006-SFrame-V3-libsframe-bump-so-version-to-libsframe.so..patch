@@ -1,0 +1,102 @@
+From d609160a108bcc592db5332758687cc2e23402bc Mon Sep 17 00:00:00 2001
+Message-ID: <d609160a108bcc592db5332758687cc2e23402bc.1767968092.git.sam@gentoo.org>
+In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Fri, 24 Oct 2025 09:39:08 -0700
+Subject: [PATCH 06/39] [SFrame-V3] libsframe: bump so version to
+ libsframe.so.3.0.0
+
+Consolidate the 2.0 and 2.1 nodes into a new 3.0 node.
+
+In subsequent patches for releasing SFrame V3, libsframe APIs will be
+affected.  A non-exhaustive list of noteworthy changes are mentioned
+next.
+
+Some existing APIs (breaking binary compatibility) by adding an
+additional arg to these:
+  - sframe_fre_get_ra_offset
+  - sframe_fre_get_fp_offset
+  - sframe_fre_get_cfa_offset
+
+Change of argument type:
+  - sframe_find_fre
+
+The behaviour of some APIs will change:
+ - sframe_encoder_write now writes out V3.
+
+And lastly removal of two APIs:
+  - sframe_decoder_get_funcdesc
+  - sframe_encoder_add_funcdesc
+
+Above make this release of the library binary incompatible with previous
+release, hence a version bump and new version node 3.0.
+
+Reviewed-by: Jens Remus <jremus@linux.ibm.com>
+
+libsframe/
+	* libsframe.ver: Create a new 3.0 node.  Remove the 2.0 node.
+	* libtool-version: Bump the so version.
+
+---
+[No changes in V1, V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
+---
+ libsframe/libsframe.ver   | 12 ++++--------
+ libsframe/libtool-version |  2 +-
+ 2 files changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/libsframe/libsframe.ver b/libsframe/libsframe.ver
+index 1204acec4bc..4086a397c89 100644
+--- a/libsframe/libsframe.ver
++++ b/libsframe/libsframe.ver
+@@ -1,6 +1,6 @@
+ LIBSFRAME_0.0 { };
+ 
+-LIBSFRAME_2.0 {
++LIBSFRAME_3.0 {
+   global:
+     sframe_decoder_free;
+     sframe_fde_create_func_info;
+@@ -10,6 +10,7 @@ LIBSFRAME_2.0 {
+     sframe_fre_get_fp_offset;
+     sframe_fre_get_ra_offset;
+     sframe_fre_get_ra_mangled_p;
++    sframe_fre_get_ra_undefined_p;
+     sframe_decode;
+     sframe_decoder_get_flags;
+     sframe_decoder_get_hdr_size;
+@@ -31,17 +32,12 @@ LIBSFRAME_2.0 {
+     sframe_encoder_get_offsetof_fde_start_addr;
+     sframe_encoder_get_num_fidx;
+     sframe_encoder_add_fre;
++    sframe_encoder_add_funcdesc;
+     sframe_encoder_add_funcdesc_v2;
++    sframe_encoder_write;
+     dump_sframe;
+     sframe_errmsg;
+ 
+   local:
+     *;
+ } LIBSFRAME_0.0;
+-
+-LIBSFRAME_2.1 {
+-  global:
+-    sframe_fre_get_ra_undefined_p;
+-    sframe_encoder_add_funcdesc;
+-    sframe_encoder_write;
+-} LIBSFRAME_2.0;
+diff --git a/libsframe/libtool-version b/libsframe/libtool-version
+index e06835d7c65..8faf006448e 100644
+--- a/libsframe/libtool-version
++++ b/libsframe/libtool-version
+@@ -27,4 +27,4 @@
+ #       then set age to 0.
+ #
+ # CURRENT:REVISION:AGE
+-2:0:0
++3:0:0
+-- 
+2.52.0
+

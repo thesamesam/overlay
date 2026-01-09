@@ -1,0 +1,117 @@
+From 00121cce7a38efd3c7b79c3e2dc30c4d31dbaed4 Mon Sep 17 00:00:00 2001
+Message-ID: <00121cce7a38efd3c7b79c3e2dc30c4d31dbaed4.1767968092.git.sam@gentoo.org>
+In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Mon, 3 Nov 2025 00:17:41 -0800
+Subject: [PATCH 03/39] [SFrame-V3] libsframe: remove old
+ sframe_decoder_get_funcdesc API
+
+sframe_decoder_get_funcdesc () was added for SFRAME_VERSION_1.  This has
+since been obsoleted by introduction of SFRAME_VERSION_2 and its
+corresponding sframe_decoder_get_funcdesc_v2 API.
+
+Remove from the version script file as well.  We will bump the version
+of the library to 3.0.0 in a subsequent patch (closer to release) and
+consolidate the entries into a new LIBSFRAME_3.0 node.
+
+Reviewed-by: Jens Remus <jremus@linux.ibm.com>
+
+include/
+	* sframe-api.h (sframe_decoder_get_funcdesc): Remove.
+libsframe/
+	* libsframe.ver: Likewise.
+	* sframe.c (sframe_decoder_get_funcdesc): Remove definition.
+
+---
+[No Changes in V1, V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
+---
+ include/sframe-api.h    | 11 -----------
+ libsframe/libsframe.ver |  1 -
+ libsframe/sframe.c      | 34 ----------------------------------
+ 3 files changed, 46 deletions(-)
+
+diff --git a/include/sframe-api.h b/include/sframe-api.h
+index 4a45cb169b7..f7b36fa3aba 100644
+--- a/include/sframe-api.h
++++ b/include/sframe-api.h
+@@ -169,17 +169,6 @@ sframe_decoder_get_fre (sframe_decoder_ctx *ctx,
+ 			unsigned int fre_idx,
+ 			sframe_frame_row_entry *fre);
+ 
+-/* Get the data (NUM_FRES, FUNC_START_ADDRESS) from the function
+-   descriptor entry at index I'th in the decoder CTX.  If failed,
+-   return error code.  */
+-extern int
+-sframe_decoder_get_funcdesc (sframe_decoder_ctx *ctx,
+-			     unsigned int i,
+-			     uint32_t *num_fres,
+-			     uint32_t *func_size,
+-			     int32_t *func_start_address,
+-			     unsigned char *func_info);
+-
+ /* Get the data (NUM_FRES, FUNC_SIZE, FUNC_START_ADDRESS, FUNC_INFO,
+    REP_BLOCK_SIZE) from the function descriptor entry at index I'th
+    in the decoder CTX.  If failed, return error code.
+diff --git a/libsframe/libsframe.ver b/libsframe/libsframe.ver
+index 18ab92839e1..1204acec4bc 100644
+--- a/libsframe/libsframe.ver
++++ b/libsframe/libsframe.ver
+@@ -20,7 +20,6 @@ LIBSFRAME_2.0 {
+     sframe_decoder_get_fixed_ra_offset;
+     sframe_find_fre;
+     sframe_decoder_get_num_fidx;
+-    sframe_decoder_get_funcdesc;
+     sframe_decoder_get_funcdesc_v2;
+     sframe_decoder_get_fre;
+     sframe_encode;
+diff --git a/libsframe/sframe.c b/libsframe/sframe.c
+index 609a13e66d6..0e0dce70137 100644
+--- a/libsframe/sframe.c
++++ b/libsframe/sframe.c
+@@ -1438,40 +1438,6 @@ sframe_decoder_get_num_fidx (sframe_decoder_ctx *ctx)
+   return num_fdes;
+ }
+ 
+-/* Get the data (NUM_FRES, FUNC_START_ADDRESS) from the function
+-   descriptor entry at index I'th in the decoder CTX.  If failed,
+-   return error code.  */
+-/* FIXME - consolidate the args and return a
+-   sframe_func_desc_index_elem rather?  */
+-
+-int
+-sframe_decoder_get_funcdesc (sframe_decoder_ctx *ctx,
+-			     unsigned int i,
+-			     uint32_t *num_fres,
+-			     uint32_t *func_size,
+-			     int32_t *func_start_address,
+-			     unsigned char *func_info)
+-{
+-  sframe_func_desc_entry_int *fdp;
+-  int err = 0;
+-
+-  if (ctx == NULL || func_start_address == NULL || num_fres == NULL
+-      || func_size == NULL)
+-    return sframe_set_errno (&err, SFRAME_ERR_INVAL);
+-
+-  fdp = sframe_decoder_get_funcdesc_at_index (ctx, i);
+-
+-  if (fdp == NULL)
+-    return sframe_set_errno (&err, SFRAME_ERR_FDE_NOTFOUND);
+-
+-  *num_fres = fdp->func_num_fres;
+-  *func_start_address = fdp->func_start_pc_offset;
+-  *func_size = fdp->func_size;
+-  *func_info = fdp->func_info;
+-
+-  return 0;
+-}
+-
+ int
+ sframe_decoder_get_funcdesc_v2 (sframe_decoder_ctx *dctx,
+ 				unsigned int i,
+-- 
+2.52.0
+

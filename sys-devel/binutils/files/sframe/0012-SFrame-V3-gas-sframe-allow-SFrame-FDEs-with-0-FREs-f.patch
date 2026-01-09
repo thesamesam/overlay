@@ -1,0 +1,148 @@
+From e5c7ff8ba8f6922784d58977e73bd83c9e9747ed Mon Sep 17 00:00:00 2001
+Message-ID: <e5c7ff8ba8f6922784d58977e73bd83c9e9747ed.1767968092.git.sam@gentoo.org>
+In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Sat, 6 Dec 2025 20:35:45 -0800
+Subject: [PATCH 12/39] [SFrame-V3] gas: sframe: allow SFrame FDEs with 0 FREs
+ for signal frames
+
+Update the SFrame generation logic in GAS to emit Function Descriptor Entries
+(FDEs) for signal frames even when no Frame Row Entries (FREs) could be
+generated.
+
+Previously, create_sframe_all () would discard any FDE that failed
+translation or resulted in zero FREs. However, for signal frames (marked
+with .cfi_signal_frame), preserving the FDE may be valuable even without
+stack offsets. The presence of the SFrame FDE with the 'Signal'
+attribute may allow stack tracers to identify the frame as a signal
+trampoline and potentially apply fallback handling, rather than treating
+the PC range as having no stack trace info at all.
+
+The patch modifies create_sframe_all () to detect translation errors for
+signal frames, effectively allowing the generation of an empty FDE (0 FREs)
+marked with the 'S' attribute.
+
+gas/
+	* gen-sframe.c (sframe_fde_free): Add NULL check for safety.
+	(create_sframe_all): Allow FDEs for signal frames even if translation
+	encountered errors or produced no FREs.
+gas/testsuite/
+	* gas/cfi-sframe/cfi-sframe.exp: New test.
+	* gas/cfi-sframe/cfi-sframe-x86_64-signal-1.d: New test ensuring
+	signal frame FDE is emitted with 0 FREs.
+	* gas/cfi-sframe/cfi-sframe-x86_64-signal-1.s: New test.
+
+---
+[Changes in V1]
+  - Use register names in CFI directives in test files [Jan].
+[End of changes in V1]
+
+[No changes in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
+---
+ gas/gen-sframe.c                              | 20 +++++++++++++------
+ .../cfi-sframe/cfi-sframe-x86_64-signal-1.d   | 18 +++++++++++++++++
+ .../cfi-sframe/cfi-sframe-x86_64-signal-1.s   | 12 +++++++++++
+ gas/testsuite/gas/cfi-sframe/cfi-sframe.exp   |  1 +
+ 4 files changed, 45 insertions(+), 6 deletions(-)
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.d
+ create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.s
+
+diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
+index 3f0a5531381..06e0832f744 100644
+--- a/gas/gen-sframe.c
++++ b/gas/gen-sframe.c
+@@ -574,7 +574,12 @@ sframe_fde_alloc (void)
+ static void
+ sframe_fde_free (struct sframe_func_entry *sframe_fde)
+ {
+-  sframe_row_entry_free (sframe_fde->sframe_fres);
++  if (sframe_fde == NULL)
++    return;
++
++  if (sframe_fde->sframe_fres)
++    sframe_row_entry_free (sframe_fde->sframe_fres);
++
+   XDELETE (sframe_fde);
+ }
+ 
+@@ -2108,12 +2113,15 @@ create_sframe_all (void)
+       /* Initialize the translation context with information anew.  */
+       sframe_xlate_ctx_init (xlate_ctx);
+ 
+-      /* Process and link SFrame FDEs if no error.  Also skip adding an SFrame
+-	 FDE if it does not contain any SFrame FREs.  There is little use of an
+-	 SFrame FDE if there is no stack tracing information for the
+-	 function.  */
++      /* Process and link SFrame FDEs if no error.  */
+       int err = sframe_do_fde (xlate_ctx, dw_fde);
+-      if (err || xlate_ctx->num_xlate_fres == 0)
++      if (err && get_dw_fde_signal_p (dw_fde))
++	{
++	  sframe_xlate_ctx_cleanup (xlate_ctx);
++	  err = SFRAME_XLATE_OK;
++	}
++
++      if (err)
+ 	{
+ 	  sframe_xlate_ctx_cleanup (xlate_ctx);
+ 	  sframe_fde_free (sframe_fde);
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.d
+new file mode 100644
+index 00000000000..adffa7dc64e
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.d
+@@ -0,0 +1,18 @@
++#as: --gsframe
++#warning: \.cfi\_escape with op \(0xf\)
++#objdump: --sframe=.sframe
++#name: Signal Frame with no FREs
++#...
++Contents of the SFrame section .sframe:
++  Header :
++
++    Version: SFRAME_VERSION_3
++    Flags: SFRAME_F_FDE_FUNC_START_PCREL
++    CFA fixed RA offset: -8
++    Num FDEs: 1
++    Num FREs: 0
++
++  Function Index :
++
++    func idx \[0\]: pc = 0x0, size = 3 bytes, attr = "S"
++    STARTPC + CFA + FP + RA +
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.s b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.s
+new file mode 100644
+index 00000000000..9394577a9e6
+--- /dev/null
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.s
+@@ -0,0 +1,12 @@
++	.type	foo, @function
++foo:
++	.cfi_startproc
++	.cfi_signal_frame
++# DW_CFA_def_cfa_expression, length, DW_OP_breg9, (sleb)offset, DW_OP_deref
++	.cfi_escape 0xf,0x3,0x79,0x78,0x6
++	nop
++	pop	%rbp
++	.cfi_offset rbp, -16
++	ret
++	.cfi_endproc
++	.size	foo, .-foo
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
+index f7c5abf01b2..d42d2ecae18 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp
+@@ -63,6 +63,7 @@ if { [istarget "x86_64-*-*"] && [gas_sframe_check] } then {
+ 	run_dump_test "cfi-sframe-x86_64-3"
+ 	run_dump_test "cfi-sframe-x86_64-pr33170"
+ 	run_dump_test "cfi-sframe-x86_64-pr33756"
++	run_dump_test "cfi-sframe-x86_64-signal-1"
+ 	run_dump_test "cfi-sframe-x86_64-empty-1"
+ 	run_dump_test "cfi-sframe-x86_64-empty-2"
+ 	run_dump_test "cfi-sframe-x86_64-empty-3"
+-- 
+2.52.0
+

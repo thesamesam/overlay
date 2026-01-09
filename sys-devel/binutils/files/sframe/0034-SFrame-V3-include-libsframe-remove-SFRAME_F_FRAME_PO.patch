@@ -1,0 +1,75 @@
+From 0be09985659f9b6121d318da61ac2d4824e46e3e Mon Sep 17 00:00:00 2001
+Message-ID: <0be09985659f9b6121d318da61ac2d4824e46e3e.1767968092.git.sam@gentoo.org>
+In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From: Indu Bhagat <indu.bhagat@oracle.com>
+Date: Mon, 29 Dec 2025 13:02:30 -0800
+Subject: [PATCH 34/39] [SFrame-V3] include: libsframe: remove
+ SFRAME_F_FRAME_POINTER flag
+
+SFrame V3 has 8 precious flag bits, two of which are being used.  More
+flag byte (s) can be added to the auxiliary header when it comes to
+that.  But for now, it may be worthwhile to use the 8-bits frugally.
+
+SFRAME_F_FRAME_POINTER flag bit was added with the intention of marking
+binaries built with frame-pointer preserved.  A stack tracer could then
+use this (deterministic) information if necessary.  But such a marking
+of binary will ideally be done by the linker, and ATM adding such a
+framework is not justified for such small gain.  The outcome of this is
+that SFRAME_F_FRAME_POINTER is never set in SFrame V2 binaries.
+
+Remove the definition SFRAME_F_FRAME_POINTER for SFrame V3.  The
+relinquished bit can be used when reading/dumping SFrame V2 sections are
+no longer supported by consumers.  Changing the values of existing flags
+like SFRAME_F_FDE_FUNC_START_PCREL is being done for V3, to avoid
+version-specific flag bit reading (albeit doable) in consumers.
+
+Related changes to the specification are done in a subsequent commit.
+
+include/
+	* sframe.h (SFRAME_V3_F_ALL_FLAGS): Remove
+	SFRAME_F_FRAME_POINTER from the set of V3 flags.
+
+libsframe/
+	* sframe-dump.c (dump_sframe_header_flags): Add a comment for
+	clarity.
+
+---
+[New in V2]
+
+Signed-off-by: Sam James <sam@gentoo.org>
+---
+ include/sframe.h        | 3 +--
+ libsframe/sframe-dump.c | 2 ++
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/include/sframe.h b/include/sframe.h
+index 07565e167d6..aea589e8704 100644
+--- a/include/sframe.h
++++ b/include/sframe.h
+@@ -100,8 +100,7 @@ extern "C"
+ 
+ /* Set of all defined flags in SFrame V3.  */
+ #define SFRAME_V3_F_ALL_FLAGS \
+-  (SFRAME_F_FDE_SORTED | SFRAME_F_FRAME_POINTER \
+-   | SFRAME_F_FDE_FUNC_START_PCREL)
++  (SFRAME_F_FDE_SORTED | SFRAME_F_FDE_FUNC_START_PCREL)
+ 
+ #define SFRAME_CFA_FIXED_FP_INVALID 0
+ #define SFRAME_CFA_FIXED_RA_INVALID 0
+diff --git a/libsframe/sframe-dump.c b/libsframe/sframe-dump.c
+index afc2394e4ad..3153424b0a1 100644
+--- a/libsframe/sframe-dump.c
++++ b/libsframe/sframe-dump.c
+@@ -161,6 +161,8 @@ dump_sframe_header_flags (const sframe_decoder_ctx *sfd_ctx)
+     }
+ 
+   PRINT_FLAG (SFRAME_F_FDE_SORTED);
++  /* Support dumping of both SFrame V2 and V3.  Include SFRAME_F_FRAME_POINTER,
++     even though this should not appear in SFrame V3.  */
+   PRINT_FLAG (SFRAME_F_FRAME_POINTER);
+   PRINT_FLAG (SFRAME_F_FDE_FUNC_START_PCREL);
+ #undef PRINT_FLAG
+-- 
+2.52.0
+

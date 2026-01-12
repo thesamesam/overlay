@@ -134,7 +134,6 @@ src_prepare() {
 
 	if [[ -n ${PATCH_VER} ]] || [[ ${PV} == *9999 ]] ; then
 		if ! use vanilla; then
-			mv "${WORKDIR}/patch/0005-x86-Cache-the-symbol-table-when-packing-relative-rel.patch" "${T}" || die
 			mv "${WORKDIR}/patch/0006-Revert-ELF-give-.note.GNU-stack-proper-section-type.patch" "${T}" || die
 			einfo "Applying binutils patchset ${patchsetname}"
 			eapply "${WORKDIR}/patch"
@@ -145,7 +144,6 @@ src_prepare() {
 			git config user.name "Your Name"
 			git am "${FILESDIR}/sframe/"*.patch || die
 
-			eapply "${T}"/0005-x86-Cache-the-symbol-table-when-packing-relative-rel.patch
 			eapply "${T}"/0006-Revert-ELF-give-.note.GNU-stack-proper-section-type.patch
 
 			# This is applied conditionally for now just out of caution.

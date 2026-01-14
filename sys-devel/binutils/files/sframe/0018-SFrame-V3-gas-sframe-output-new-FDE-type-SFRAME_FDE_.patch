@@ -1,7 +1,7 @@
-From 916fbbeb00f20a1fdacd211215893c905343920b Mon Sep 17 00:00:00 2001
-Message-ID: <916fbbeb00f20a1fdacd211215893c905343920b.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 8fc23be3b47120e0831d6e090ace0eb3bff01001 Mon Sep 17 00:00:00 2001
+Message-ID: <8fc23be3b47120e0831d6e090ace0eb3bff01001.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 19 Nov 2025 09:26:47 -0800
 Subject: [PATCH 18/40] [SFrame-V3] gas: sframe: output new FDE type
@@ -77,7 +77,7 @@ gas/
  2 files changed, 186 insertions(+), 31 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 3ffa5f3f411..c07170ccb2e 100644
+index 554ad494c70..52df8ff73a0 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -223,6 +223,22 @@ get_offset_size_in_bytes (offsetT value)

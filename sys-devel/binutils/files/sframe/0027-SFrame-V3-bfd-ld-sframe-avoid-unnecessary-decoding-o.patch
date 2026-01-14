@@ -1,7 +1,7 @@
-From b9c6fde9975e82f83039646119f4248fd71c9182 Mon Sep 17 00:00:00 2001
-Message-ID: <b9c6fde9975e82f83039646119f4248fd71c9182.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 5cf04e57803ca73142031f3a737a017f28b334fc Mon Sep 17 00:00:00 2001
+Message-ID: <5cf04e57803ca73142031f3a737a017f28b334fc.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Thu, 20 Nov 2025 09:32:32 -0800
 Subject: [PATCH 27/40] [SFrame-V3] bfd: ld: sframe: avoid unnecessary decoding

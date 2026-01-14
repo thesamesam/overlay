@@ -1,7 +1,7 @@
-From 5ab41a38b7437f52a3903771c533787e892e7ce6 Mon Sep 17 00:00:00 2001
-Message-ID: <5ab41a38b7437f52a3903771c533787e892e7ce6.1768383274.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 29b9075d2a1296535076f19facccbd27e8ddde11 Mon Sep 17 00:00:00 2001
+Message-ID: <29b9075d2a1296535076f19facccbd27e8ddde11.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 24 Oct 2025 09:39:15 -0700
 Subject: [PATCH 11/40] [SFrame-V3] sframe: gas: bfd: add support for signal
@@ -59,7 +59,7 @@ libsframe/
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-common-13.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 4aa362433d7..ff2f7a962ac 100644
+index 3d87143eb0a..f79f5cdd97f 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -116,6 +116,13 @@ get_dw_fde_pauth_b_key_p (const struct fde_entry *dw_fde ATTRIBUTE_UNUSED)

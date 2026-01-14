@@ -1,7 +1,7 @@
-From 3347b4c4da569e7e9eef20da4b24b2b532936033 Mon Sep 17 00:00:00 2001
-Message-ID: <3347b4c4da569e7e9eef20da4b24b2b532936033.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 8e4dc3bd22ee7748d3d275e546e099dc5b6f65f4 Mon Sep 17 00:00:00 2001
+Message-ID: <8e4dc3bd22ee7748d3d275e546e099dc5b6f65f4.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 24 Nov 2025 12:16:05 -0800
 Subject: [PATCH 29/40] [SFrame-V3] gas: sframe: doc: testsuite: add new
@@ -146,7 +146,7 @@ index d4080d73a79..29c05437679 100644
  @end ifset
  
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 2a58c2a0828..5ff10fcb559 100644
+index d6fe0449baa..ecb70c78026 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -324,16 +324,17 @@ sframe_v3_set_func_info (unsigned int fde_pc_type, unsigned int fre_type,

@@ -1,7 +1,7 @@
-From 750f624de22926856087360258a682cf3f1112fd Mon Sep 17 00:00:00 2001
-Message-ID: <750f624de22926856087360258a682cf3f1112fd.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 5704fe1839253a78c08ae8aeb0faedc4c14e6f8f Mon Sep 17 00:00:00 2001
+Message-ID: <5704fe1839253a78c08ae8aeb0faedc4c14e6f8f.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 22 Dec 2025 00:54:44 -0800
 Subject: [PATCH 17/40] [SFrame-V3] gas: sframe: use three states for location
@@ -65,7 +65,7 @@ gas/
  2 files changed, 11 insertions(+), 5 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index daf11eb4791..3ffa5f3f411 100644
+index 373467a712a..554ad494c70 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -1243,8 +1243,8 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,

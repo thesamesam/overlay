@@ -1,7 +1,7 @@
-From 231601a95b3c4e16a6fdd39fcd40180f829d1abc Mon Sep 17 00:00:00 2001
-Message-ID: <231601a95b3c4e16a6fdd39fcd40180f829d1abc.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 5c76dd5da035ef071b4a5d49fc23f502b4c688ef Mon Sep 17 00:00:00 2001
+Message-ID: <5c76dd5da035ef071b4a5d49fc23f502b4c688ef.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 21 Nov 2025 17:00:42 -0800
 Subject: [PATCH 28/40] [SFrame-V3] include: gas: libsframe: split FDE into idx
@@ -177,7 +177,7 @@ index af6356f49fe..511a297054b 100644
  	  BFD_ASSERT (!err);
  	}
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 09898d011a3..2a58c2a0828 100644
+index f5521dd1dbc..d6fe0449baa 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -56,7 +56,7 @@

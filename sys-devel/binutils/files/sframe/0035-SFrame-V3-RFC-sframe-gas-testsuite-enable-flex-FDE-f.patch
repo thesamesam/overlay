@@ -1,7 +1,7 @@
-From 5f980a26f1d635b641f6cc47a991e4179a88ed22 Mon Sep 17 00:00:00 2001
-Message-ID: <5f980a26f1d635b641f6cc47a991e4179a88ed22.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 994683a625d1dc469667e69e405318b1ae617202 Mon Sep 17 00:00:00 2001
+Message-ID: <994683a625d1dc469667e69e405318b1ae617202.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Tue, 30 Dec 2025 14:26:01 -0800
 Subject: [PATCH 35/40] [SFrame-V3][RFC] sframe: gas: testsuite: enable flex
@@ -198,7 +198,7 @@ index 7d7c56dc8a9..535c424ca04 100644
  
  /* Specify the fixed offset to recover RA from CFA.
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 5ff10fcb559..111393a07b6 100644
+index ecb70c78026..d842d0f389f 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -1485,43 +1485,6 @@ sframe_xlate_do_val_offset (const struct sframe_xlate_ctx *xlate_ctx ATTRIBUTE_U

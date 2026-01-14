@@ -1,7 +1,7 @@
-From 09800c785bf50ffa093b73b5347e252be34b52b2 Mon Sep 17 00:00:00 2001
-Message-ID: <09800c785bf50ffa093b73b5347e252be34b52b2.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 9ce3b7f916fcce0256a931eef9a524a25215dcd0 Mon Sep 17 00:00:00 2001
+Message-ID: <9ce3b7f916fcce0256a931eef9a524a25215dcd0.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 24 Dec 2025 12:21:20 -0800
 Subject: [PATCH 34/40] [SFrame-V3][WIP] sframe: doc: specification changes for

@@ -1,7 +1,7 @@
-From 72fc45adee408bba30969b18aed832433952de30 Mon Sep 17 00:00:00 2001
-Message-ID: <72fc45adee408bba30969b18aed832433952de30.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From f0cc39cc7cf0c75b050bede938522f557118ae01 Mon Sep 17 00:00:00 2001
+Message-ID: <f0cc39cc7cf0c75b050bede938522f557118ae01.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 10 Nov 2025 14:44:48 -0800
 Subject: [PATCH 14/40] [SFrame-V3] include: gas: libsframe: add 8-bits of
@@ -156,7 +156,7 @@ index ae6c96d77df..58b12e2b372 100644
  				      0 /* Num FREs.  */);
  
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 507412a20e0..69b68b8f4e7 100644
+index 9b4f3f3d1b9..18c01605032 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -755,6 +755,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,

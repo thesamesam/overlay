@@ -1,7 +1,7 @@
-From a97867c8188587d9289075b73b83e9952ed9ba1f Mon Sep 17 00:00:00 2001
-Message-ID: <a97867c8188587d9289075b73b83e9952ed9ba1f.1768383274.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 0ea44ee0a8b3336959454009f8ce7f85c4c62f55 Mon Sep 17 00:00:00 2001
+Message-ID: <0ea44ee0a8b3336959454009f8ce7f85c4c62f55.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Tue, 28 Oct 2025 01:39:55 -0700
 Subject: [PATCH 10/40] [SFrame-V3] include: libsframe: bfd: gas: testsuite:
@@ -267,7 +267,7 @@ index 9e1c6d8a0e0..ae6c96d77df 100644
  			     + PLT_SFRAME_FDE_START_OFFSET);
  	}
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 35f2add7087..4aa362433d7 100644
+index 0aadaafa1ec..3d87143eb0a 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -691,7 +691,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,

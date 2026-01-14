@@ -1,7 +1,7 @@
-From f4035bfa0adf3f8876d55550540979463cb61553 Mon Sep 17 00:00:00 2001
-Message-ID: <f4035bfa0adf3f8876d55550540979463cb61553.1768383274.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From d095ff0e0aa5b3bcf33c56f546da16a7725267a4 Mon Sep 17 00:00:00 2001
+Message-ID: <d095ff0e0aa5b3bcf33c56f546da16a7725267a4.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Sat, 6 Dec 2025 20:35:45 -0800
 Subject: [PATCH 12/40] [SFrame-V3] gas: sframe: allow SFrame FDEs with 0 FREs
@@ -49,7 +49,7 @@ gas/testsuite/
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index ff2f7a962ac..daf3b3ecc25 100644
+index f79f5cdd97f..6818407683a 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -564,7 +564,12 @@ sframe_fde_alloc (void)

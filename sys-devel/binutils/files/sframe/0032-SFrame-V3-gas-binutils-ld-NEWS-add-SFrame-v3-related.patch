@@ -1,7 +1,7 @@
-From 89117595cb4bdc062243a9ef128fbc14d0a1f2ac Mon Sep 17 00:00:00 2001
-Message-ID: <89117595cb4bdc062243a9ef128fbc14d0a1f2ac.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From fbd0b5241e622537d9db8087ecf131b58a2b6266 Mon Sep 17 00:00:00 2001
+Message-ID: <fbd0b5241e622537d9db8087ecf131b58a2b6266.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 24 Dec 2025 23:42:54 -0800
 Subject: [PATCH 32/40] [SFrame-V3] gas: binutils: ld: NEWS: add SFrame v3

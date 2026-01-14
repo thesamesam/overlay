@@ -1,7 +1,7 @@
-From 9034ef88c1738d84a40253b22a4f6fd471aca096 Mon Sep 17 00:00:00 2001
-Message-ID: <9034ef88c1738d84a40253b22a4f6fd471aca096.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 0f0ad85956969a549bd7f8b7ae367af18ed7f6f4 Mon Sep 17 00:00:00 2001
+Message-ID: <0f0ad85956969a549bd7f8b7ae367af18ed7f6f4.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Sat, 29 Nov 2025 21:14:32 -0800
 Subject: [PATCH 22/40] [SFrame-V3] sframe: gas: translate specific CFI
@@ -77,7 +77,7 @@ gas/
  1 file changed, 233 insertions(+), 38 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index c07170ccb2e..1fd9c6ab67d 100644
+index 52df8ff73a0..e506ea16394 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -24,6 +24,7 @@

@@ -1,7 +1,7 @@
-From ee95fca77d680bf4d18075a2ab6e5db9cfa08be1 Mon Sep 17 00:00:00 2001
-Message-ID: <ee95fca77d680bf4d18075a2ab6e5db9cfa08be1.1768383274.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 5d453af0871267dd84c570363084cede22ac00cb Mon Sep 17 00:00:00 2001
+Message-ID: <5d453af0871267dd84c570363084cede22ac00cb.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 10 Nov 2025 12:20:16 -0800
 Subject: [PATCH 13/40] [SFrame-V3] include: sframe: s390x: keep unused bits
@@ -40,7 +40,7 @@ include/
  3 files changed, 45 insertions(+), 6 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index daf3b3ecc25..507412a20e0 100644
+index 6818407683a..9b4f3f3d1b9 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -1312,11 +1312,11 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,

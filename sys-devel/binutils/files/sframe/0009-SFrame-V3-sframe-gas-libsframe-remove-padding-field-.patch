@@ -1,7 +1,7 @@
-From c3a79a11ea1b4ba09cbe288ceca009926cadfcf2 Mon Sep 17 00:00:00 2001
-Message-ID: <c3a79a11ea1b4ba09cbe288ceca009926cadfcf2.1768383274.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 7fe2e5f5bcc443502c8dd0e3e5668469d9e0ed29 Mon Sep 17 00:00:00 2001
+Message-ID: <7fe2e5f5bcc443502c8dd0e3e5668469d9e0ed29.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 28 Nov 2025 12:31:17 -0800
 Subject: [PATCH 09/40] [SFrame-V3] sframe: gas: libsframe: remove padding
@@ -37,7 +37,7 @@ libsframe/
  4 files changed, 3 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index a7e1c356f17..35f2add7087 100644
+index ce9243e99dd..0aadaafa1ec 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -738,7 +738,6 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,

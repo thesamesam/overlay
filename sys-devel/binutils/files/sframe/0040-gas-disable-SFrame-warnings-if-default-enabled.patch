@@ -1,7 +1,7 @@
-From 1f138e00cda5985590134ba720a9b1a452267204 Mon Sep 17 00:00:00 2001
-Message-ID: <1f138e00cda5985590134ba720a9b1a452267204.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From f1338034f014e0963cb32d5343d74569753babfd Mon Sep 17 00:00:00 2001
+Message-ID: <f1338034f014e0963cb32d5343d74569753babfd.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 04:50:21 +0100
 Subject: [PATCH 40/40] gas: disable SFrame warnings if default-enabled
@@ -50,7 +50,7 @@ Signed-off-by: Sam James <sam@gentoo.org>
  2 files changed, 26 insertions(+), 18 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 111393a07b6..4d6f4328bc8 100644
+index d842d0f389f..bc51510f2cb 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -1262,7 +1262,7 @@ sframe_xlate_do_def_cfa (struct sframe_xlate_ctx *xlate_ctx,

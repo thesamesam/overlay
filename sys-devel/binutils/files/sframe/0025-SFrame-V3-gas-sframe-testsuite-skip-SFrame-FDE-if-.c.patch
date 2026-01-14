@@ -1,7 +1,7 @@
-From 1b365df906879fb1f70eef27fa23c95e6d28cf12 Mon Sep 17 00:00:00 2001
-Message-ID: <1b365df906879fb1f70eef27fa23c95e6d28cf12.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 067aceaeffb5012c4874bc465ac76187d12fd5f0 Mon Sep 17 00:00:00 2001
+Message-ID: <067aceaeffb5012c4874bc465ac76187d12fd5f0.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Tue, 16 Dec 2025 12:50:04 -0800
 Subject: [PATCH 25/40] [SFrame-V3] gas: sframe: testsuite: skip SFrame FDE if
@@ -56,7 +56,7 @@ gas/testsuite/
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 472ce3dee7c..56e314964dd 100644
+index 71f29dd940c..3e7e7e8fcdd 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -1483,6 +1483,13 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,

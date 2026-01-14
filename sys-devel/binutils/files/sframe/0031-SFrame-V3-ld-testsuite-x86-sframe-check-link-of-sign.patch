@@ -1,7 +1,7 @@
-From 1a9c835eef2441cd685424535a7e7e94f37b3525 Mon Sep 17 00:00:00 2001
-Message-ID: <1a9c835eef2441cd685424535a7e7e94f37b3525.1768383275.git.sam@gentoo.org>
-In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
-References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+From 1dba5ec75d418ceeda75b7a86cac4c3062848261 Mon Sep 17 00:00:00 2001
+Message-ID: <1dba5ec75d418ceeda75b7a86cac4c3062848261.1768401239.git.sam@gentoo.org>
+In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 5 Dec 2025 20:57:30 -0800
 Subject: [PATCH 31/40] [SFrame-V3] ld: testsuite: x86: sframe: check link of

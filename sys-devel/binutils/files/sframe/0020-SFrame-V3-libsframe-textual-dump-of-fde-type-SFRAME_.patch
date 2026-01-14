@@ -1,10 +1,10 @@
-From 0cfcbb580038fadad046c7587bbb0fed95a8b4bf Mon Sep 17 00:00:00 2001
-Message-ID: <0cfcbb580038fadad046c7587bbb0fed95a8b4bf.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 9dee8698a6d559f5358a8aff2591457b16619868 Mon Sep 17 00:00:00 2001
+Message-ID: <9dee8698a6d559f5358a8aff2591457b16619868.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 17 Nov 2025 10:39:14 -0800
-Subject: [PATCH 20/39] [SFrame-V3] libsframe: textual dump of fde type
+Subject: [PATCH 20/40] [SFrame-V3] libsframe: textual dump of fde type
  SFRAME_FDE_TYPE_FLEX
 
 Refactor the SFrame textual dumper in sframe-dump.c to properly handle
@@ -82,13 +82,16 @@ libsframe/
     Register/Control Data [Indu].
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - Forced typecasting to uint32_t is not enough.  Use the
+    sframe_get_fre_udata API [Jens].
+[End of changes in V3]
 ---
- libsframe/sframe-dump.c | 379 +++++++++++++++++++++++++++++++++-------
- 1 file changed, 312 insertions(+), 67 deletions(-)
+ libsframe/sframe-dump.c | 378 +++++++++++++++++++++++++++++++++-------
+ 1 file changed, 311 insertions(+), 67 deletions(-)
 
 diff --git a/libsframe/sframe-dump.c b/libsframe/sframe-dump.c
-index ab979c16eef..afc2394e4ad 100644
+index ab979c16eef..b09e67f050b 100644
 --- a/libsframe/sframe-dump.c
 +++ b/libsframe/sframe-dump.c
 @@ -23,6 +23,76 @@
@@ -264,7 +267,7 @@ index ab979c16eef..afc2394e4ad 100644
  
        /* FIXME - fixup the err caching in array.
  	 assert no error for base reg id and RA undefined.  */
-@@ -301,6 +312,240 @@ dump_sframe_func_with_fres (const sframe_decoder_ctx *sfd_ctx,
+@@ -301,6 +312,239 @@ dump_sframe_func_with_fres (const sframe_decoder_ctx *sfd_ctx,
      }
  }
  
@@ -335,8 +338,8 @@ index ab979c16eef..afc2394e4ad 100644
 +      int err_cfa_offset = 0;
 +      /* Read the Register/Control Data as unsigned.  */
 +      uint32_t cfa_reg_data
-+	= (uint32_t) sframe_get_fre_offset (&fre, SFRAME_FRE_CFA_OFFSET_IDX,
-+					    &err_cfa_reg);
++	= sframe_get_fre_udata (&fre, SFRAME_FRE_CFA_OFFSET_IDX,
++				&err_cfa_reg);
 +      int32_t cfa_offset = sframe_fre_get_cfa_offset (sfd_ctx, &fre, fde_type,
 +						      &err_cfa_offset);
 +      sframe_assert (!err_cfa_reg && !err_cfa_offset);
@@ -350,8 +353,8 @@ index ab979c16eef..afc2394e4ad 100644
 +      int err_ra_reg = 0;
 +      /* Read the Register/Control Data as unsigned.  */
 +      uint32_t ra_reg_data
-+	= (uint32_t) sframe_get_fre_offset (&fre, SFRAME_FRE_RA_OFFSET_IDX * 2,
-+					    &err_ra_reg);
++	= sframe_get_fre_udata (&fre, SFRAME_FRE_RA_OFFSET_IDX * 2,
++				&err_ra_reg);
 +      int32_t ra_offset = sframe_fre_get_ra_offset (sfd_ctx, &fre, fde_type,
 +						    &err_ra_offset);
 +      bool ra_reg_p = SFRAME_V3_FLEX_FDE_OFFSET_REG_P (ra_reg_data);
@@ -368,8 +371,7 @@ index ab979c16eef..afc2394e4ad 100644
 +       fp_idx -= 1;
 +
 +      /* Read the Register/Control Data as unsigned.  */
-+      uint32_t fp_reg_data
-+	= (uint32_t) sframe_get_fre_offset (&fre, fp_idx, &err_fp_reg);
++      uint32_t fp_reg_data = sframe_get_fre_udata (&fre, fp_idx, &err_fp_reg);
 +      int32_t fp_offset = sframe_fre_get_fp_offset (sfd_ctx, &fre, fde_type,
 +						    &err_fp_offset);
 +      bool fp_reg_p = SFRAME_V3_FLEX_FDE_OFFSET_REG_P (fp_reg_data);

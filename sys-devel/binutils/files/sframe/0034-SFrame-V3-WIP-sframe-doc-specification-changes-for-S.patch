@@ -1,10 +1,10 @@
-From 41ec3a4dc832974dd044914acc292d4d3c2d4a15 Mon Sep 17 00:00:00 2001
-Message-ID: <41ec3a4dc832974dd044914acc292d4d3c2d4a15.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 09800c785bf50ffa093b73b5347e252be34b52b2 Mon Sep 17 00:00:00 2001
+Message-ID: <09800c785bf50ffa093b73b5347e252be34b52b2.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 24 Dec 2025 12:21:20 -0800
-Subject: [PATCH 35/39] [SFrame-V3][WIP] sframe: doc: specification changes for
+Subject: [PATCH 34/40] [SFrame-V3][WIP] sframe: doc: specification changes for
  SFrame version 3
 
 Update the SFrame specification to document Version 3. This version
@@ -51,7 +51,6 @@ libsframe/doc/
 	Data/Displacement pair encoding.
 
 TBD:
-  - add a section for linker considerations ?
   - mention s390x flex FDE ?
 
 ---
@@ -67,13 +66,20 @@ TBD:
   - Other cosmetic fixes.
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - Use the term SFrame FDE index "entry" instead of mixed used of
+    "elements" and "items" [Jose]
+  - Other reviews TBD [Jose]
+  - Use sframe_fre_get_udata instead of sframe_fre_get_offset in pseudo
+    code. [Indu]
+  - Other cosmetic changes.
+[End of changes in V3]
 ---
- libsframe/doc/sframe-spec.texi | 709 +++++++++++++++++++++++++--------
- 1 file changed, 538 insertions(+), 171 deletions(-)
+ libsframe/doc/sframe-spec.texi | 717 +++++++++++++++++++++++++--------
+ 1 file changed, 540 insertions(+), 177 deletions(-)
 
 diff --git a/libsframe/doc/sframe-spec.texi b/libsframe/doc/sframe-spec.texi
-index 306f21e82c9..a53e47f6d37 100644
+index 306f21e82c9..9b170861e54 100644
 --- a/libsframe/doc/sframe-spec.texi
 +++ b/libsframe/doc/sframe-spec.texi
 @@ -20,7 +20,7 @@ License''.
@@ -133,7 +139,7 @@ index 306f21e82c9..a53e47f6d37 100644
  changes made to each previously published version of the SFrame stack trace
  format.
  
-@@ -113,6 +114,54 @@ later.
+@@ -113,6 +114,56 @@ later.
  This document is intended to be in sync with the C code in @file{sframe.h}.
  Please report discrepancies between the two, if any.
  
@@ -147,7 +153,7 @@ index 306f21e82c9..a53e47f6d37 100644
 +
 +@itemize @bullet
 +@item
-+Terminology impovements and renames for readability
++Terminology improvements and renames for readability
 + @itemize @minus
 +  @item Use terminology `PC offset' in place of `Addr' for function start PC
 +  offset consistently.
@@ -165,15 +171,17 @@ index 306f21e82c9..a53e47f6d37 100644
 + @end itemize
 + Rename structure members as a consequence.
 +@item
-+Reduce the data type of @code{sfda_func_num_fres} and remove padding field.
++Narrow the width of @code{sfda_func_num_fres} to @code{uint16_t} and remove
++padding field.
 +@item
 +Increase the size of the @code{sfdi_func_start_offset} to @code{int64_t}.  This
 +field is renamed from the @code{sfde_func_start_address} in SFrame version 2
 +specification.
 +@item
-+Addition of a new function info byte in SFrame function descriptor attribute
-+structure.  Reserve 5-bits for FDE types, and add a default FDE type
-+SFRAME_FDE_TYPE_DEFAULT.
++Addition of a new function info byte @code{sfda_func_info2} in SFrame function
++descriptor attribute structure to store additional information about the stack
++trace data for the function.  Reserve 5-bits for FDE types, and add a default
++FDE type SFRAME_FDE_TYPE_DEFAULT.
 +@item
 +Define a new FDE type SFRAME_FDE_TYPE_FLEX to convey stack trace information for
 +specific cases, e.g., when CFA is non-SP/FP based, or when FP/RA recovery is
@@ -188,7 +196,7 @@ index 306f21e82c9..a53e47f6d37 100644
  @node Changes from Version 1 to Version 2
  @section Changes from Version 1 to Version 2
  @cindex Changes from Version 1 to Version 2
-@@ -125,7 +174,7 @@ since Version 1 was published.
+@@ -125,7 +176,7 @@ since Version 1 was published.
  Add an unsigned 8-bit integral field to the SFrame function descriptor entry to
  encode the size of the repetitive code blocks.  Such code blocks, e.g, pltN
  entries, use an SFrame function descriptor entry of type
@@ -197,7 +205,7 @@ index 306f21e82c9..a53e47f6d37 100644
  @item
  Add an unsigned 16-bit integral field to the SFrame function descriptor entry
  to serve as padding.  This helps ensure natural alignment for the members of
-@@ -138,9 +187,9 @@ of 20 bytes instead of its size of 17 bytes in SFrame format version 1.
+@@ -138,9 +189,9 @@ of 20 bytes instead of its size of 17 bytes in SFrame format version 1.
  SFrame Version 2, to indicate the encoding of the SFrame FDE function start
  address field:
   @itemize @minus
@@ -209,7 +217,7 @@ index 306f21e82c9..a53e47f6d37 100644
  bytes to the start PC of the associated function from the start of the SFrame
  section.
   @end itemize
-@@ -172,10 +221,10 @@ by CFA offset alignment factor and then revert CFA offset adjustment).
+@@ -172,10 +223,10 @@ by CFA offset alignment factor and then revert CFA offset adjustment).
  @item
  [Errata 1] An ELF SFrame section has the type SHT_GNU_SFRAME.
  @item
@@ -224,7 +232,7 @@ index 306f21e82c9..a53e47f6d37 100644
  @end itemize
  
  SFrame version 1 is now obsolete and should not be used.
-@@ -229,7 +278,7 @@ SFrame section is intended.  Further details:
+@@ -229,7 +280,7 @@ SFrame section is intended.  Further details:
  @tab @code{sfp_version}
  @tab The version number of this SFrame section.  @xref{SFrame Version}, for the
  set of valid values.  Current version is
@@ -233,7 +241,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  @item 0x03
  @tab @code{uint8_t}
-@@ -263,15 +312,17 @@ The version of the SFrame format can be determined by inspecting
+@@ -263,15 +314,17 @@ The version of the SFrame format can be determined by inspecting
  
  @tindex SFRAME_VERSION_1
  @cindex SFrame versions
@@ -254,7 +262,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  @node SFrame Flags
  @subsection SFrame Flags
-@@ -288,13 +339,13 @@ The following flags are currently defined.
+@@ -288,13 +341,13 @@ The following flags are currently defined.
  @item @code{SFRAME_F_FDE_SORTED} @tab All @tab 0x1 @tab Function Descriptor
  Entries are sorted on PC.
  @tindex SFRAME_F_FRAME_POINTER
@@ -272,7 +280,7 @@ index 306f21e82c9..a53e47f6d37 100644
  the function's start address, from the start of the SFrame section.
  @end multitable
  
-@@ -471,116 +522,165 @@ stack trace generators to make certain ABI/arch-specific decisions.
+@@ -471,116 +524,160 @@ stack trace generators to make certain ABI/arch-specific decisions.
  @section SFrame FDE
  @cindex SFrame FDE
  
@@ -303,14 +311,13 @@ index 306f21e82c9..a53e47f6d37 100644
 +@node The SFrame FDE Index
 +@subsection The SFrame FDE Index
 +
-+The SFrame FDE index elements are stored in a sub-section of their own.  The
-+array of SFrame FDE index items may be sorted on the
-+@code{sfdi_func_start_offset} if the SFrame section header flag
-+@code{sfp_flags} has @code{SFRAME_F_FDE_SORTED} set, creating an index.
-+Typically (as is the case with GNU ld) a linked object or executable will have
-+the @code{SFRAME_F_FDE_SORTED} set.  This makes the job of a stack tracer
-+easier as it may then employ a binary search scheme to look for the stack trace
-+information pertinent to a given PC.
++The SFrame FDE index entries are stored in a sub-section of their own, forming
++a searchable index.  If the SFrame header flag @code{SFRAME_F_FDE_SORTED} is
++set, then the entries are sorted by @code{sfdi_func_start_offset}, allowing for
++efficient binary search.  Typically (as is the case with GNU ld) a linked
++object or executable will have the @code{SFRAME_F_FDE_SORTED} set.  This makes
++the job of a stack tracer easier as it may then employ a binary search scheme
++to look for the stack trace information pertinent to a given PC.
  
  @example
 -typedef struct sframe_func_desc_entry
@@ -347,8 +354,8 @@ index 306f21e82c9..a53e47f6d37 100644
 -for future ABIs.
 -
 -Following table describes each component of the SFrame FDE structure:
-+Every element of the SFrame function descriptor index is naturally aligned.
-+Following table describes each component of the SFrame FDE index:
++Each entry of the SFrame function descriptor index is naturally aligned.
++Following table describes each component of the SFrame FDE index entry:
  
 -@multitable {Offset} {@code{uint32_t}} {@code{sfde_func_start_fre_off}} {Signed 32-bit integral field denoting the}
 +@multitable {Offset} {@code{uint32_t}} {@code{sfdi_func_start_fre_off}} {Signed 32-bit integral field denoting the}
@@ -357,16 +364,19 @@ index 306f21e82c9..a53e47f6d37 100644
 -@tab @code{int32_t}
 -@tab @code{sfde_func_start_address}
 -@tab Signed 32-bit integral field denoting the virtual memory address of the
+-described function, for which the SFrame FDE applies.  If the flag
+-@code{SFRAME_F_FDE_FUNC_START_PCREL}, @xref{SFrame Flags}, in the SFrame
+-header is set, the value encoded in the @code{sfde_func_start_address} field is
+-the offset in bytes to the function's start address, from the SFrame
+-@code{sfde_func_start_address} field.
 +@tab @code{int64_t}
 +@tab @code{sfdi_func_start_offset}
-+@tab Signed 64-bit integral field denoting the virtual memory address of the
- described function, for which the SFrame FDE applies.  If the flag
- @code{SFRAME_F_FDE_FUNC_START_PCREL}, @xref{SFrame Flags}, in the SFrame
--header is set, the value encoded in the @code{sfde_func_start_address} field is
-+header is set, the value encoded in the @code{sfdi_func_start_offset} field is
- the offset in bytes to the function's start address, from the SFrame
--@code{sfde_func_start_address} field.
-+@code{sfdi_func_start_offset} field.
++@tab Signed 64-bit integral field specifying the offset to the start address of
++the described function.  If the flag @code{SFRAME_F_FDE_FUNC_START_PCREL},
++@xref{SFrame Flags}, in the SFrame header is set, the value encoded in the
++@code{sfdi_func_start_offset} field is the offset in bytes to the function's
++start address from the @code{sfdi_func_start_offset} field itself.  Otherwise,
++it is the offset in bytes from the start of the SFrame section.
  
 -@item 0x04
 +@item 0x08
@@ -387,26 +397,22 @@ index 306f21e82c9..a53e47f6d37 100644
 -@tab @code{sfde_func_num_fres}
 -@tab Unsigned 32-bit integral field specifying the total number of SFrame FREs
 +@tab @code{sfdi_func_start_fre_off}
-+@tab Unsigned 32-bit integral field specifying the offset in bytes to the
-+function's stack trace data in the SFrame FRE sub-section.
++@tab Unsigned 32-bit integral field specifying the offset to the start of the
++function's stack trace data (SFrame FREs). This offset is relative to the
++@emph{beginning of the SFrame FRE sub-section}.
 +
 +@end multitable
-+
-+@code{sfdi_func_start_fre_off} is the offset to the location in the SFrame
-+FRE sub-section where the stack trace data for the function starts.  This
-+offset is relative to the @emph{end of the SFrame FDE} sub-section (unlike
-+the sub-section offsets in the SFrame header, which are relative to the
-+@emph{end} of the SFrame auxiliary header).
 +
 +@cindex The SFrame FDE Attribute
 +@node The SFrame FDE Attribute
 +@subsection The SFrame FDE Attribute
 +
-+The SFrame FDE attribute specifies a subset of function-level metadata like
-+number of SFrame FREs and encoding of information in the SFrame FREs.  The
-+SFrame FDE attributes are stored in the SFrame FRE sub-section, and as a
-+consequence have no guarantees of its elements being at naturally aligned
-+boundaries.
++The SFrame FDE attribute structure provides information concerning the SFrame
++FRE entries that follow: their number and their encoding.  The SFrame FDE
++attributes are stored at the beginning of each function's stack trace data
++within the SFrame FRE sub-section. Because these structures are interleaved
++with variable-length FREs, their elements are not guaranteed to be at naturally
++aligned boundaries.
 +
 +@example
 +typedef struct sframe_func_desc_attr
@@ -469,26 +475,25 @@ index 306f21e82c9..a53e47f6d37 100644
 +@code{sfda_func_info} and @code{sfda_func_info2} are the SFrame FDE "info
 +bytes", containing information on the FRE type and the FDE type for the
 +function.
- 
--@cindex The SFrame FDE Info Word
--@node The SFrame FDE Info Word
--@subsection The SFrame FDE Info Word
++
 +@cindex Provisions for future ABIs
 +The SFrame FDE attribute has some currently unused bits in the SFrame FDE info
 +bytes, @xref{The SFrame FDE Info Bytes}, that may be used for the purpose of
 +extending the SFrame file format specification for future ABIs.  See also
 +@xref{The SFrame FDE Types} subsection.
- 
--The info word is a bitfield split into three parts.  From MSB to LSB:
++
 +@cindex The SFrame FDE Info Bytes
 +@node The SFrame FDE Info Bytes
 +@subsection The SFrame FDE Info Bytes
  
--@multitable {Bit offset} {@code{pauth_key}} {Specify which key is used for signing the return addresses}
+-@cindex The SFrame FDE Info Word
+-@node The SFrame FDE Info Word
+-@subsection The SFrame FDE Info Word
 +The SFrame FDE Attribute contains two distinct bytes, @code{sfda_func_info} and
 +@code{sfda_func_info2}.  Together these are referred to as the SFrame FDE info
 +bytes.  These bytes contain vital information necessary to:
-+
+ 
+-The info word is a bitfield split into three parts.  From MSB to LSB:
 +@itemize @minus
 + @item read and interpret SFrame FREs, e.g., the number and size of each SFrame
 +FRE offset,
@@ -498,7 +503,8 @@ index 306f21e82c9..a53e47f6d37 100644
 +@end itemize
 +
 +The first info byte is a bitfield split into four parts.  From MSB to LSB:
-+
+ 
+-@multitable {Bit offset} {@code{pauth_key}} {Specify which key is used for signing the return addresses}
 +@multitable {Bit offset} {@code{fde_pctype}} {Specify which key is used for signing the return addresses}
  @headitem Bit offset @tab Name @tab Description
 -@item 7--6
@@ -514,7 +520,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  @item 5
  @tab @code{pauth_key}
-@@ -588,48 +688,71 @@ The info word is a bitfield split into three parts.  From MSB to LSB:
+@@ -588,48 +685,70 @@ The info word is a bitfield split into three parts.  From MSB to LSB:
  in the SFrame FDE.  Two possible values: @*
  SFRAME_AARCH64_PAUTH_KEY_A (0), or @*
  SFRAME_AARCH64_PAUTH_KEY_B (1). @*
@@ -544,9 +550,7 @@ index 306f21e82c9..a53e47f6d37 100644
 -@tindex SFRAME_FDE_TYPE_PCMASK
 -@tindex SFRAME_FDE_TYPE_PCINC
 +The second info byte is a bitfield split into two parts.  From MSB to LSB:
- 
--The SFrame format defines two types of FDE entries.  The choice of which SFrame
--FDE type to use is made based on the instruction patterns in the relevant
++
 +@multitable {Bit offset} {@code{fde_type}} {Specify which key is used for signing the return addresses}
 +@headitem Bit offset @tab Name @tab Description
 +@item 7--5
@@ -572,7 +576,9 @@ index 306f21e82c9..a53e47f6d37 100644
 +@subsubsection The SFrame FDE PC Types
 +@tindex SFRAME_V3_FDE_PCTYPE_MASK
 +@tindex SFRAME_V3_FDE_PCTYPE_INC
-+
+ 
+-The SFrame format defines two types of FDE entries.  The choice of which SFrame
+-FDE type to use is made based on the instruction patterns in the relevant
 +The SFrame format defines two types of FDE PC types.  The choice of which SFrame
 +FDE PC type to use is made based on the instruction patterns in the relevant
  program stub.
@@ -581,18 +587,20 @@ index 306f21e82c9..a53e47f6d37 100644
 -FREs should be treated as increments in bytes.  This is used fo the the bulk of
 -the executable code of a program, which contains instructions with no specific
 -pattern.
-+An SFrame FDE of PC type @code{SFRAME_V3_FDE_PCTYPE_INC} is an indication that
-+the PCs in the FREs should be treated as increments in bytes.  This is used fo
-+the the bulk of the executable code of a program, which contains instructions
-+with no specific pattern.
++An FDE of PC type @code{SFRAME_V3_FDE_PCTYPE_INC} contains FREs whose PCs are
++to be interpreted as the address of a single instruction, measured in bytes and
++relative to the beginning of the function.
  
 -In contrast, an SFrame FDE of type @code{SFRAME_FDE_TYPE_PCMASK} is an
-+In contrast, an SFrame FDE of PC type @code{SFRAME_V3_FDE_PCTYPE_MASK} is an
- indication that the PCs in the FREs should be treated as masks.  This type is
- useful for the cases where a small pattern of instructions in a program stub is
+-indication that the PCs in the FREs should be treated as masks.  This type is
+-useful for the cases where a small pattern of instructions in a program stub is
 -used repeatedly for a specific functionality.  Typical usecases are pltN
-+used repeatedly for a specific functionality.  Typical use cases are pltN
- entries and trampolines.
+-entries and trampolines.
++In contrast, a FDE of PC type @code{SFRAME_V3_FDE_PCTYPE_MASK} contains FREs
++whose PCs are to be interpreted as masks that identify several instructions.
++This is useful for cases where a small pattern of instructions in a program
++stub is used repeteadly for a specific functionality, like PLT entries and
++trampolines.
  
 -@multitable {SFRAME_FDE_TYPE_PCMASK} {Value} {Unwinders perform a Unwinders perform a}
 -@headitem Name of SFrame FDE type @tab Value @tab Description
@@ -609,7 +617,7 @@ index 306f21e82c9..a53e47f6d37 100644
  @tab 1 @tab  Stacktracers perform a @*
  (PC % REP_BLOCK_SIZE @*
   >= FRE_START_ADDR)
-@@ -639,11 +762,58 @@ repeating block of program instructions and is encoded via
+@@ -639,11 +758,58 @@ repeating block of program instructions and is encoded via
  
  @end multitable
  
@@ -621,7 +629,7 @@ index 306f21e82c9..a53e47f6d37 100644
 +
 +The SFrame format defines two types of Function Descriptor Entries (FDEs) to
 +encode stack trace information.  The choice of FDE type determines how the data
-+in the variable-length Frame Row Entries (FREs) are interpreted.  The FDE type
++in the variable-length Frame Row Entries (FREs) is interpreted.  The FDE type
 +is encoded in the lower 5 bits of the @code{sfda_func_info2} field in the
 +SFrame FDE attribute.
 +
@@ -643,9 +651,9 @@ index 306f21e82c9..a53e47f6d37 100644
 +@item @code{SFRAME_FDE_TYPE_FLEX}
 +@tab 1
 +@tab The flexible FDE type. @*
-+Used for complex cases such as stack realignment
-+(DRAP), non-standard CFA base registers, or when RA/FP recovery requires
-+dereferencing or non-CFA base registers.
++Used for complex cases such as stack realignment (DRAP), non-standard CFA base
++registers, or when RA/FP recovery requires dereferencing or non-CFA base
++registers.
 +
 +The variable-length stack offsets are interpreted as pairs of Control Data
 +and Displacements, allowing for complex recovery rules (e.g., DRAP on AMD64,
@@ -670,7 +678,7 @@ index 306f21e82c9..a53e47f6d37 100644
  stack trace information for such a variety of function sizes.  These
  representations vary in the number of bits needed to encode the start address
  offset in the SFrame FRE.
-@@ -674,8 +844,8 @@ The following constants are defined and used to identify the SFrame FRE types:
+@@ -674,8 +840,8 @@ The following constants are defined and used to identify the SFrame FRE types:
  
  A single function must use the same type of SFrame FRE throughout.  The
  identifier to reflect the chosen SFrame FRE type is stored in the
@@ -681,7 +689,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  @node SFrame Frame Row Entries
  @section SFrame FRE
-@@ -698,7 +868,7 @@ information, each SFrame FRE is followed by S*N bytes, where:
+@@ -698,7 +864,7 @@ information, each SFrame FRE is followed by S*N bytes, where:
  @code{N} is the number of stack offsets in the FRE
  @end itemize
  
@@ -690,7 +698,7 @@ index 306f21e82c9..a53e47f6d37 100644
  the @code{fre_offset_size} and the @code{fre_offset_count} respectively.  More
  information about the precise encoding and range of values for @code{S} and
  @code{N} is provided later in the @xref{The SFrame FRE Info Word}.
-@@ -715,7 +885,7 @@ format specification flexible yet extensible, the interpretation of the stack
+@@ -715,7 +881,7 @@ format specification flexible yet extensible, the interpretation of the stack
  offsets is ABI/arch-specific.  The precise interpretation of the FRE stack
  offsets in the currently supported ABIs/architectures is covered in the
  ABI/arch-specific definition of the SFrame file format,
@@ -699,7 +707,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  Next, the definitions of the three SFrame FRE types are as follows:
  
-@@ -764,7 +934,7 @@ Further SFrame FRE types may be added in future.
+@@ -764,7 +930,7 @@ Further SFrame FRE types may be added in future.
  @node The SFrame FRE Info Word
  @subsection The SFrame FRE Info Word
  
@@ -708,7 +716,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  @multitable {Bit offset} {@code{fre_cfa_base_reg_id}} {Size of stack offsets in bytes.  Valid values}
  @headitem Bit offset @tab Name @tab Description
-@@ -781,7 +951,7 @@ SFRAME_FRE_OFFSET_4B.
+@@ -781,7 +947,7 @@ SFRAME_FRE_OFFSET_4B.
  
  @item 1-4
  @tab @code{fre_offset_count}
@@ -717,7 +725,7 @@ index 306f21e82c9..a53e47f6d37 100644
  for most ABIs to track all three of CFA, FP and RA.  A value of zero indicates
  that the return address (RA) is undefined.  A stack tracer may use this as
  indication that an outermost frame has been reached and the stack trace is
-@@ -816,25 +986,30 @@ long.
+@@ -816,25 +982,30 @@ long.
  
  @end multitable
  
@@ -729,10 +737,10 @@ index 306f21e82c9..a53e47f6d37 100644
 +@cindex Interpretation of SFrame FREs
  
 -This section covers the ABI/arch-specific definition of the SFrame file format.
-+Each SFrame Frame Row Entry (FRE) may provide a stream of variable-length bytes
-+for the applicable PC range (@pxref{SFrame Frame Row Entries}).  The
-+interpretation of these bytes depends on the FDE Type of the function, and the
-+ABI/arch of the SFrame section.
++Each SFrame Frame Row Entry (FRE) provides information about a PC range within
++some function, encoded in a variable number of bytes (@pxref{SFrame Frame Row
++Entries}).  The interpretation of these bytes depends on the type of FDE used
++to represent stack tracing information for the function.
  
 -Currently, the only part of the SFrame file format definition that is
 -ABI/arch-specific is the interpretation of the variable number of bytes at the
@@ -764,7 +772,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  @menu
  * AMD64::
-@@ -843,12 +1018,12 @@ auxiliary SFrame header, etc., if used, must also be outlined here.
+@@ -843,12 +1014,12 @@ auxiliary SFrame header, etc., if used, must also be outlined here.
  @end menu
  
  @node AMD64
@@ -779,7 +787,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  In AMD64, the return address (RA) is always saved on stack when a function
  call is executed.  Further, AMD64 ABI mandates that the RA be saved at a
-@@ -869,19 +1044,19 @@ Hence, in summary:
+@@ -869,19 +1040,19 @@ Hence, in summary:
  @end multitable
  
  @node AArch64
@@ -802,7 +810,7 @@ index 306f21e82c9..a53e47f6d37 100644
  locate the FP, by interpreting it as: FP = CFA + offset3.
  
  Given the nature of things, the number of stack offsets seen on AARCH64 per
-@@ -897,7 +1072,7 @@ Hence, in summary:
+@@ -897,7 +1068,7 @@ Hence, in summary:
  @end multitable
  
  @node s390x
@@ -811,7 +819,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  A stack tracer implementation must initialize the SP to the designated SP
  register value, the FP to the preferred FP register value, and the RA to the
-@@ -921,7 +1096,7 @@ CFA = @code{BASE_REG}
+@@ -921,7 +1092,7 @@ CFA = @code{BASE_REG}
      + (offset1 * @code{SFRAME_S390X_CFA_OFFSET_ALIGNMENT_FACTOR})
      - @code{SFRAME_S390X_CFA_OFFSET_ADJUSTMENT}.
  The identification of the @code{BASE_REG} is done by using the
@@ -820,7 +828,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  The (64-bit) s390x ELF ABI does not mandate the precise location in a function
  where the return address (RA) and frame pointer (FP) are saved, if at all.
-@@ -936,16 +1111,9 @@ used to locate the FP stack slot, by interpreting it as: FP = CFA + offset3.
+@@ -936,16 +1107,9 @@ used to locate the FP stack slot, by interpreting it as: FP = CFA + offset3.
  FP remains unchanged, if the offset is not available.
  
  In leaf functions the RA and FP may be saved in other registers, such as
@@ -840,7 +848,7 @@ index 306f21e82c9..a53e47f6d37 100644
  
  Given the nature of things, the number of stack offsets and/or register numbers
  seen on s390x per SFrame FRE is either 1, 2, or 3.
-@@ -955,11 +1123,9 @@ Hence, in summary:
+@@ -955,11 +1119,9 @@ Hence, in summary:
  @multitable @columnfractions .15 .85
  @headitem Offset ID @tab Interpretation in s390x
  @item 1 @tab CFA = @code{BASE_REG} + offset1
@@ -854,7 +862,7 @@ index 306f21e82c9..a53e47f6d37 100644
  @end multitable
  
  The s390x ELF ABI defines the CFA as stack pointer (SP) at call site +160.  The
-@@ -967,6 +1133,116 @@ SP can therefore be obtained using the SP value offset from CFA
+@@ -967,6 +1129,116 @@ SP can therefore be obtained using the SP value offset from CFA
  @code{SFRAME_S390X_SP_VAL_OFFSET} of -160 as follows:
  SP = CFA + @code{SFRAME_S390X_SP_VAL_OFFSET}
  
@@ -868,9 +876,9 @@ index 306f21e82c9..a53e47f6d37 100644
 +@section Flexible FDE Type Interpretation
 +@cindex SFRAME_FDE_TYPE_FLEX
 +
-+The flexible FDE type (@code{SFRAME_FDE_TYPE_FLEX}) is used when the
-+most-common recovery rules or representation using
-+@code{SFRAME_FDE_TYPE_DEFAULT} are insufficient.  Common use cases include:
++Flexible FDEs (@code{SFRAME_FDE_TYPE_FLEX}) are used in cases where the most
++common default recovery rules implied by @code{SFRAME_FDE_TYPE_DEFAULT} are
++insufficient.  Common use cases include:
 +@itemize @bullet
 +@item
 +DRAP (Dynamically Realigned Argument Pointer): Where the CFA is based on a
@@ -971,7 +979,7 @@ index 306f21e82c9..a53e47f6d37 100644
  @node Generating Stack Traces using SFrame
  @appendix Generating Stack Traces using SFrame
  
-@@ -1011,15 +1287,18 @@ can be done as follows:
+@@ -1011,15 +1283,18 @@ can be done as follows:
       int err = get_next_frame (&next_frame, pc, sp, fp);
  @end example
  
@@ -995,7 +1003,7 @@ index 306f21e82c9..a53e47f6d37 100644
          // Whether the base register for CFA tracking is REG_FP.
          base_reg_val = sframe_fre_base_reg_fp_p (fre) ? fp : sp;
          // Get the CFA stack offset from the FRE.
-@@ -1044,10 +1323,98 @@ SFrame section.
+@@ -1044,10 +1319,98 @@ SFrame section.
              // Continue to use the value of fp as it has not
              // been clobbered by the current frame yet.
              next_frame->fp = fp;
@@ -1013,7 +1021,7 @@ index 306f21e82c9..a53e47f6d37 100644
 +
 +        // Get the RA reg, offset, and deref_p.
 +        // The third FRE offset (index 2) is the RA Control Data.
-+        ra_reg_data = sframe_fre_get_offset (fre, 2);
++        ra_reg_data = sframe_fre_get_udata (fre, 2);
 +        if (ra_reg_data != SFRAME_FRE_RA_OFFSET_INVALID)
 +                ra_offset = sframe_fre_get_offset (fre, 3);
 +                fp_tracking_p = fre.num_offsets > 3;
@@ -1024,7 +1032,7 @@ index 306f21e82c9..a53e47f6d37 100644
 +
 +        // Get the FP reg, offset, and deref_p (if present).
 +        if (fp_tracking_p)
-+             fp_reg_data = sframe_fre_get_offset (fre, fp_data_index);
++             fp_reg_data = sframe_fre_get_udata (fre, fp_data_index);
 +             fp_offset = sframe_fre_get_fp_offset (fre);
 +
 +        // Safety check for topmost frames:

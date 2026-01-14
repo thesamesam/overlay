@@ -1,10 +1,10 @@
-From 8e9db0ef52d55b668ae1d945d1a71362de05515d Mon Sep 17 00:00:00 2001
-Message-ID: <8e9db0ef52d55b668ae1d945d1a71362de05515d.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 3347b4c4da569e7e9eef20da4b24b2b532936033 Mon Sep 17 00:00:00 2001
+Message-ID: <3347b4c4da569e7e9eef20da4b24b2b532936033.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 24 Nov 2025 12:16:05 -0800
-Subject: [PATCH 29/39] [SFrame-V3] gas: sframe: doc: testsuite: add new
+Subject: [PATCH 29/40] [SFrame-V3] gas: sframe: doc: testsuite: add new
  command line option --gsframe-3
 
 This option will allow users to select emission of SFrame stack trace
@@ -31,21 +31,24 @@ gas/testsuite/
 ---
 [No Changes in V1, V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - bugfix set flag_gen_sframe to ENABLED.  The testcase had a
+    '.cfi_sections .sframe'.  Fixed that too.
+[End of changes in V3]
 ---
- gas/as.c                                      | 15 +++++++++++-
+ gas/as.c                                      | 16 ++++++++++++-
  gas/as.h                                      |  7 ++++++
  gas/doc/as.texi                               |  7 +++++-
  gas/gen-sframe.c                              | 23 +++++++++++--------
  .../gas/cfi-sframe/cfi-sframe-common-1d.d     | 13 +++++++++++
- .../gas/cfi-sframe/cfi-sframe-common-1d.s     |  3 +++
+ .../gas/cfi-sframe/cfi-sframe-common-1d.s     |  2 ++
  gas/testsuite/gas/cfi-sframe/cfi-sframe.exp   |  1 +
  7 files changed, 57 insertions(+), 12 deletions(-)
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-common-1d.d
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-common-1d.s
 
 diff --git a/gas/as.c b/gas/as.c
-index d0e508cb2e3..49b4fe5eeec 100644
+index d0e508cb2e3..6492bf1351f 100644
 --- a/gas/as.c
 +++ b/gas/as.c
 @@ -118,6 +118,9 @@ bool flag_generate_build_notes = DEFAULT_GENERATE_BUILD_NOTES;
@@ -87,11 +90,12 @@ index d0e508cb2e3..49b4fe5eeec 100644
  # if defined (TARGET_USE_SCFI) && defined (TARGET_USE_GINSN)
      ,{"scfi", required_argument, NULL, OPTION_SCFI}
  # endif
-@@ -1058,6 +1067,10 @@ This program has absolutely no warranty.\n"));
+@@ -1058,6 +1067,11 @@ This program has absolutely no warranty.\n"));
  	    flag_gen_sframe = GEN_SFRAME_ENABLED;
  	  break;
  
 +	case OPTION_SFRAME_3:
++	  flag_gen_sframe = GEN_SFRAME_ENABLED;
 +	  flag_gen_sframe_version = GEN_SFRAME_VERSION_3;
 +	  break;
 +
@@ -142,10 +146,10 @@ index d4080d73a79..29c05437679 100644
  @end ifset
  
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 6cbba35a18d..63c5f4f387d 100644
+index 2a58c2a0828..5ff10fcb559 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -334,16 +334,17 @@ sframe_v3_set_func_info (unsigned int fde_pc_type, unsigned int fre_type,
+@@ -324,16 +324,17 @@ sframe_v3_set_func_info (unsigned int fde_pc_type, unsigned int fre_type,
  /* SFrame version specific operations setup.  */
  
  static void
@@ -172,7 +176,7 @@ index 6cbba35a18d..63c5f4f387d 100644
  }
  
  /* SFrame set FRE info.  */
-@@ -2548,8 +2549,10 @@ output_sframe (segT sframe_seg)
+@@ -2539,8 +2540,10 @@ output_sframe (segT sframe_seg)
  {
    (void) sframe_seg;
  
@@ -205,11 +209,10 @@ index 00000000000..23690412678
 +#...
 diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-1d.s b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-1d.s
 new file mode 100644
-index 00000000000..ac9c6ca2cf3
+index 00000000000..659b3b9d99b
 --- /dev/null
 +++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-common-1d.s
-@@ -0,0 +1,3 @@
-+	.cfi_sections .sframe
+@@ -0,0 +1,2 @@
 +	.cfi_startproc
 +	.cfi_endproc
 diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp b/gas/testsuite/gas/cfi-sframe/cfi-sframe.exp

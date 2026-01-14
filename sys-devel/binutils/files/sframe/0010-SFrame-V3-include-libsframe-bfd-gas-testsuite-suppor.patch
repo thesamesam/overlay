@@ -1,10 +1,10 @@
-From 962a6775c174e478fb8a29740bb02d2f05fe8746 Mon Sep 17 00:00:00 2001
-Message-ID: <962a6775c174e478fb8a29740bb02d2f05fe8746.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From a97867c8188587d9289075b73b83e9952ed9ba1f Mon Sep 17 00:00:00 2001
+Message-ID: <a97867c8188587d9289075b73b83e9952ed9ba1f.1768383274.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Tue, 28 Oct 2025 01:39:55 -0700
-Subject: [PATCH 10/39] [SFrame-V3] include: libsframe: bfd: gas: testsuite:
+Subject: [PATCH 10/40] [SFrame-V3] include: libsframe: bfd: gas: testsuite:
  support for signed 64-bit offset in SFrame FDE
 
 This change enables support text > 2 GiB in SFrame format.
@@ -100,9 +100,7 @@ include/
   - Update the Changelog to reflect additional diffs due to rename.
 [End of changes in V1]
 
-[No changes in V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V2, V3]
 ---
  bfd/elf-sframe.c                              |  22 +++++----
  bfd/elf64-s390.c                              |   6 +--
@@ -220,10 +218,10 @@ index 6bf19c408f4..dbeee7f66e4 100644
  			     + PLT_SFRAME_FDE_START_OFFSET);
  	}
 diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
-index 663649d7a41..717d892775e 100644
+index 9e1c6d8a0e0..ae6c96d77df 100644
 --- a/bfd/elfxx-x86.c
 +++ b/bfd/elfxx-x86.c
-@@ -1923,7 +1923,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+@@ -1913,7 +1913,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
      {
        /* Add SFrame FDE for plt0, the function start address is updated later
  	 at _bfd_elf_merge_section_sframe time.  */
@@ -232,7 +230,7 @@ index 663649d7a41..717d892775e 100644
  				      0, /* func start addr.  */
  				      plt0_entry_size,
  				      func_info,
-@@ -1952,7 +1952,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+@@ -1942,7 +1942,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
  	 function start address = plt0_entry_size.  As usual, this will be
  	 updated later at _bfd_elf_merge_section_sframe, by when the
  	 sections are relocated.  */
@@ -241,7 +239,7 @@ index 663649d7a41..717d892775e 100644
  				      plt0_entry_size, /* func start addr.  */
  				      dpltsec->size - plt0_entry_size,
  				      func_info,
-@@ -3006,7 +3006,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
+@@ -2996,7 +2996,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
  	    + PLT_SFRAME_FDE_START_OFFSET;
  	  bfd_put_signed_32 (dynobj, test_value,
  #endif
@@ -250,7 +248,7 @@ index 663649d7a41..717d892775e 100644
  			     htab->plt_sframe->contents
  			     + PLT_SFRAME_FDE_START_OFFSET);
  	}
-@@ -3040,7 +3040,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
+@@ -3030,7 +3030,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
  	    + PLT_SFRAME_FDE_START_OFFSET;
  	  bfd_put_signed_32 (dynobj, test_value,
  #endif
@@ -259,7 +257,7 @@ index 663649d7a41..717d892775e 100644
  			     htab->plt_second_sframe->contents
  			     + PLT_SFRAME_FDE_START_OFFSET);
  	}
-@@ -3067,7 +3067,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
+@@ -3057,7 +3057,7 @@ _bfd_x86_elf_finish_dynamic_sections (bfd *output_bfd,
  	    = (htab->plt_got_sframe->output_section->vma
  	       + htab->plt_got_sframe->output_offset
  	       + PLT_SFRAME_FDE_START_OFFSET);
@@ -269,10 +267,10 @@ index 663649d7a41..717d892775e 100644
  			     + PLT_SFRAME_FDE_START_OFFSET);
  	}
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 250452de85d..e1a60ca4bf5 100644
+index 35f2add7087..4aa362433d7 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -701,7 +701,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+@@ -691,7 +691,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
    exp.X_op_symbol = symbol_temp_new_now (); /* from location.  */
    exp.X_add_number = 0;
    emit_expr (&exp, sizeof_member (sframe_func_desc_entry,

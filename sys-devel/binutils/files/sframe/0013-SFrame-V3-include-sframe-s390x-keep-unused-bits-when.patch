@@ -1,10 +1,10 @@
-From 91073a5dbb8ef9c7e84db49b68f059227b45143a Mon Sep 17 00:00:00 2001
-Message-ID: <91073a5dbb8ef9c7e84db49b68f059227b45143a.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From ee95fca77d680bf4d18075a2ab6e5db9cfa08be1 Mon Sep 17 00:00:00 2001
+Message-ID: <ee95fca77d680bf4d18075a2ab6e5db9cfa08be1.1768383274.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 10 Nov 2025 12:20:16 -0800
-Subject: [PATCH 13/39] [SFrame-V3] include: sframe: s390x: keep unused bits
+Subject: [PATCH 13/40] [SFrame-V3] include: sframe: s390x: keep unused bits
  when possible
 
 TBD:
@@ -32,9 +32,7 @@ include/
  - Use sframe_s390x_offset_regnum_p consistently. [Jens]
 [End of changes in V1]
 
-[No changes in V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V2, V3]
 ---
  gas/gen-sframe.c        |  4 ++--
  include/sframe.h        | 13 +++++++++++++
@@ -42,10 +40,10 @@ Signed-off-by: Sam James <sam@gentoo.org>
  3 files changed, 45 insertions(+), 6 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 06e0832f744..c1bc2edf014 100644
+index daf3b3ecc25..507412a20e0 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -1322,11 +1322,11 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1312,11 +1312,11 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
       numbers, as offsets from CFA are always a multiple of -8 on s390x.  */
    if (cfi_insn->u.rr.reg1 == SFRAME_CFA_FP_REG)
      sframe_fre_set_fp_track (cur_fre,

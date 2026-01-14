@@ -1,10 +1,10 @@
-From 486aee3ed6834d33c809274031dc663313e91af5 Mon Sep 17 00:00:00 2001
-Message-ID: <486aee3ed6834d33c809274031dc663313e91af5.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From a426fb36d9b96b5108abe27744b9867187ac4916 Mon Sep 17 00:00:00 2001
+Message-ID: <a426fb36d9b96b5108abe27744b9867187ac4916.1768383274.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 24 Oct 2025 09:39:01 -0700
-Subject: [PATCH 05/39] [SFrame-V3] sframe: gas: bfd: ld: format bump to
+Subject: [PATCH 05/40] [SFrame-V3] sframe: gas: bfd: ld: format bump to
  version 3
 
 Bump version to SFRAME_VERSION_3.  Introduce a new definition of SFrame
@@ -66,7 +66,10 @@ libsframe/testsuite/
     flags field sanity check [Indu].
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+ - Include diff in a new testcase after rebase
+   cfi-sframe/cfi-sframe-s390x-pr33756.d [Indu].
+[End of changes in V3]
 ---
  bfd/elf-sframe.c                              |   6 +-
  bfd/elf64-s390.c                              |   2 +-
@@ -102,6 +105,7 @@ Signed-off-by: Sam James <sam@gentoo.org>
  .../cfi-sframe-s390x-fpra-offset-2.d          |   2 +-
  .../cfi-sframe-s390x-fpra-register-1.d        |   2 +-
  .../cfi-sframe-s390x-fpra-register-2.d        |   2 +-
+ .../gas/cfi-sframe/cfi-sframe-s390x-pr33756.d |   2 +-
  .../cfi-sframe-s390x-ra-undefined-1.d         |   2 +-
  .../gas/cfi-sframe/cfi-sframe-x86_64-1.d      |   2 +-
  .../gas/cfi-sframe/cfi-sframe-x86_64-2.d      |   2 +-
@@ -131,7 +135,7 @@ Signed-off-by: Sam James <sam@gentoo.org>
  libsframe/sframe-dump.c                       |  11 ++-
  libsframe/sframe.c                            |  92 ++++++++++++++----
  libsframe/testsuite/libsframe.decode/DATA2    | Bin 98 -> 98 bytes
- 63 files changed, 192 insertions(+), 90 deletions(-)
+ 64 files changed, 193 insertions(+), 91 deletions(-)
 
 diff --git a/bfd/elf-sframe.c b/bfd/elf-sframe.c
 index 0ed374bd0b9..5a9cc45435f 100644
@@ -178,10 +182,10 @@ index 2ff38adfd60..6bf19c408f4 100644
  			 SFRAME_ABI_S390X_ENDIAN_BIG,
  			 SFRAME_CFA_FIXED_FP_INVALID,
 diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
-index 36ba7919f47..663649d7a41 100644
+index fc51bf262a5..9e1c6d8a0e0 100644
 --- a/bfd/elfxx-x86.c
 +++ b/bfd/elfxx-x86.c
-@@ -1906,7 +1906,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+@@ -1896,7 +1896,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
        break;
      }
  
@@ -217,7 +221,7 @@ index a6973d832a4..bcb8cc04743 100644
      CFA fixed RA offset: -8
      Num FDEs: 1
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 4a70ae13ff5..f814eebc3a0 100644
+index bf5cd62f6fc..c8a0aa598b2 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -54,8 +54,8 @@
@@ -231,7 +235,7 @@ index 4a70ae13ff5..f814eebc3a0 100644
  
  /* List of SFrame FDE entries.  */
  
-@@ -310,10 +310,10 @@ sframe_v1_set_func_info (unsigned int fde_type, unsigned int fre_type,
+@@ -300,10 +300,10 @@ sframe_v1_set_func_info (unsigned int fde_type, unsigned int fre_type,
  static void
  sframe_set_version (uint32_t sframe_version ATTRIBUTE_UNUSED)
  {
@@ -245,7 +249,7 @@ index 4a70ae13ff5..f814eebc3a0 100644
  
    sframe_ver_ops.set_fre_info = sframe_v1_set_fre_info;
  
-@@ -2111,7 +2111,7 @@ output_sframe (segT sframe_seg)
+@@ -2101,7 +2101,7 @@ output_sframe (segT sframe_seg)
    (void) sframe_seg;
  
    /* Setup the version specific access functions.  */
@@ -618,6 +622,19 @@ index 7b719fd979f..f781fb1dee9 100644
      Flags: SFRAME_F_FDE_FUNC_START_PCREL
      Num FDEs: 1
      Num FREs: 5
+diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-pr33756.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-pr33756.d
+index e572592a06b..e565c931894 100644
+--- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-pr33756.d
++++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-pr33756.d
+@@ -6,7 +6,7 @@ Contents of the SFrame section .sframe:
+ 
+   Header :
+ 
+-    Version: SFRAME_VERSION_2
++    Version: SFRAME_VERSION_3
+     Flags: SFRAME_F_FDE_FUNC_START_PCREL
+     Num FDEs: 1
+     Num FREs: 4
 diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-ra-undefined-1.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-ra-undefined-1.d
 index dfd47e30bbe..aeef6969f21 100644
 --- a/gas/testsuite/gas/cfi-sframe/cfi-sframe-s390x-ra-undefined-1.d

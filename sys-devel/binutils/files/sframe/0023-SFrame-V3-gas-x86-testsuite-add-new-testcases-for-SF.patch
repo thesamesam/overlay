@@ -1,10 +1,10 @@
-From 920842c643e2ec45d0eff42d742a9e3bb7a23bb5 Mon Sep 17 00:00:00 2001
-Message-ID: <920842c643e2ec45d0eff42d742a9e3bb7a23bb5.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From f22d6732cbc70688a4aa21bb8897e45a04a534ba Mon Sep 17 00:00:00 2001
+Message-ID: <f22d6732cbc70688a4aa21bb8897e45a04a534ba.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 19 Nov 2025 09:28:02 -0800
-Subject: [PATCH 23/39] [SFrame-V3] gas: x86: testsuite: add new testcases for
+Subject: [PATCH 23/40] [SFrame-V3] gas: x86: testsuite: add new testcases for
  SFRAME_FDE_TYPE_FLEX
 
 gas/testsuite/
@@ -29,7 +29,12 @@ gas/testsuite/
 
 [No changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - Fix the expected output of
+    gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-4.d.  With the bugfix
+    of PR gas/33756 committed, the previous expected output was itself buggy
+    [Indu].
+[End of changes in V3]
 ---
  .../gas/cfi-sframe/cfi-sframe-x86_64-4.d      | 29 +++++++
  .../gas/cfi-sframe/cfi-sframe-x86_64-4.s      | 80 +++++++++++++++++++
@@ -48,7 +53,7 @@ Signed-off-by: Sam James <sam@gentoo.org>
 
 diff --git a/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-4.d b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-4.d
 new file mode 100644
-index 00000000000..97d03f5b38a
+index 00000000000..dfbca8b8562
 --- /dev/null
 +++ b/gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-4.d
 @@ -0,0 +1,29 @@
@@ -76,7 +81,7 @@ index 00000000000..97d03f5b38a
 +    0+0014 +r3\+40 +u +f +
 +    0+0073 +sp\+40 +u +f +
 +    0+007b +sp\-8 +u +f +
-+    0+007e +sp\+40 +u +f +
++    0+007e +r3\+40 +u +f +
 +    0+00c2 +sp\+40 +u +f +
 +    0+00c6 +sp\-8 +u +f +
 +

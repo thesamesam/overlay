@@ -1,10 +1,10 @@
-From 8655bc7e48ff1b4aed5061ce143b2498fc243b10 Mon Sep 17 00:00:00 2001
-Message-ID: <8655bc7e48ff1b4aed5061ce143b2498fc243b10.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 2c5dbb0da36381d77b6d2eaf4203e52c3eeba8d1 Mon Sep 17 00:00:00 2001
+Message-ID: <2c5dbb0da36381d77b6d2eaf4203e52c3eeba8d1.1768383274.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 14 Nov 2025 15:49:38 -0800
-Subject: [PATCH 04/39] [SFrame-V3] sframe: use const for sframe_decoder_ctx
+Subject: [PATCH 04/40] [SFrame-V3] sframe: use const for sframe_decoder_ctx
  object arg
 
 As the library version will be bumped soon, include this change now.
@@ -20,9 +20,7 @@ const object.
 Reviewed-by: Jens Remus <jremus@linux.ibm.com>
 
 ---
-[No changes in V1, V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V1, V2, V3]
 ---
  include/sframe-api.h    | 42 ++++++++++++++---------------
  libsframe/sframe-dump.c | 14 +++++-----

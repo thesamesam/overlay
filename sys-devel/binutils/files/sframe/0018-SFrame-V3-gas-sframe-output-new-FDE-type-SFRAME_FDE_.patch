@@ -1,44 +1,43 @@
-From 25928179679069104f1c1c04e43c57bda61bde1c Mon Sep 17 00:00:00 2001
-Message-ID: <25928179679069104f1c1c04e43c57bda61bde1c.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 916fbbeb00f20a1fdacd211215893c905343920b Mon Sep 17 00:00:00 2001
+Message-ID: <916fbbeb00f20a1fdacd211215893c905343920b.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 19 Nov 2025 09:26:47 -0800
-Subject: [PATCH 18/39] [SFrame-V3] gas: sframe: output new FDE type
+Subject: [PATCH 18/40] [SFrame-V3] gas: sframe: output new FDE type
  SFRAME_FDE_TYPE_FLEX
 
 This patch updates the routines for emission of the new FDE type
 SFRAME_FDE_TYPE_FLEX in the SFrame output section.  The support for
 generating these flex FDEs themselves is added in a subsequent commit.
 
-For flex FDE type, output_sframe_row_entry_offsets () emits two
-offsets for RA tracking, irrespective of the ABI/arch, i.e.,
-irrespecitve of whether RA-tracking is enabled.  This is because, for
-flex FDE type, RA is allowed "non-standard" recovery rules,
-e.g., RA = REG or RA = *(REG+offset).  In a follow-up patch, when
-handling for .cfi_register RA, REG is added, emission code will be
-patched up accodingly.
-
-TBD - gas/gen-sframe.c code can be improved ?
+Update struct sframe_row_entry to track additional state for CFA,
+FP, and RA.  Modify output_sframe_row_entry_offsets () to emit
+metadata/offset pairs for flexible FDEs or padding where applicable,
+ensuring the usual ordering (CFA, RA, FP).  The padding data, a.k.a.
+SFRAME_FRE_RA_OFFSET_INVALID is emitted in flexible FDEs when RA is
+untracked but FP offsets follow.  Trailing padding offsets should not
+occur.  Add a new function get_udata_size_in_bytes () to account for
+sizing of unsigned register metadata.
 
 gas/
 	* gen-sframe.c (get_udata_size_in_bytes): Get size of unsigned
 	int data in bytes.
-	(get_fre_num_offsets): Get number of offsets for
-	SFRAME_FDE_TYPE_FLEX fde type as well (new argument).
-	(output_sframe_row_entry_offsets): Output the SFrame FREs for
-	two different cases (fde type SFRAME_FDE_TYPE_FLEX or the
-	default).
-	(output_sframe_row_entry): Update caller.
-	(output_sframe_funcdesc): Emit func type in func_info2 field.
-	(sframe_xlate_ctx_init): Initialize flex_p in translation
-	context object.
-	(sframe_xlate_ctx_finalize): Likewise.
-	(sframe_row_entry_initialize): Copy over new data members too.
-	* gen-sframe.h (struct sframe_row_entry): Add tracking for CFA
-	dereferencing, frame pointer dereferencing.
-	(struct sframe_func_entry): Add tracking for flexible FDE type.
-	(struct sframe_xlate_ctx): Likewise.
+	(get_fre_num_offsets): Handle SFRAME_FDE_TYPE_FLEX.
+	(sframe_get_fre_offset_size): Account for register metadata
+	in flexible FDEs.
+	(output_sframe_row_entry_offsets): Add logic for flexible
+	FDE offset pairs.
+	(output_sframe_row_entry): Reset base register for flex FDEs.
+	(output_sframe_funcdesc): Emit FDE type in func_info2.
+	(sframe_xlate_ctx_init): Initialize flex_p.
+	(sframe_xlate_ctx_finalize): Finalize flex_p status.
+	(sframe_row_entry_initialize): Copy new deref tracking bits.
+	(sframe_xlate_do_offset): Set deref bits during translation.
+	* gen-sframe.h (struct sframe_row_entry): Add cfa_deref_p,
+	fp_deref_p, and ra_deref_p.
+	(struct sframe_func_entry): Add fde_flex_p.
+	(struct sframe_xlate_ctx): Add flex_p.
 
 ---
 [Changes in V1]
@@ -64,17 +63,24 @@ gas/
   - Other minor touch ups.
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - Use standard min/max constants [Jens]
+  - In sframe_get_fre_offset_size(), do not check fp_reg_data/fp_offset
+    if FP recovery rule was never saved.  Similar handling for RA.  This
+    fixes a issue causing a bit more bytes in output section than
+    necessary [Indu].
+  - Update commit log [Jens].
+[End of changes in V3]
 ---
- gas/gen-sframe.c | 188 +++++++++++++++++++++++++++++++++++++++--------
+ gas/gen-sframe.c | 199 ++++++++++++++++++++++++++++++++++++++++-------
  gas/gen-sframe.h |  18 ++++-
- 2 files changed, 175 insertions(+), 31 deletions(-)
+ 2 files changed, 186 insertions(+), 31 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index b80663c3462..43cbf53e9f0 100644
+index 3ffa5f3f411..c07170ccb2e 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -233,6 +233,22 @@ get_offset_size_in_bytes (offsetT value)
+@@ -223,6 +223,22 @@ get_offset_size_in_bytes (offsetT value)
    return size;
  }
  
@@ -85,9 +91,9 @@ index b80663c3462..43cbf53e9f0 100644
 +{
 +  unsigned int size = 0;
 +
-+  if (value <= VALUE_8BIT + 1)
++  if (value <= UINT8_MAX)
 +    size = 1;
-+  else if (value <= VALUE_16BIT + 1)
++  else if (value <= UINT16_MAX)
 +    size = 2;
 +  else
 +    size = 4;
@@ -97,7 +103,7 @@ index b80663c3462..43cbf53e9f0 100644
  #define SFRAME_FRE_OFFSET_FUNC_MAP_INDEX_1B  0 /* SFRAME_FRE_OFFSET_1B.  */
  #define SFRAME_FRE_OFFSET_FUNC_MAP_INDEX_2B  1 /* SFRAME_FRE_OFFSET_2B.  */
  #define SFRAME_FRE_OFFSET_FUNC_MAP_INDEX_4B  2 /* SFRAME_FRE_OFFSET_4B.  */
-@@ -380,19 +396,36 @@ get_fre_base_reg_id (const struct sframe_row_entry *sframe_fre)
+@@ -370,19 +386,36 @@ get_fre_base_reg_id (const struct sframe_row_entry *sframe_fre)
  /* Get number of offsets necessary for the SFrame Frame Row Entry.  */
  
  static unsigned int
@@ -144,7 +150,7 @@ index b80663c3462..43cbf53e9f0 100644
    return fre_num_offsets;
  }
  
-@@ -400,7 +433,8 @@ get_fre_num_offsets (const struct sframe_row_entry *sframe_fre)
+@@ -390,7 +423,8 @@ get_fre_num_offsets (const struct sframe_row_entry *sframe_fre)
     SFrame frame row entry.  */
  
  static unsigned int
@@ -154,7 +160,7 @@ index b80663c3462..43cbf53e9f0 100644
  {
    unsigned int max_offset_size = 0;
    unsigned int cfa_offset_size = 0;
-@@ -430,6 +464,32 @@ sframe_get_fre_offset_size (const struct sframe_row_entry *sframe_fre)
+@@ -420,6 +454,38 @@ sframe_get_fre_offset_size (const struct sframe_row_entry *sframe_fre)
    if (ra_offset_size > max_offset_size)
      max_offset_size = ra_offset_size;
  
@@ -169,25 +175,31 @@ index b80663c3462..43cbf53e9f0 100644
 +      if (data_size > max_offset_size)
 +	max_offset_size = data_size;
 +
-+      reg_p = (sframe_fre->fp_loc == SFRAME_FRE_ELEM_LOC_REG);
-+      data = SFRAME_V3_FLEX_FDE_REG_ENCODE (sframe_fre->fp_reg,
-+					    sframe_fre->fp_deref_p, reg_p);
-+      data_size = get_udata_size_in_bytes (data);
-+      if (data_size > max_offset_size)
-+	max_offset_size = data_size;
++      if (sframe_fre->ra_loc != SFRAME_FRE_ELEM_LOC_NONE)
++	{
++	  reg_p = (sframe_fre->ra_loc != SFRAME_FRE_ELEM_LOC_REG);
++	  data = SFRAME_V3_FLEX_FDE_REG_ENCODE (sframe_fre->ra_reg,
++						sframe_fre->ra_deref_p, reg_p);
++	  data_size = get_udata_size_in_bytes (data);
++	  if (data_size > max_offset_size)
++	    max_offset_size = data_size;
++	}
 +
-+      reg_p = (sframe_fre->ra_loc != SFRAME_FRE_ELEM_LOC_REG);
-+      data = SFRAME_V3_FLEX_FDE_REG_ENCODE (sframe_fre->ra_reg,
-+					    sframe_fre->ra_deref_p, reg_p);
-+      data_size = get_udata_size_in_bytes (data);
-+      if (data_size > max_offset_size)
-+	max_offset_size = data_size;
++      if (sframe_fre->fp_loc != SFRAME_FRE_ELEM_LOC_NONE)
++	{
++	  reg_p = (sframe_fre->fp_loc == SFRAME_FRE_ELEM_LOC_REG);
++	  data = SFRAME_V3_FLEX_FDE_REG_ENCODE (sframe_fre->fp_reg,
++						sframe_fre->fp_deref_p, reg_p);
++	  data_size = get_udata_size_in_bytes (data);
++	  if (data_size > max_offset_size)
++	    max_offset_size = data_size;
++	}
 +    }
 +
    gas_assert (max_offset_size);
  
    switch (max_offset_size)
-@@ -539,6 +599,7 @@ sframe_row_entry_new (void)
+@@ -529,6 +595,7 @@ sframe_row_entry_new (void)
       valid register for a supported arch.  */
    fre->cfa_base_reg = SFRAME_FRE_REG_INVALID;
    fre->fp_reg = SFRAME_FRE_REG_INVALID;
@@ -195,7 +207,7 @@ index b80663c3462..43cbf53e9f0 100644
    fre->merge_candidate = true;
    /* Reset the mangled RA status bit to zero by default.  We will
       initialize it in sframe_row_entry_initialize () with the sticky
-@@ -588,39 +649,91 @@ sframe_fde_free (struct sframe_func_entry *sframe_fde)
+@@ -578,39 +645,91 @@ sframe_fde_free (struct sframe_func_entry *sframe_fde)
     size FRE_OFFSET_SIZE.  Write out the offsets in order - CFA, RA, FP.  */
  
  static unsigned int
@@ -303,7 +315,7 @@ index b80663c3462..43cbf53e9f0 100644
      }
  
    return fre_write_offsets;
-@@ -677,8 +790,10 @@ output_sframe_row_entry (const struct sframe_func_entry *sframe_fde,
+@@ -667,10 +786,17 @@ output_sframe_row_entry (const struct sframe_func_entry *sframe_fde,
    else
      {
        fre_base_reg = get_fre_base_reg_id (sframe_fre);
@@ -315,8 +327,15 @@ index b80663c3462..43cbf53e9f0 100644
 +						    sframe_fde->fde_flex_p);
        fre_mangled_ra_p = sframe_fre->mangled_ra_p;
      }
++
++  /* Unused for flex FDE.  Set to zero.  */
++  if (sframe_fde->fde_flex_p)
++    fre_base_reg = SFRAME_BASE_REG_FP;
++
    fre_info = sframe_set_fre_info (fre_base_reg, fre_num_offsets,
-@@ -764,7 +879,12 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+ 				  fre_offset_size, fre_mangled_ra_p);
+   out_one (fre_info);
+@@ -754,7 +880,12 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
      }
    else
      out_one (func_info);
@@ -330,7 +349,7 @@ index b80663c3462..43cbf53e9f0 100644
    out_one (0);
  }
  
-@@ -948,6 +1068,7 @@ static void
+@@ -938,6 +1069,7 @@ static void
  sframe_xlate_ctx_init (struct sframe_xlate_ctx *xlate_ctx)
  {
    xlate_ctx->dw_fde = NULL;
@@ -338,7 +357,7 @@ index b80663c3462..43cbf53e9f0 100644
    xlate_ctx->first_fre = NULL;
    xlate_ctx->last_fre = NULL;
    xlate_ctx->cur_fre = NULL;
-@@ -974,6 +1095,7 @@ sframe_xlate_ctx_finalize (struct sframe_xlate_ctx *xlate_ctx,
+@@ -964,6 +1096,7 @@ sframe_xlate_ctx_finalize (struct sframe_xlate_ctx *xlate_ctx,
  			   struct sframe_func_entry *sframe_fde)
  {
    sframe_fde->dw_fde = xlate_ctx->dw_fde;
@@ -346,7 +365,7 @@ index b80663c3462..43cbf53e9f0 100644
    sframe_fde->sframe_fres = xlate_ctx->first_fre;
    sframe_fde->num_fres = xlate_ctx->num_xlate_fres;
    /* remember_fre is cloned copy of the applicable fre (where necessary).
-@@ -1030,10 +1152,13 @@ sframe_row_entry_initialize (struct sframe_row_entry *cur_fre,
+@@ -1020,10 +1153,13 @@ sframe_row_entry_initialize (struct sframe_row_entry *cur_fre,
    gas_assert (prev_fre);
    cur_fre->cfa_base_reg = prev_fre->cfa_base_reg;
    cur_fre->cfa_offset = prev_fre->cfa_offset;
@@ -360,7 +379,7 @@ index b80663c3462..43cbf53e9f0 100644
    cur_fre->ra_offset = prev_fre->ra_offset;
    /* Treat RA mangling as a sticky bit.  It retains its value until another
       .cfi_negate_ra_state is seen.  */
-@@ -1255,12 +1380,15 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1245,12 +1381,15 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
      {
        sframe_fre_set_fp_track (cur_fre, cfi_insn->u.ri.offset);
        cur_fre->fp_reg = SFRAME_FRE_REG_INVALID;

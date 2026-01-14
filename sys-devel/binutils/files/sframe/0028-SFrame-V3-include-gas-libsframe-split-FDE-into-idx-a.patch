@@ -1,10 +1,10 @@
-From fcdca1ad5c0bdcfa0ad2317493e06aa117ac4c96 Mon Sep 17 00:00:00 2001
-Message-ID: <fcdca1ad5c0bdcfa0ad2317493e06aa117ac4c96.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 231601a95b3c4e16a6fdd39fcd40180f829d1abc Mon Sep 17 00:00:00 2001
+Message-ID: <231601a95b3c4e16a6fdd39fcd40180f829d1abc.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 21 Nov 2025 17:00:42 -0800
-Subject: [PATCH 28/39] [SFrame-V3] include: gas: libsframe: split FDE into idx
+Subject: [PATCH 28/40] [SFrame-V3] include: gas: libsframe: split FDE into idx
  and attr
 
 This patch introduces a structural change to the SFrame V3 format. It
@@ -121,7 +121,7 @@ libsframe/testsuite/
     terminology [Indu].
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V3]
 ---
  bfd/elf-sframe.c                           |  16 +-
  gas/gen-sframe.c                           |  56 +--
@@ -177,7 +177,7 @@ index af6356f49fe..511a297054b 100644
  	  BFD_ASSERT (!err);
  	}
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 23c32d0a642..6cbba35a18d 100644
+index 09898d011a3..2a58c2a0828 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -56,7 +56,7 @@
@@ -189,7 +189,7 @@ index 23c32d0a642..6cbba35a18d 100644
  
  /* List of SFrame FDE entries.  */
  
-@@ -814,14 +814,12 @@ output_sframe_row_entry (const struct sframe_func_entry *sframe_fde,
+@@ -815,14 +815,12 @@ output_sframe_row_entry (const struct sframe_func_entry *sframe_fde,
  }
  
  static void
@@ -207,7 +207,7 @@ index 23c32d0a642..6cbba35a18d 100644
  
    dw_fde_start_addrS = get_dw_fde_start_addrS (sframe_fde->dw_fde);
    dw_fde_end_addrS = get_dw_fde_end_addrS (sframe_fde->dw_fde);
-@@ -832,30 +830,35 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+@@ -833,30 +831,35 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
    exp.X_add_symbol = dw_fde_start_addrS; /* to location.  */
    exp.X_op_symbol = symbol_temp_new_now (); /* from location.  */
    exp.X_add_number = 0;
@@ -260,7 +260,7 @@ index 23c32d0a642..6cbba35a18d 100644
  
    /* Number of FREs must fit uint16_t.  */
    gas_assert (sframe_fde->num_fres <= UINT16_MAX);
-@@ -991,8 +994,8 @@ output_sframe_internal (void)
+@@ -992,8 +995,8 @@ output_sframe_internal (void)
    i = 0;
    for (sframe_fde = all_sframe_fdes; sframe_fde; sframe_fde = sframe_fde->next)
      {
@@ -271,7 +271,7 @@ index 23c32d0a642..6cbba35a18d 100644
        i++;
      }
  
-@@ -1005,6 +1008,9 @@ output_sframe_internal (void)
+@@ -1006,6 +1009,9 @@ output_sframe_internal (void)
    for (sframe_fde = all_sframe_fdes; sframe_fde; sframe_fde = sframe_fde_next)
      {
        symbol_set_value_now (fde_fre_symbols[i]);
@@ -338,7 +338,7 @@ index 4e6e5271a47..07565e167d6 100644
  #define SFRAME_V3_FDE_FUNC_INFO(fde_pc_type, fre_type) \
    (SFRAME_V2_FUNC_INFO (fde_pc_type, fre_type))
 diff --git a/libsframe/sframe.c b/libsframe/sframe.c
-index d79035b052c..57e16470dbc 100644
+index a32144d221b..52788d8ac15 100644
 --- a/libsframe/sframe.c
 +++ b/libsframe/sframe.c
 @@ -140,22 +140,28 @@ sframe_fde_tbl_alloc (sf_fde_tbl **fde_tbl, unsigned int num_fdes)
@@ -761,7 +761,7 @@ index d79035b052c..57e16470dbc 100644
  /* Expands the memory allocated for the SFrame Frame Row Entry (FRE) table
     FRE_TBL.  This function is called when the current FRE buffer is
     insufficient and more stack trace data in the form of COUNT number of SFrame
-@@ -1297,6 +1459,7 @@ sframe_decode (const char *sf_buf, size_t sf_size, int *errp)
+@@ -1325,6 +1487,7 @@ sframe_decode (const char *sf_buf, size_t sf_size, int *errp)
  
    /* SFrame FDEs are at an offset of sfh_fdeoff from SFrame header end.  */
    if (sframe_fde_tbl_init (dctx->sfd_funcdesc, frame_buf + dhp->sfh_fdeoff,
@@ -769,7 +769,7 @@ index d79035b052c..57e16470dbc 100644
  			   &fidx_size, dhp->sfh_num_fdes, sfp->sfp_version))
      {
        sframe_ret_set_errno (errp, SFRAME_ERR_BUF_INVAL);
-@@ -1402,8 +1565,8 @@ sframe_decoder_get_offsetof_fde_start_addr (const sframe_decoder_ctx *dctx,
+@@ -1430,8 +1593,8 @@ sframe_decoder_get_offsetof_fde_start_addr (const sframe_decoder_ctx *dctx,
  
    if (sframe_decoder_get_version (dctx) == SFRAME_VERSION_3)
      return (sframe_decoder_get_hdr_size (dctx)
@@ -780,7 +780,7 @@ index d79035b052c..57e16470dbc 100644
    else if (sframe_decoder_get_version (dctx) == SFRAME_VERSION_2)
      return (sframe_decoder_get_hdr_size (dctx)
  	    + func_idx * sizeof (sframe_func_desc_entry_v2)
-@@ -1511,6 +1674,7 @@ sframe_find_fre (const sframe_decoder_ctx *ctx, int64_t pc,
+@@ -1539,6 +1702,7 @@ sframe_find_fre (const sframe_decoder_ctx *ctx, int64_t pc,
    if ((ctx == NULL) || (frep == NULL))
      return sframe_set_errno (&err, SFRAME_ERR_INVAL);
  
@@ -788,7 +788,7 @@ index d79035b052c..57e16470dbc 100644
    /* Find the FDE which contains the PC, then scan its fre entries.  */
    fdep = sframe_get_funcdesc_with_addr_internal (ctx, pc, &err, &func_idx);
    if (fdep == NULL || ctx->sfd_fres == NULL)
-@@ -1519,6 +1683,8 @@ sframe_find_fre (const sframe_decoder_ctx *ctx, int64_t pc,
+@@ -1547,6 +1711,8 @@ sframe_find_fre (const sframe_decoder_ctx *ctx, int64_t pc,
    fre_type = sframe_get_fre_type (fdep);
  
    fres = ctx->sfd_fres + fdep->func_start_fre_off;
@@ -797,7 +797,7 @@ index d79035b052c..57e16470dbc 100644
    func_start_pc_offset = sframe_decoder_get_secrel_func_start_addr (ctx,
  								    func_idx);
  
-@@ -1651,15 +1817,19 @@ sframe_decoder_get_fre (const sframe_decoder_ctx *ctx,
+@@ -1679,15 +1845,19 @@ sframe_decoder_get_fre (const sframe_decoder_ctx *ctx,
    if (ctx == NULL || fre == NULL)
      return sframe_set_errno (&err, SFRAME_ERR_INVAL);
  
@@ -818,7 +818,7 @@ index d79035b052c..57e16470dbc 100644
    for (i = 0; i < fdep->func_num_fres; i++)
     {
       /* Decode the FRE at the current position.  Return it if valid.  */
-@@ -1720,7 +1890,8 @@ sframe_decoder_get_fres_buf (const sframe_decoder_ctx *dctx,
+@@ -1748,7 +1918,8 @@ sframe_decoder_get_fres_buf (const sframe_decoder_ctx *dctx,
    fre_type = sframe_get_fre_type (fdep);
    /* Update the pointer to (and total size of) the FRE entries.  */
    *fres_buf = dctx->sfd_fres + fdep->func_start_fre_off;
@@ -828,7 +828,7 @@ index d79035b052c..57e16470dbc 100644
    while (i < *num_fres)
      {
        /* Avoid cost of full decoding at this time.  */
-@@ -1901,8 +2072,8 @@ sframe_encoder_get_offsetof_fde_start_addr (sframe_encoder_ctx *ectx,
+@@ -1929,8 +2100,8 @@ sframe_encoder_get_offsetof_fde_start_addr (sframe_encoder_ctx *ectx,
      *errp = 0;
  
    return (sframe_encoder_get_hdr_size (ectx)
@@ -839,7 +839,7 @@ index d79035b052c..57e16470dbc 100644
  }
  
  /* Add an SFrame FRE to function at FUNC_IDX'th function descriptor entry in
-@@ -1967,6 +2138,9 @@ sframe_encoder_add_fre (sframe_encoder_ctx *ectx,
+@@ -1995,6 +2166,9 @@ sframe_encoder_add_fre (sframe_encoder_ctx *ectx,
    ectx->sfe_fres = fre_tbl;
    ectx->sfe_fre_nbytes += esz;
  
@@ -849,7 +849,7 @@ index d79035b052c..57e16470dbc 100644
    ehp = sframe_encoder_get_header (ectx);
    ehp->sfh_num_fres = fre_tbl->count;
  
-@@ -2019,14 +2193,24 @@ sframe_encoder_add_fres_buf (sframe_encoder_ctx *ectx,
+@@ -2047,14 +2221,24 @@ sframe_encoder_add_fres_buf (sframe_encoder_ctx *ectx,
        fre_tbl = tmp;
      }
  
@@ -876,7 +876,7 @@ index d79035b052c..57e16470dbc 100644
  
        if (!sframe_fre_sanity_check_p (ectx_frep))
  	return sframe_set_errno (&err, SFRAME_ERR_FRE_INVAL);
-@@ -2038,23 +2222,19 @@ sframe_encoder_add_fres_buf (sframe_encoder_ctx *ectx,
+@@ -2066,23 +2250,19 @@ sframe_encoder_add_fres_buf (sframe_encoder_ctx *ectx,
  	 libsframe/33131.  */
        sframe_assert (ectx_frep->fre_start_addr <= fdep->func_size);
  
@@ -902,7 +902,7 @@ index d79035b052c..57e16470dbc 100644
    return 0;
  
  bad:
-@@ -2328,26 +2508,46 @@ sframe_encoder_write_fre (char *contents, sframe_frame_row_entry *frep,
+@@ -2356,26 +2536,46 @@ sframe_encoder_write_fre (char *contents, sframe_frame_row_entry *frep,
    return 0;
  }
  
@@ -961,7 +961,7 @@ index d79035b052c..57e16470dbc 100644
  /* Serialize the core contents of the SFrame section and write out to the
     output buffer held in the encoder context ECTX.  Sort the SFrame FDEs on
     start PC if SORT_FDE_P is true.  Return SFRAME_ERR if failure.  */
-@@ -2375,7 +2575,7 @@ sframe_encoder_write_sframe (sframe_encoder_ctx *ectx, bool sort_fde_p)
+@@ -2403,7 +2603,7 @@ sframe_encoder_write_sframe (sframe_encoder_ctx *ectx, bool sort_fde_p)
    contents = ectx->sfe_data;
    buf_size = ectx->sfe_data_size;
    num_fdes = sframe_encoder_get_num_fidx (ectx);
@@ -970,7 +970,7 @@ index d79035b052c..57e16470dbc 100644
    ehp = sframe_encoder_get_header (ectx);
    hdr_size = sframe_get_hdr_size (ehp);
  
-@@ -2409,13 +2609,13 @@ sframe_encoder_write_sframe (sframe_encoder_ctx *ectx, bool sort_fde_p)
+@@ -2437,13 +2637,13 @@ sframe_encoder_write_sframe (sframe_encoder_ctx *ectx, bool sort_fde_p)
        fre_type = sframe_get_fre_type (fdep);
        num_fres = fdep->func_num_fres;
  
@@ -988,7 +988,7 @@ index d79035b052c..57e16470dbc 100644
        for (j = 0; j < num_fres; j++)
  	{
  	  fre_index = global + j;
-@@ -2452,8 +2652,8 @@ sframe_encoder_write_sframe (sframe_encoder_ctx *ectx, bool sort_fde_p)
+@@ -2480,8 +2680,8 @@ sframe_encoder_write_sframe (sframe_encoder_ctx *ectx, bool sort_fde_p)
    /* Write out the FDE table sorted on funtion start address.  */
    for (i = 0; i < num_fdes; i++)
      {
@@ -999,7 +999,7 @@ index d79035b052c..57e16470dbc 100644
        contents += fde_write_size;
      }
  
-@@ -2482,7 +2682,7 @@ sframe_encoder_write (sframe_encoder_ctx *ectx, size_t *encoded_size,
+@@ -2510,7 +2710,7 @@ sframe_encoder_write (sframe_encoder_ctx *ectx, size_t *encoded_size,
  
    ehp = sframe_encoder_get_header (ectx);
    hdrsize = sframe_get_hdr_size (ehp);

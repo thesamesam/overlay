@@ -1,10 +1,10 @@
-From 745e2f439fc174a4bfd36d31583bc0bcf5318ecd Mon Sep 17 00:00:00 2001
-Message-ID: <745e2f439fc174a4bfd36d31583bc0bcf5318ecd.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 5ab41a38b7437f52a3903771c533787e892e7ce6 Mon Sep 17 00:00:00 2001
+Message-ID: <5ab41a38b7437f52a3903771c533787e892e7ce6.1768383274.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 24 Oct 2025 09:39:15 -0700
-Subject: [PATCH 11/39] [SFrame-V3] sframe: gas: bfd: add support for signal
+Subject: [PATCH 11/40] [SFrame-V3] sframe: gas: bfd: add support for signal
  frames
 
 Reserve a bit in function info byte in the SFrame FDE to designate
@@ -44,9 +44,7 @@ libsframe/
     [Jens].
 [End of changes in V1]
 
-[No changes in V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V2, V3]
 ---
  gas/gen-sframe.c                              | 30 +++++++++++++------
  gas/gen-sframe.h                              |  3 +-
@@ -61,7 +59,7 @@ Signed-off-by: Sam James <sam@gentoo.org>
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-common-13.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index e1a60ca4bf5..3f0a5531381 100644
+index 4aa362433d7..ff2f7a962ac 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -116,6 +116,13 @@ get_dw_fde_pauth_b_key_p (const struct fde_entry *dw_fde ATTRIBUTE_UNUSED)
@@ -78,7 +76,7 @@ index e1a60ca4bf5..3f0a5531381 100644
  /* SFrame Frame Row Entry (FRE) related functions.  */
  
  static void
-@@ -294,14 +301,16 @@ sframe_v1_set_fre_info (unsigned int cfa_base_reg, unsigned int num_offsets,
+@@ -284,14 +291,16 @@ sframe_v1_set_fre_info (unsigned int cfa_base_reg, unsigned int num_offsets,
    return fre_info;
  }
  
@@ -100,7 +98,7 @@ index e1a60ca4bf5..3f0a5531381 100644
    return func_info;
  }
  
-@@ -317,7 +326,7 @@ sframe_set_version (uint32_t sframe_version ATTRIBUTE_UNUSED)
+@@ -307,7 +316,7 @@ sframe_set_version (uint32_t sframe_version ATTRIBUTE_UNUSED)
  
    sframe_ver_ops.set_fre_info = sframe_v1_set_fre_info;
  
@@ -109,7 +107,7 @@ index e1a60ca4bf5..3f0a5531381 100644
  }
  
  /* SFrame set FRE info.  */
-@@ -334,9 +343,10 @@ sframe_set_fre_info (unsigned int cfa_base_reg, unsigned int num_offsets,
+@@ -324,9 +333,10 @@ sframe_set_fre_info (unsigned int cfa_base_reg, unsigned int num_offsets,
  
  static unsigned char
  sframe_set_func_info (unsigned int fde_type, unsigned int fre_type,
@@ -122,7 +120,7 @@ index e1a60ca4bf5..3f0a5531381 100644
  }
  
  /* Get the number of SFrame FDEs for the current file.  */
-@@ -690,6 +700,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+@@ -680,6 +690,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
    expressionS exp;
    symbolS *dw_fde_start_addrS, *dw_fde_end_addrS;
    unsigned int pauth_key;
@@ -130,7 +128,7 @@ index e1a60ca4bf5..3f0a5531381 100644
  
    dw_fde_start_addrS = get_dw_fde_start_addrS (sframe_fde->dw_fde);
    dw_fde_end_addrS = get_dw_fde_end_addrS (sframe_fde->dw_fde);
-@@ -733,9 +744,10 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+@@ -723,9 +734,10 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
    unsigned char func_info;
    pauth_key = (get_dw_fde_pauth_b_key_p (sframe_fde->dw_fde)
  	       ? SFRAME_AARCH64_PAUTH_KEY_B : SFRAME_AARCH64_PAUTH_KEY_A);

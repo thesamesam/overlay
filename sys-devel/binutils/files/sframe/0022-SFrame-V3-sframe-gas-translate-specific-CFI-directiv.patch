@@ -1,10 +1,10 @@
-From b058ccd3a35cbfb40c7bd972ae15c24cca41ff8c Mon Sep 17 00:00:00 2001
-Message-ID: <b058ccd3a35cbfb40c7bd972ae15c24cca41ff8c.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 9034ef88c1738d84a40253b22a4f6fd471aca096 Mon Sep 17 00:00:00 2001
+Message-ID: <9034ef88c1738d84a40253b22a4f6fd471aca096.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Sat, 29 Nov 2025 21:14:32 -0800
-Subject: [PATCH 22/39] [SFrame-V3] sframe: gas: translate specific CFI
+Subject: [PATCH 22/40] [SFrame-V3] sframe: gas: translate specific CFI
  directives for SFRAME_FDE_TYPE_FLEX
 
 This patch updates the SFrame generation in GAS to translate specific
@@ -71,13 +71,13 @@ gas/
     purpose [Jens, Indu].
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V3]
 ---
  gas/gen-sframe.c | 271 ++++++++++++++++++++++++++++++++++++++++-------
  1 file changed, 233 insertions(+), 38 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 43cbf53e9f0..ff6df7412ba 100644
+index c07170ccb2e..1fd9c6ab67d 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
 @@ -24,6 +24,7 @@
@@ -88,7 +88,7 @@ index 43cbf53e9f0..ff6df7412ba 100644
  
  #ifdef support_sframe_p
  
-@@ -1247,30 +1248,46 @@ sframe_xlate_do_def_cfa (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1248,30 +1249,46 @@ sframe_xlate_do_def_cfa (struct sframe_xlate_ctx *xlate_ctx,
      sframe_fre_set_begin_addr (cur_fre,
  			       get_dw_fde_start_addrS (xlate_ctx->dw_fde));
    }
@@ -153,7 +153,7 @@ index 43cbf53e9f0..ff6df7412ba 100644
    return SFRAME_XLATE_OK;
  }
  
-@@ -1292,14 +1309,22 @@ sframe_xlate_do_def_cfa_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1293,14 +1310,22 @@ sframe_xlate_do_def_cfa_register (struct sframe_xlate_ctx *xlate_ctx,
    if (cfi_insn->u.r != SFRAME_CFA_SP_REG
        && cfi_insn->u.r != SFRAME_CFA_FP_REG)
      {
@@ -180,7 +180,7 @@ index 43cbf53e9f0..ff6df7412ba 100644
  
    cur_fre->merge_candidate = false;
  
-@@ -1635,6 +1660,132 @@ sframe_xlate_do_gnu_window_save (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1636,6 +1661,132 @@ sframe_xlate_do_gnu_window_save (struct sframe_xlate_ctx *xlate_ctx,
    return SFRAME_XLATE_ERR_NOTREPRESENTED;  /* Not represented.  */
  }
  
@@ -313,7 +313,7 @@ index 43cbf53e9f0..ff6df7412ba 100644
  /* Handle DW_CFA_expression in .cfi_escape.
  
     As with sframe_xlate_do_cfi_escape, the intent of this function is to detect
-@@ -1646,13 +1797,14 @@ sframe_xlate_do_gnu_window_save (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1647,13 +1798,14 @@ sframe_xlate_do_gnu_window_save (struct sframe_xlate_ctx *xlate_ctx,
     SFRAME_XLATE_ERR_NOTREPRESENTED for their callers.  */
  
  static int
@@ -330,7 +330,7 @@ index 43cbf53e9f0..ff6df7412ba 100644
    unsigned int i = 0;
  
    /* Check roughly for an expression
-@@ -1662,32 +1814,70 @@ sframe_xlate_do_escape_expr (const struct sframe_xlate_ctx *xlate_ctx,
+@@ -1663,32 +1815,70 @@ sframe_xlate_do_escape_expr (const struct sframe_xlate_ctx *xlate_ctx,
    while (e->next)
      {
        e = e->next;
@@ -414,7 +414,7 @@ index 43cbf53e9f0..ff6df7412ba 100644
      {
        as_warn (_("no SFrame FDE emitted; "
  		 ".cfi_escape DW_CFA_expression with %s reg %u"),
-@@ -1852,7 +2042,7 @@ warn_and_exit:
+@@ -1853,7 +2043,7 @@ warn_and_exit:
     SFRAME_XLATE_OK if OK to skip.  */
  
  static int
@@ -423,7 +423,7 @@ index 43cbf53e9f0..ff6df7412ba 100644
  			    const struct cfi_insn_data *cfi_insn)
  {
    const struct cfi_escape_data *e;
-@@ -1888,6 +2078,10 @@ sframe_xlate_do_cfi_escape (const struct sframe_xlate_ctx *xlate_ctx,
+@@ -1889,6 +2079,10 @@ sframe_xlate_do_cfi_escape (const struct sframe_xlate_ctx *xlate_ctx,
  	}
        break;
  
@@ -434,7 +434,7 @@ index 43cbf53e9f0..ff6df7412ba 100644
      case DW_CFA_expression:
        err = sframe_xlate_do_escape_expr (xlate_ctx, cfi_insn, &warn_p);
        break;
-@@ -2247,6 +2441,7 @@ create_sframe_all (void)
+@@ -2248,6 +2442,7 @@ create_sframe_all (void)
        if (err && get_dw_fde_signal_p (dw_fde))
  	{
  	  sframe_xlate_ctx_cleanup (xlate_ctx);

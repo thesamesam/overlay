@@ -1,10 +1,10 @@
-From d953ffed79cade7a77bb5bf8fae34a02d9847f01 Mon Sep 17 00:00:00 2001
-Message-ID: <d953ffed79cade7a77bb5bf8fae34a02d9847f01.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 15fcd93efa69917bcaea25b5d77a05212ebe586e Mon Sep 17 00:00:00 2001
+Message-ID: <15fcd93efa69917bcaea25b5d77a05212ebe586e.1768383274.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Tue, 12 Aug 2025 17:13:15 -0700
-Subject: [PATCH 07/39] [SFrame-V3] libsframe: add V3 APIs for adding and
+Subject: [PATCH 07/40] [SFrame-V3] libsframe: add V3 APIs for adding and
  getting SFrame FDE
 
 (Similar to V2) Add two new APIs for adding and getting SFrame FDE:
@@ -45,9 +45,7 @@ libsframe/
     a note in the function-level comments for now [Indu].
 [End of changes in V1]
 
-[No changes in V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V2, V3]
 ---
  include/sframe-api.h    | 23 ++++++++++++++
  libsframe/libsframe.ver |  2 ++

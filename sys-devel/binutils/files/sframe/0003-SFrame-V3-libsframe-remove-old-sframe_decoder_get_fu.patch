@@ -1,10 +1,10 @@
-From 00121cce7a38efd3c7b79c3e2dc30c4d31dbaed4 Mon Sep 17 00:00:00 2001
-Message-ID: <00121cce7a38efd3c7b79c3e2dc30c4d31dbaed4.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From aff615fbf014a0b7a099158ec196408ea988ea04 Mon Sep 17 00:00:00 2001
+Message-ID: <aff615fbf014a0b7a099158ec196408ea988ea04.1768383274.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 3 Nov 2025 00:17:41 -0800
-Subject: [PATCH 03/39] [SFrame-V3] libsframe: remove old
+Subject: [PATCH 03/40] [SFrame-V3] libsframe: remove old
  sframe_decoder_get_funcdesc API
 
 sframe_decoder_get_funcdesc () was added for SFRAME_VERSION_1.  This has
@@ -24,9 +24,7 @@ libsframe/
 	* sframe.c (sframe_decoder_get_funcdesc): Remove definition.
 
 ---
-[No Changes in V1, V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No Changes in V1, V2, V3]
 ---
  include/sframe-api.h    | 11 -----------
  libsframe/libsframe.ver |  1 -

@@ -1,10 +1,10 @@
-From 4025a877d04c17efc45c35d562c9bcaf0854e0d0 Mon Sep 17 00:00:00 2001
-Message-ID: <4025a877d04c17efc45c35d562c9bcaf0854e0d0.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 72fc45adee408bba30969b18aed832433952de30 Mon Sep 17 00:00:00 2001
+Message-ID: <72fc45adee408bba30969b18aed832433952de30.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 10 Nov 2025 14:44:48 -0800
-Subject: [PATCH 14/39] [SFrame-V3] include: gas: libsframe: add 8-bits of
+Subject: [PATCH 14/40] [SFrame-V3] include: gas: libsframe: add 8-bits of
  func_info2 for extensibility in FDE
 
 The existing field func_info (in the SFrame FDE) is used to convey important
@@ -66,9 +66,7 @@ include/
   - Add more details to the commit log to make it more useful.
 [End of changes in V1]
 
-[No changes in V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V2, V3]
 ---
  bfd/elf-sframe.c                                 |   6 ++++--
  bfd/elf64-s390.c                                 |   2 ++
@@ -138,10 +136,10 @@ index dbeee7f66e4..c172b9b5287 100644
  				      0 /* Num FREs.  */);
  
 diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
-index 717d892775e..06e658012bb 100644
+index ae6c96d77df..58b12e2b372 100644
 --- a/bfd/elfxx-x86.c
 +++ b/bfd/elfxx-x86.c
-@@ -1927,6 +1927,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+@@ -1917,6 +1917,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
  				      0, /* func start addr.  */
  				      plt0_entry_size,
  				      func_info,
@@ -149,7 +147,7 @@ index 717d892775e..06e658012bb 100644
  				      0,
  				      0 /* Num FREs.  */);
        sframe_frame_row_entry plt0_fre;
-@@ -1956,6 +1957,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+@@ -1946,6 +1947,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
  				      plt0_entry_size, /* func start addr.  */
  				      dpltsec->size - plt0_entry_size,
  				      func_info,
@@ -158,10 +156,10 @@ index 717d892775e..06e658012bb 100644
  				      0 /* Num FREs.  */);
  
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index c1bc2edf014..d689f277dd6 100644
+index 507412a20e0..69b68b8f4e7 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -765,6 +765,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+@@ -755,6 +755,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
    else
      out_one (func_info);
    out_one (0);

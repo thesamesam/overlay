@@ -1,10 +1,10 @@
-From 43887e1e88fc025ae32027dee931234235f9622d Mon Sep 17 00:00:00 2001
-Message-ID: <43887e1e88fc025ae32027dee931234235f9622d.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From b9c6fde9975e82f83039646119f4248fd71c9182 Mon Sep 17 00:00:00 2001
+Message-ID: <b9c6fde9975e82f83039646119f4248fd71c9182.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Thu, 20 Nov 2025 09:32:32 -0800
-Subject: [PATCH 27/39] [SFrame-V3] bfd: ld: sframe: avoid unnecessary decoding
+Subject: [PATCH 27/40] [SFrame-V3] bfd: ld: sframe: avoid unnecessary decoding
  of SFrame FREs at link time
 
 At link time, in _bfd_elf_merge_section_sframe (), it suffices to bring
@@ -51,7 +51,7 @@ include/
     seen with this patch [Indu].
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V3]
 ---
  bfd/elf-sframe.c        |  24 +++----
  include/sframe-api.h    |  23 +++++++
@@ -103,7 +103,7 @@ index 1ef53120543..af6356f49fe 100644
    /* Free the SFrame decoder context.  */
    sframe_decoder_free (&sfd_ctx);
 diff --git a/include/sframe-api.h b/include/sframe-api.h
-index 825cef154a6..3ce5f9c9e75 100644
+index 4d5c9dccadb..455738b5ef1 100644
 --- a/include/sframe-api.h
 +++ b/include/sframe-api.h
 @@ -169,6 +169,19 @@ sframe_decoder_get_fre (const sframe_decoder_ctx *ctx,
@@ -126,7 +126,7 @@ index 825cef154a6..3ce5f9c9e75 100644
  /* Get the data (NUM_FRES, FUNC_SIZE, FUNC_START_ADDRESS, FUNC_INFO,
     REP_BLOCK_SIZE) from the function descriptor entry at index I'th
     in the decoder CTX.  If failed, return error code.
-@@ -299,6 +312,16 @@ sframe_encoder_add_fre (sframe_encoder_ctx *ectx,
+@@ -300,6 +313,16 @@ sframe_encoder_add_fre (sframe_encoder_ctx *ectx,
  			unsigned int func_idx,
  			sframe_frame_row_entry *frep);
  
@@ -144,7 +144,7 @@ index 825cef154a6..3ce5f9c9e75 100644
     the encoder context ECTX.  */
  extern int
 diff --git a/libsframe/libsframe.ver b/libsframe/libsframe.ver
-index f6dbde273de..8bad0e733f5 100644
+index 726c2ea9524..df88a2b28b1 100644
 --- a/libsframe/libsframe.ver
 +++ b/libsframe/libsframe.ver
 @@ -25,6 +25,7 @@ LIBSFRAME_3.0 {
@@ -164,7 +164,7 @@ index f6dbde273de..8bad0e733f5 100644
      dump_sframe;
      sframe_errmsg;
 diff --git a/libsframe/sframe.c b/libsframe/sframe.c
-index e14bf486c81..d79035b052c 100644
+index 38bdd55ac96..a32144d221b 100644
 --- a/libsframe/sframe.c
 +++ b/libsframe/sframe.c
 @@ -491,6 +491,21 @@ sframe_fre_entry_size (sframe_frame_row_entry *frep, uint32_t fre_type)
@@ -189,7 +189,7 @@ index e14bf486c81..d79035b052c 100644
  /* Get the function descriptor entry at index FUNC_IDX in the decoder
     context CTX.  */
  
-@@ -1672,6 +1687,52 @@ sframe_decoder_get_fre (const sframe_decoder_ctx *ctx,
+@@ -1700,6 +1715,52 @@ sframe_decoder_get_fre (const sframe_decoder_ctx *ctx,
    return sframe_set_errno (&err, SFRAME_ERR_FDE_NOTFOUND);
  }
  
@@ -242,7 +242,7 @@ index e14bf486c81..d79035b052c 100644
  
  /* SFrame Encoder.  */
  
-@@ -1922,6 +1983,88 @@ bad:
+@@ -1950,6 +2011,88 @@ bad:
    return -1;
  }
  

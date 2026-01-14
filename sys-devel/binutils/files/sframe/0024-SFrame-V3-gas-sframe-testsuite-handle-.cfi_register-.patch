@@ -1,10 +1,10 @@
-From 8b6925e9cd828f9a425903c095b0edb85261cf07 Mon Sep 17 00:00:00 2001
-Message-ID: <8b6925e9cd828f9a425903c095b0edb85261cf07.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 2ef38583dd66dfdf40aaa278ee389d4cfdd5dc6f Mon Sep 17 00:00:00 2001
+Message-ID: <2ef38583dd66dfdf40aaa278ee389d4cfdd5dc6f.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Sat, 6 Dec 2025 12:50:44 -0800
-Subject: [PATCH 24/39] [SFrame-V3] gas: sframe: testsuite: handle
+Subject: [PATCH 24/40] [SFrame-V3] gas: sframe: testsuite: handle
  .cfi_register FP/RA for flex FDE
 
 Use SFrame FDE of type SFRAME_FDE_TYPE_FLEX_TOPMOST_FRAME.
@@ -48,7 +48,7 @@ gas/testsuite/gas/
     cfi-sframe-x86_64-ra-undefined-flex-1.d [Indu].
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V3]
 ---
  gas/gen-sframe.c                              | 47 +++++++++++++++----
  .../gas/cfi-sframe/cfi-sframe-x86_64-5.d      | 21 +++++++++
@@ -67,10 +67,10 @@ Signed-off-by: Sam James <sam@gentoo.org>
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-ra-undefined-flex-1.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index ff6df7412ba..4582c9d89e8 100644
+index 1fd9c6ab67d..472ce3dee7c 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -1161,6 +1161,7 @@ sframe_row_entry_initialize (struct sframe_row_entry *cur_fre,
+@@ -1162,6 +1162,7 @@ sframe_row_entry_initialize (struct sframe_row_entry *cur_fre,
    cur_fre->ra_loc = prev_fre->ra_loc;
    cur_fre->ra_reg = prev_fre->ra_reg;
    cur_fre->ra_offset = prev_fre->ra_offset;
@@ -78,7 +78,7 @@ index ff6df7412ba..4582c9d89e8 100644
    /* Treat RA mangling as a sticky bit.  It retains its value until another
       .cfi_negate_ra_state is seen.  */
    cur_fre->mangled_ra_p = prev_fre->mangled_ra_p;
-@@ -1486,6 +1487,18 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1487,6 +1488,18 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
  }
  
  /* Translate DW_CFA_register into SFrame context.
@@ -97,7 +97,7 @@ index ff6df7412ba..4582c9d89e8 100644
     Return SFRAME_XLATE_OK if success.  */
  
  static int
-@@ -1495,15 +1508,33 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1496,15 +1509,33 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
    /* Conditionally invoke S390-specific implementation.  */
    if (sframe_get_abi_arch () == SFRAME_ABI_S390X_ENDIAN_BIG)
      return s390_sframe_xlate_do_register (xlate_ctx, cfi_insn);

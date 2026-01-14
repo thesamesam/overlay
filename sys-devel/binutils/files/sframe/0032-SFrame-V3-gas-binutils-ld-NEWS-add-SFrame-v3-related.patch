@@ -1,10 +1,10 @@
-From afe3a82d694bdff91a85e637ade10c0904d6401c Mon Sep 17 00:00:00 2001
-Message-ID: <afe3a82d694bdff91a85e637ade10c0904d6401c.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 89117595cb4bdc062243a9ef128fbc14d0a1f2ac Mon Sep 17 00:00:00 2001
+Message-ID: <89117595cb4bdc062243a9ef128fbc14d0a1f2ac.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 24 Dec 2025 23:42:54 -0800
-Subject: [PATCH 33/39] [SFrame-V3] gas: binutils: ld: NEWS: add SFrame v3
+Subject: [PATCH 32/40] [SFrame-V3] gas: binutils: ld: NEWS: add SFrame v3
  related announcements
 
 Add NEWS entries related to the SFrame version 3 release.
@@ -15,8 +15,6 @@ Add NEWS entries related to the SFrame version 3 release.
 [Changes in V2]
   - Use --discard-sframe in ld/NEWS [Indu].
 [End of changes in V2].
-
-Signed-off-by: Sam James <sam@gentoo.org>
 ---
  binutils/NEWS |  8 ++++++++
  gas/NEWS      |  9 +++++++++

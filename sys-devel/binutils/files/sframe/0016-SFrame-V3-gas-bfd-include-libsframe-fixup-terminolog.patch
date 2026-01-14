@@ -1,10 +1,10 @@
-From 86a2ab5a4ebbbc32c4b7ae457bbc07ff5970f3fa Mon Sep 17 00:00:00 2001
-Message-ID: <86a2ab5a4ebbbc32c4b7ae457bbc07ff5970f3fa.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From f71aa8ead3b1b506bb825ccccd08a75a9c316709 Mon Sep 17 00:00:00 2001
+Message-ID: <f71aa8ead3b1b506bb825ccccd08a75a9c316709.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 26 Dec 2025 12:56:54 -0800
-Subject: [PATCH 16/39] [SFrame-V3] gas: bfd: include: libsframe: fixup
+Subject: [PATCH 16/40] [SFrame-V3] gas: bfd: include: libsframe: fixup
  terminology 'PC Type' vs 'FDE Type'
 
 In SFrame V2, we did use the the term 'FDE Type' for the two designated
@@ -46,8 +46,6 @@ libsframe/testsuite/
 [New in V1, Not present in RFC].
 
 [No changes in V2].
-
-Signed-off-by: Sam James <sam@gentoo.org>
 ---
  bfd/elf64-s390.c                              | 10 ++--
  bfd/elfxx-x86.c                               |  8 +--
@@ -102,10 +100,10 @@ index c172b9b5287..012457827e0 100644
  	{
  	  unsigned int func_idx = plt0_entry_size ? 1 : 0;
 diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
-index 06e658012bb..f2ace269f3e 100644
+index 58b12e2b372..0348da9f0a1 100644
 --- a/bfd/elfxx-x86.c
 +++ b/bfd/elfxx-x86.c
-@@ -1915,7 +1915,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+@@ -1905,7 +1905,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
  
    /* FRE type is dependent on the size of the function.  */
    fre_type = sframe_calc_fre_type (dpltsec->size);
@@ -114,7 +112,7 @@ index 06e658012bb..f2ace269f3e 100644
  
    /* Add SFrame FDE and the associated FREs for plt0 if plt0 has been
       generated.  */
-@@ -1943,12 +1943,12 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+@@ -1933,12 +1933,12 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
    if (num_pltn_entries)
      {
        /* pltn entries use an SFrame FDE of type
@@ -129,7 +127,7 @@ index 06e658012bb..f2ace269f3e 100644
        /* Add the SFrame FDE for all PCs starting at the first pltn entry (hence,
  	 function start address = plt0_entry_size.  As usual, this will be
  	 updated later at _bfd_elf_merge_section_sframe, by when the
-@@ -1963,7 +1963,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
+@@ -1953,7 +1953,7 @@ _bfd_x86_elf_create_sframe_plt (bfd *output_bfd,
  
        sframe_frame_row_entry pltn_fre;
        /* Now add the FREs for pltn.  Simply adding the FREs suffices due
@@ -139,10 +137,10 @@ index 06e658012bb..f2ace269f3e 100644
  	{
  	  unsigned int func_idx = plt0_entry_size ? 1 : 0;
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index d689f277dd6..7e161bc12c0 100644
+index 69b68b8f4e7..daf11eb4791 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -750,7 +750,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+@@ -740,7 +740,7 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
    pauth_key = (get_dw_fde_pauth_b_key_p (sframe_fde->dw_fde)
  	       ? SFRAME_AARCH64_PAUTH_KEY_B : SFRAME_AARCH64_PAUTH_KEY_A);
    signal_p = get_dw_fde_signal_p (sframe_fde->dw_fde);

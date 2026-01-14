@@ -1,10 +1,10 @@
-From e5c7ff8ba8f6922784d58977e73bd83c9e9747ed Mon Sep 17 00:00:00 2001
-Message-ID: <e5c7ff8ba8f6922784d58977e73bd83c9e9747ed.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From f4035bfa0adf3f8876d55550540979463cb61553 Mon Sep 17 00:00:00 2001
+Message-ID: <f4035bfa0adf3f8876d55550540979463cb61553.1768383274.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Sat, 6 Dec 2025 20:35:45 -0800
-Subject: [PATCH 12/39] [SFrame-V3] gas: sframe: allow SFrame FDEs with 0 FREs
+Subject: [PATCH 12/40] [SFrame-V3] gas: sframe: allow SFrame FDEs with 0 FREs
  for signal frames
 
 Update the SFrame generation logic in GAS to emit Function Descriptor Entries
@@ -38,9 +38,7 @@ gas/testsuite/
   - Use register names in CFI directives in test files [Jan].
 [End of changes in V1]
 
-[No changes in V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V2, V3]
 ---
  gas/gen-sframe.c                              | 20 +++++++++++++------
  .../cfi-sframe/cfi-sframe-x86_64-signal-1.d   | 18 +++++++++++++++++
@@ -51,10 +49,10 @@ Signed-off-by: Sam James <sam@gentoo.org>
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-signal-1.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 3f0a5531381..06e0832f744 100644
+index ff2f7a962ac..daf3b3ecc25 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -574,7 +574,12 @@ sframe_fde_alloc (void)
+@@ -564,7 +564,12 @@ sframe_fde_alloc (void)
  static void
  sframe_fde_free (struct sframe_func_entry *sframe_fde)
  {
@@ -68,7 +66,7 @@ index 3f0a5531381..06e0832f744 100644
    XDELETE (sframe_fde);
  }
  
-@@ -2108,12 +2113,15 @@ create_sframe_all (void)
+@@ -2098,12 +2103,15 @@ create_sframe_all (void)
        /* Initialize the translation context with information anew.  */
        sframe_xlate_ctx_init (xlate_ctx);
  

@@ -1,10 +1,10 @@
-From 79dfed5dabf34a7e8c856c06b63b3796117329e9 Mon Sep 17 00:00:00 2001
-Message-ID: <79dfed5dabf34a7e8c856c06b63b3796117329e9.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 9e1bb5e7ea9d5bdfcff178124053f782e408eabd Mon Sep 17 00:00:00 2001
+Message-ID: <9e1bb5e7ea9d5bdfcff178124053f782e408eabd.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 24 Nov 2025 16:27:30 -0800
-Subject: [PATCH 15/39] [SFrame-V3] include: sframe: reserve 5 bits for new FDE
+Subject: [PATCH 15/40] [SFrame-V3] include: sframe: reserve 5 bits for new FDE
  types
 
 In SFrame V2, the FDE representation caters to the most common cases of
@@ -31,7 +31,7 @@ it needs to:
     recovery rules employ the use of any non-SP/FP based register, the
     stack tracer must proceed only if it is the topmost frame on stack.
 
-For each of CFA and RA two offsets are always used.  The two offsets
+For CFA, RA, and FP, up to two offsets are always used.  The two offsets
 represent the information as follows:
   - (minimum 8-bit) offset1 to encode register like:
     (regnum << 3) | unused << 2 | deref << 1 | reg_p (=1)
@@ -101,7 +101,10 @@ include/
 
 [No changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - Adjusted the text in commit log from "two offsets" to "up to two
+    offsets" [Indu]
+[End of changes in V3]
 ---
  include/sframe.h | 38 +++++++++++++++++++++++++++++++++++---
  1 file changed, 35 insertions(+), 3 deletions(-)

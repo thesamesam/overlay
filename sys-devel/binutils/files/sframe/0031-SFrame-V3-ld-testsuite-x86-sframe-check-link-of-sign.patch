@@ -1,15 +1,15 @@
-From ee808da44313fb0b30418bc30f34e5867f0a5de2 Mon Sep 17 00:00:00 2001
-Message-ID: <ee808da44313fb0b30418bc30f34e5867f0a5de2.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 1a9c835eef2441cd685424535a7e7e94f37b3525 Mon Sep 17 00:00:00 2001
+Message-ID: <1a9c835eef2441cd685424535a7e7e94f37b3525.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 5 Dec 2025 20:57:30 -0800
-Subject: [PATCH 32/39] [SFrame-V3] ld: testsuite: x86: sframe: check link of
+Subject: [PATCH 31/40] [SFrame-V3] ld: testsuite: x86: sframe: check link of
  signal frame and outermost frames
 
 In this test, two "special" case FDEs are linked:
   - Signal frame where the SFrame stack trace data is not
-    respresentable.
+    representable.
   - _start like outermost frame function.
 
 This is useful test for sframe_encoder's merge input sections
@@ -30,13 +30,16 @@ ld/testsuite/
 
 [No changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - Fixed some typos (respresentable, mimic'ing) [Indu].
+  - Remove duplicate line in sframe-link-1.s [Indu].
+[End of changes in V3]
 ---
  ld/testsuite/ld-x86-64/sframe-link-1.d | 38 ++++++++++++++++++++++++++
- ld/testsuite/ld-x86-64/sframe-signal.s | 19 +++++++++++++
+ ld/testsuite/ld-x86-64/sframe-signal.s | 18 ++++++++++++
  ld/testsuite/ld-x86-64/sframe-start.s  | 15 ++++++++++
  ld/testsuite/ld-x86-64/x86-64.exp      |  1 +
- 4 files changed, 73 insertions(+)
+ 4 files changed, 72 insertions(+)
  create mode 100644 ld/testsuite/ld-x86-64/sframe-link-1.d
  create mode 100644 ld/testsuite/ld-x86-64/sframe-signal.s
  create mode 100644 ld/testsuite/ld-x86-64/sframe-start.s
@@ -87,12 +90,11 @@ index 00000000000..57881f875f8
 +    STARTPC +CFA +FP +RA +
 diff --git a/ld/testsuite/ld-x86-64/sframe-signal.s b/ld/testsuite/ld-x86-64/sframe-signal.s
 new file mode 100644
-index 00000000000..119bfac699d
+index 00000000000..554e072f006
 --- /dev/null
 +++ b/ld/testsuite/ld-x86-64/sframe-signal.s
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,18 @@
 +# Input file with SFrame FDE for a signal trampoline
-+# Input file mimic'ing the start of frame FDE
 +# When linked with other "special" case FDEs like start frame,
 +# this is a useful test for sframe_encoder's merge input sections
 +# functionality and its associated write code-paths (sframe_encoder_write)
@@ -112,11 +114,11 @@ index 00000000000..119bfac699d
 +	.section	.note.GNU-stack,"",@progbits
 diff --git a/ld/testsuite/ld-x86-64/sframe-start.s b/ld/testsuite/ld-x86-64/sframe-start.s
 new file mode 100644
-index 00000000000..f3a2e1d8c76
+index 00000000000..cf4348126a6
 --- /dev/null
 +++ b/ld/testsuite/ld-x86-64/sframe-start.s
 @@ -0,0 +1,15 @@
-+# Input file mimic'ing the start of frame FDE
++# Input file mimicking the start of frame FDE
 +# When linked with other "special" case FDEs like signal frame,
 +# this is a useful test for sframe_encoder's merge input sections
 +# functionality and its associated write code-paths (sframe_encoder_write)

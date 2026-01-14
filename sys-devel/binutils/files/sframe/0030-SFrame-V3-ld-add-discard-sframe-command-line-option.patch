@@ -1,10 +1,10 @@
-From e75b5d4af8a8e0f9131308ae5e80f99f2fa0c2df Mon Sep 17 00:00:00 2001
-Message-ID: <e75b5d4af8a8e0f9131308ae5e80f99f2fa0c2df.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 468357b6de678cde8e21228ca38d0d9c02fc3066 Mon Sep 17 00:00:00 2001
+Message-ID: <468357b6de678cde8e21228ca38d0d9c02fc3066.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Wed, 3 Dec 2025 12:50:33 -0800
-Subject: [PATCH 30/39] [SFrame-V3] ld: add --discard-sframe command line
+Subject: [PATCH 30/40] [SFrame-V3] ld: add --discard-sframe command line
  option
 
 Add a new command line option --discard-sframe to the linker.
@@ -30,16 +30,9 @@ binary's SFrame data.
 The option is added for architectures that currently support SFrame:
 AArch64, s390x, and x86_64.
 
-In a subsequent commit, we will tie this option with discard of all
-input .sframe sections.
-
-TBD:
-  - (Input from reviewers appreciated) For aarch64, is adding to both
-    aarch64elf.sh and aarch64linux.sh necessary?  The desired outcome is
-    to allow the new command line for aarch64 elf, amd64 elf, s390x elf
-    only.  Confirm.
-
 bfd/
+	* elf-sframe.c (_bfd_elf_parse_sframe): Mark with SEC_EXCLUDE if
+	--discard-sframe is in effect.
 	* elf64-s390.c (elf_s390_create_dynamic_sections): Use
 	discard_sframe to guard .sframe section creation.
 	* elfxx-x86.c (_bfd_x86_elf_link_setup_gnu_properties): Likewise.
@@ -49,15 +42,25 @@ ld/
 	* ldlex.h (enum option_values): Add OPTION_NO_LD_SFRAME_INFO.
 	* lexsup.c (elf_sframe_list_options): New function.
 	(ld_list_options): Add sframe_info argument. Update callers.
+	* ld.texi: Update documentation.
 	* emulparams/sframe-info.sh: New file.
-	* emulparams/aarch64elf.sh: Source sframe-info.sh.
-	* emulparams/aarch64linux.sh: Likewise.
+	* emultempl/aarch64elf.em: Add --discard-sframe option
+	listing and handling.
 	* emulparams/elf64_s390.sh: Likewise.
 	* emulparams/elf_x86_64.sh: Likewise.
 	* Makefile.am: Update to handle sframe-info.sh and new list options.
 	* configure.ac: Handle SFRAME_INFO target variable.
 	* Makefile.in: Regenerate.
 	* configure: Regenerate.
+ld/testsuite/
+	* ld-x86-64/x86-64.exp: New test.
+	* ld-x86-64/sframe-command-line-1.d: New test.
+	* ld-aarch64/aarch64-elf.exp: New test.
+	* ld-s390/s390.exp: New test.
+	* ld-x86-64/x86-64.exp: New test.
+	* ld-aarch64/sframe-command-line-1.d: New test.
+	* ld-s390/sframe-command-line-1.d: New test.
+	* ld-x86-64/sframe-command-line-1.d: New test.
 
 ---
 [Changes in V1]
@@ -71,26 +74,55 @@ ld/
   - Commit log adjustments.
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - Squashed V2 commit "[SFrame-V3] ld: discard sframe sections when
+    --discard-sframe" into current [Jens].
+  - Fixed aarch64elf emulations: Earlier the patch was wrongly sourcing
+    the sframe-info.sh in aarch64*.sh files [Indu].
+  - Added tests for aarch64, s390x [Indu].
+[End of changes in V3]
 ---
- bfd/elf64-s390.c              |  2 +-
- bfd/elfxx-x86.c               |  2 +-
- include/bfdlink.h             |  4 ++++
- ld/Makefile.am                |  3 ++-
- ld/Makefile.in                |  4 +++-
- ld/configure                  | 11 +++++++++--
- ld/configure.ac               |  6 ++++++
- ld/emulparams/aarch64elf.sh   |  1 +
- ld/emulparams/aarch64linux.sh |  1 +
- ld/emulparams/elf64_s390.sh   |  1 +
- ld/emulparams/elf_x86_64.sh   |  1 +
- ld/emulparams/sframe-info.sh  | 15 +++++++++++++++
- ld/ld.texi                    | 10 +++++++---
- ld/ldlex.h                    |  2 ++
- ld/lexsup.c                   | 15 +++++++++++++--
- 15 files changed, 67 insertions(+), 11 deletions(-)
+ bfd/elf-sframe.c                                |  3 +++
+ bfd/elf64-s390.c                                |  2 +-
+ bfd/elfxx-x86.c                                 |  2 +-
+ include/bfdlink.h                               |  4 ++++
+ ld/Makefile.am                                  |  3 ++-
+ ld/Makefile.in                                  |  4 +++-
+ ld/configure                                    | 11 +++++++++--
+ ld/configure.ac                                 |  6 ++++++
+ ld/emulparams/elf64_s390.sh                     |  1 +
+ ld/emulparams/elf_x86_64.sh                     |  1 +
+ ld/emulparams/sframe-info.sh                    | 15 +++++++++++++++
+ ld/emultempl/aarch64elf.em                      |  7 +++++++
+ ld/ld.texi                                      | 10 +++++++---
+ ld/ldlex.h                                      |  2 ++
+ ld/lexsup.c                                     | 15 +++++++++++++--
+ ld/testsuite/ld-aarch64/aarch64-elf.exp         |  1 +
+ ld/testsuite/ld-aarch64/sframe-command-line-1.d |  8 ++++++++
+ ld/testsuite/ld-s390/s390.exp                   |  1 +
+ ld/testsuite/ld-s390/sframe-command-line-1.d    |  8 ++++++++
+ ld/testsuite/ld-x86-64/sframe-command-line-1.d  |  8 ++++++++
+ ld/testsuite/ld-x86-64/x86-64.exp               |  1 +
+ 21 files changed, 102 insertions(+), 11 deletions(-)
  create mode 100644 ld/emulparams/sframe-info.sh
+ create mode 100644 ld/testsuite/ld-aarch64/sframe-command-line-1.d
+ create mode 100644 ld/testsuite/ld-s390/sframe-command-line-1.d
+ create mode 100644 ld/testsuite/ld-x86-64/sframe-command-line-1.d
 
+diff --git a/bfd/elf-sframe.c b/bfd/elf-sframe.c
+index 511a297054b..33e4df5b1c7 100644
+--- a/bfd/elf-sframe.c
++++ b/bfd/elf-sframe.c
+@@ -211,6 +211,9 @@ _bfd_elf_parse_sframe (bfd *abfd,
+   bfd_size_type sf_size;
+   int decerr = 0;
+ 
++  if (info->discard_sframe)
++    sec->flags |= SEC_EXCLUDE;
++
+   /* Prior versions of assembler and ld were generating SFrame sections with
+      section type SHT_PROGBITS.  Issue an error for lack of support for such
+      objects now.  Even if section size is zero, a valid section type is
 diff --git a/bfd/elf64-s390.c b/bfd/elf64-s390.c
 index 012457827e0..8ad10ce6bd1 100644
 --- a/bfd/elf64-s390.c
@@ -105,10 +137,10 @@ index 012457827e0..8ad10ce6bd1 100644
  	  flagword flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY
  			    | SEC_HAS_CONTENTS | SEC_IN_MEMORY
 diff --git a/bfd/elfxx-x86.c b/bfd/elfxx-x86.c
-index f2ace269f3e..0c61b61830a 100644
+index 0348da9f0a1..901b858fb34 100644
 --- a/bfd/elfxx-x86.c
 +++ b/bfd/elfxx-x86.c
-@@ -4837,7 +4837,7 @@ _bfd_x86_elf_link_setup_gnu_properties
+@@ -4827,7 +4827,7 @@ _bfd_x86_elf_link_setup_gnu_properties
  	}
  
        /* .sframe sections are emitted for AMD64 ABI only.  */
@@ -270,24 +302,6 @@ index a0a1361a0eb..8c5e9606ac0 100644
  AC_SUBST(EMUL)
  
  AC_SUBST(TDIRS)
-diff --git a/ld/emulparams/aarch64elf.sh b/ld/emulparams/aarch64elf.sh
-index aa051c76a7a..c788c692ba0 100644
---- a/ld/emulparams/aarch64elf.sh
-+++ b/ld/emulparams/aarch64elf.sh
-@@ -1,3 +1,4 @@
-+source_sh ${srcdir}/emulparams/sframe-info.sh
- source_sh ${srcdir}/emulparams/dt-relr.sh
- 
- ARCH=aarch64
-diff --git a/ld/emulparams/aarch64linux.sh b/ld/emulparams/aarch64linux.sh
-index 6fe82a70659..d6369fa9e94 100644
---- a/ld/emulparams/aarch64linux.sh
-+++ b/ld/emulparams/aarch64linux.sh
-@@ -1,3 +1,4 @@
-+source_sh ${srcdir}/emulparams/sframe-info.sh
- source_sh ${srcdir}/emulparams/dt-relr.sh
- 
- ARCH=aarch64
 diff --git a/ld/emulparams/elf64_s390.sh b/ld/emulparams/elf64_s390.sh
 index b58314800d1..750e83b714f 100644
 --- a/ld/emulparams/elf64_s390.sh
@@ -329,6 +343,38 @@ index 00000000000..b7cc10bd981
 +
 +PARSE_AND_LIST_LONGOPTS="$PARSE_AND_LIST_LONGOPTS $PARSE_AND_LIST_LONGOPTS_SFRAME"
 +PARSE_AND_LIST_ARGS_CASES="$PARSE_AND_LIST_ARGS_CASES $PARSE_AND_LIST_ARGS_CASES_SFRAME"
+diff --git a/ld/emultempl/aarch64elf.em b/ld/emultempl/aarch64elf.em
+index e15eb432458..cd3a6c63d99 100644
+--- a/ld/emultempl/aarch64elf.em
++++ b/ld/emultempl/aarch64elf.em
+@@ -487,6 +487,7 @@ PARSE_AND_LIST_LONGOPTS='
+   { "fix-cortex-a53-835769", no_argument, NULL, OPTION_FIX_ERRATUM_835769},
+   { "fix-cortex-a53-843419", optional_argument, NULL, OPTION_FIX_ERRATUM_843419},
+   { "no-apply-dynamic-relocs", no_argument, NULL, OPTION_NO_APPLY_DYNAMIC_RELOCS},
++  { "discard-sframe", no_argument, NULL, OPTION_DISCARD_SFRAME},
+ '
+ 
+ PARSE_AND_LIST_OPTIONS='
+@@ -495,6 +496,7 @@ PARSE_AND_LIST_OPTIONS='
+   fprintf (file, _("  --no-wchar-size-warning     Don'\''t warn about objects with incompatible\n"
+ 		   "                                wchar_t sizes\n"));
+   fprintf (file, _("  --pic-veneer                Always generate PIC interworking veneers\n"));
++  fprintf (file, _("  --discard-sframe            Don'\''t generate SFrame stack trace info in output\n"));
+   fprintf (file, _("\
+   --stub-group-size=N         Maximum size of a group of input sections that\n\
+                                 can be handled by one stub section.  A negative\n\
+@@ -632,6 +634,11 @@ PARSE_AND_LIST_ARGS_CASES='
+ 	  fatal (_("%P: invalid number `%s'\''\n"), optarg);
+       }
+       break;
++
++    case OPTION_DISCARD_SFRAME:
++      link_info.discard_sframe = true;
++      break;
++
+ '
+ 
+ # We have our own before_allocation etc. functions, but they call
 diff --git a/ld/ld.texi b/ld/ld.texi
 index 1ec56c08337..7cadc853af9 100644
 --- a/ld/ld.texi
@@ -402,6 +448,81 @@ index 843b809bacb..158abb6dd8f 100644
    ldemul_list_emulation_options (stdout);
    printf ("\n");
  
+diff --git a/ld/testsuite/ld-aarch64/aarch64-elf.exp b/ld/testsuite/ld-aarch64/aarch64-elf.exp
+index 8791df3f3d3..a0a8867dca1 100644
+--- a/ld/testsuite/ld-aarch64/aarch64-elf.exp
++++ b/ld/testsuite/ld-aarch64/aarch64-elf.exp
+@@ -430,4 +430,5 @@ if { [supports_dt_relr] } {
+ 
+ if { ![skip_sframe_tests] } {
+   run_dump_test "sframe-simple-1"
++  run_dump_test "sframe-command-line-1"
+ }
+diff --git a/ld/testsuite/ld-aarch64/sframe-command-line-1.d b/ld/testsuite/ld-aarch64/sframe-command-line-1.d
+new file mode 100644
+index 00000000000..a9255d4abaa
+--- /dev/null
++++ b/ld/testsuite/ld-aarch64/sframe-command-line-1.d
+@@ -0,0 +1,8 @@
++#as: --gsframe
++#source: sframe-foo.s
++#source: sframe-bar.s
++#readelf: --sframe
++#ld: -shared --discard-sframe
++#name: Command line option --discard-sframe
++
++Section '.sframe' has no debugging data.
+diff --git a/ld/testsuite/ld-s390/s390.exp b/ld/testsuite/ld-s390/s390.exp
+index b81ebe280da..0fdfb39c5aa 100644
+--- a/ld/testsuite/ld-s390/s390.exp
++++ b/ld/testsuite/ld-s390/s390.exp
+@@ -192,5 +192,6 @@ if [istarget "s390x-*-*"] {
+     if { ![skip_sframe_tests] } {
+ 	run_dump_test "sframe-simple-1"
+ 	run_dump_test "sframe-plt-1"
++	run_dump_test "sframe-command-line-1"
+     }
+ }
+diff --git a/ld/testsuite/ld-s390/sframe-command-line-1.d b/ld/testsuite/ld-s390/sframe-command-line-1.d
+new file mode 100644
+index 00000000000..90ce394f5cf
+--- /dev/null
++++ b/ld/testsuite/ld-s390/sframe-command-line-1.d
+@@ -0,0 +1,8 @@
++#as: --gsframe
++#source: sframe-foo.s
++#source: sframe-bar.s
++#readelf: --sframe
++#ld: -shared --no-rosegment --discard-sframe
++#name: Command line option --discard-sframe
++
++Section '.sframe' has no debugging data.
+diff --git a/ld/testsuite/ld-x86-64/sframe-command-line-1.d b/ld/testsuite/ld-x86-64/sframe-command-line-1.d
+new file mode 100644
+index 00000000000..3f54ff9f83a
+--- /dev/null
++++ b/ld/testsuite/ld-x86-64/sframe-command-line-1.d
+@@ -0,0 +1,8 @@
++#as: --gsframe
++#source: sframe-foo.s
++#source: sframe-bar.s
++#readelf: --sframe
++#ld: -shared --no-rosegment -z separate-code --discard-sframe
++#name: Command line option --discard-sframe
++
++Section '.sframe' has no debugging data.
+diff --git a/ld/testsuite/ld-x86-64/x86-64.exp b/ld/testsuite/ld-x86-64/x86-64.exp
+index f80f718c15b..df2bb5ea1bd 100644
+--- a/ld/testsuite/ld-x86-64/x86-64.exp
++++ b/ld/testsuite/ld-x86-64/x86-64.exp
+@@ -587,6 +587,7 @@ run_dump_test "tls-le-pic-3-x32"
+ 
+ if { ![skip_sframe_tests] } {
+     run_dump_test "sframe-simple-1"
++    run_dump_test "sframe-command-line-1"
+     run_dump_test "sframe-reloc-1"
+     run_dump_test "sframe-plt-1"
+     run_dump_test "sframe-ibt-plt-1"
 -- 
 2.52.0
 

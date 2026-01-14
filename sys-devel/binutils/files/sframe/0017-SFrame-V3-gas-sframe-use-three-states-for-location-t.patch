@@ -1,26 +1,22 @@
-From 7aa8e2f84da6d87de15da76875ef729484b73103 Mon Sep 17 00:00:00 2001
-Message-ID: <7aa8e2f84da6d87de15da76875ef729484b73103.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 750f624de22926856087360258a682cf3f1112fd Mon Sep 17 00:00:00 2001
+Message-ID: <750f624de22926856087360258a682cf3f1112fd.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Mon, 22 Dec 2025 00:54:44 -0800
-Subject: [PATCH 17/39] [SFrame-V3] gas: sframe: use three states for location
+Subject: [PATCH 17/40] [SFrame-V3] gas: sframe: use three states for location
  tracking
 
 Up until now, for SFrame stack trace data generation (for default FDE
-type), tracking of two states sufficed to distinguish between the two
+type), keeping two states sufficed to distinguish between the following
 cases:
-  - the tracked entity is saved on a location on stack (tracked by
+  - the tracked entity is saved on a location on stack (identified by
     SFRAME_FRE_ELEM_LOC_STACK)
-  - the tracked entity is in register (tracked by
+  - the tracked entity is in its designated register (identified by
     SFRAME_FRE_ELEM_LOC_REG).
 
-(In some sense, the distinction between the above two was the same as
-saying SFRAME_FRE_ELEM_LOC_TRACKED or SFRAME_FRE_ELEM_LOC_UNTRACKED
-respectively.)
-
 Soon though, we will start to generate a new FDE type
-SFRAME_FDE_TYPE_FLEX, where:
+SFRAME_FDE_TYPE_FLEX, where in addition to above:
   - the tracked entity may be saved in a temporary register
   - the tracked entity may be saved at a "non-standard" location, e.g.,
     not a simple CFA+offset based location
@@ -29,21 +25,19 @@ SFRAME_FDE_TYPE_FLEX, where:
 To effectively distinguish between the various states (necessary to
 track for flex FDEs), define three states to track the location of each
 tracked entity:
-  - SFRAME_FRE_ELEM_LOC_NONE: the entity is not tracked
-  - SFRAME_FRE_ELEM_LOC_REG: the entitiy is in a location based off a
+  - SFRAME_FRE_ELEM_LOC_NONE: the entity is in its desginated location
+    (e.g., in case of AMD64 where the RA is at fixed offset from CFA)
+  - SFRAME_FRE_ELEM_LOC_REG: the entity is in a location based off a
     register
-  - SFRAME_FRE_ELEM_LOC_STACK: the entity is in a located based off the
+  - SFRAME_FRE_ELEM_LOC_STACK: the entity is in a location based off the
     CFA
 
 While at it, rather than asserting in sframe_xlate_do_offset (), reset
 the fp_reg state to SFRAME_FRE_REG_INVALID.  This is in preparation for
 upcoming flex FDE generation patches.
 
-TBD:
-  - Add Co-Authored-By, Suggested-By Jens
-  - Ideally the interfaces sframe_fre_set_ra_track,
-    sframe_fre_set_fp_track need an uplift, but we can address that when
-    time permits.
+Co-Authored-by: Jens Remus <jremus@linux.ibm.com>
+Reviewed-by: Jens Remus <jremus@linux.ibm.com>
 
 gas/
 	* gen-sframe.c (sframe_xlate_do_offset): Reset other state.
@@ -62,17 +56,19 @@ gas/
     would introduce build failures, making this not bisectable [Indu].
 [End of changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - Fix commit log [Jens].
+[End of changes in V3]
 ---
  gas/gen-sframe.c |  6 +++---
  gas/gen-sframe.h | 10 ++++++++--
  2 files changed, 11 insertions(+), 5 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 7e161bc12c0..b80663c3462 100644
+index daf11eb4791..3ffa5f3f411 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -1253,8 +1253,8 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1243,8 +1243,8 @@ sframe_xlate_do_offset (struct sframe_xlate_ctx *xlate_ctx,
    /* Ignore SP reg, as it can be recovered from the CFA tracking info.  */
    if (cfi_insn->u.ri.reg == SFRAME_CFA_FP_REG)
      {
@@ -82,7 +78,7 @@ index 7e161bc12c0..b80663c3462 100644
        cur_fre->merge_candidate = false;
      }
    else if (sframe_ra_tracking_p ()
-@@ -1874,14 +1874,14 @@ sframe_xlate_do_same_value (const struct sframe_xlate_ctx *xlate_ctx,
+@@ -1864,14 +1864,14 @@ sframe_xlate_do_same_value (const struct sframe_xlate_ctx *xlate_ctx,
  
    if (sframe_ra_tracking_p () && cfi_insn->u.r == SFRAME_CFA_RA_REG)
      {

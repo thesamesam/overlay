@@ -1,11 +1,11 @@
-From ef02d1b375891a31f5ae86f33c8d79bc19319753 Mon Sep 17 00:00:00 2001
-Message-ID: <ef02d1b375891a31f5ae86f33c8d79bc19319753.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From c36538afd038bd4a88e12057d70e467bc98d107e Mon Sep 17 00:00:00 2001
+Message-ID: <c36538afd038bd4a88e12057d70e467bc98d107e.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 19 Dec 2025 10:02:05 -0800
-Subject: [PATCH 21/39] [SFrame-V3] sframe: gas: s390: aarch64: x86: add new
- backend hooks for FLEX FDE
+Subject: [PATCH 21/40] [SFrame-V3] gas: sframe: add new backend hook
+ sframe_support_flex_fde_p for FLEX FDEs
 
 For the newly added SFrame FDE type SFRAME_FDE_TYPE_FLEX, add a new
 backend hook so that the respective ABI/arch can opt out of the
@@ -15,8 +15,7 @@ AArch64 is an example of an ABI for which SFrame is supported, but one
 that does not need the flexible FDE representation for any of the
 current usecases currently.
 
-TBD:
-  - split out into arch specific patches ?
+Reviewed-by: Jens Remus <jremus@linux.ibm.com>
 
 gas/
 	* config/tc-aarch64.c (aarch64_support_flex_fde_p): New
@@ -34,9 +33,7 @@ gas/
 ---
 [New in V1]
 
-[No changes in V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V2, V3]
 ---
  gas/config/tc-aarch64.c | 8 ++++++++
  gas/config/tc-aarch64.h | 4 ++++
@@ -47,7 +44,7 @@ Signed-off-by: Sam James <sam@gentoo.org>
  6 files changed, 35 insertions(+)
 
 diff --git a/gas/config/tc-aarch64.c b/gas/config/tc-aarch64.c
-index 6a03dfe41ec..dbac47c7ff2 100644
+index 7b0d5d22b0c..0460bc8aef0 100644
 --- a/gas/config/tc-aarch64.c
 +++ b/gas/config/tc-aarch64.c
 @@ -9282,6 +9282,14 @@ aarch64_sframe_ra_tracking_p (void)
@@ -66,7 +63,7 @@ index 6a03dfe41ec..dbac47c7ff2 100644
     (useful only when SFrame RA tracking is not needed).  */
  
 diff --git a/gas/config/tc-aarch64.h b/gas/config/tc-aarch64.h
-index 70e50384fbc..f6c28a53b1a 100644
+index dced9e42296..1b7cde747ac 100644
 --- a/gas/config/tc-aarch64.h
 +++ b/gas/config/tc-aarch64.h
 @@ -339,6 +339,10 @@ extern offsetT aarch64_sframe_cfa_ra_offset (void);

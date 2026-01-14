@@ -1,10 +1,10 @@
-From 15360fd5c5f1111c60639482a4b52df01ab4a30a Mon Sep 17 00:00:00 2001
-Message-ID: <15360fd5c5f1111c60639482a4b52df01ab4a30a.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 8b18e2528b42f71f57703e54fe2a8cdc7db258b9 Mon Sep 17 00:00:00 2001
+Message-ID: <8b18e2528b42f71f57703e54fe2a8cdc7db258b9.1768383274.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Fri, 28 Nov 2025 11:50:14 -0800
-Subject: [PATCH 08/39] [SFrame-V3] sframe: gas: libsframe: use uint16_t for
+Subject: [PATCH 08/40] [SFrame-V3] sframe: gas: libsframe: use uint16_t for
  num_fres of FDE
 
 Reduce the size of the num_fres field in the Function Descriptor Entry
@@ -48,9 +48,7 @@ libsframe/
   - Fixed up the commit log to reflect the minor shifting of the patch.
 [End of changes in V1]
 
-[No changes in V2]
-
-Signed-off-by: Sam James <sam@gentoo.org>
+[No changes in V2, V3]
 ---
  gas/gen-sframe.c                           |  19 +++++++++++++++++--
  include/sframe.h                           |   2 +-
@@ -59,10 +57,10 @@ Signed-off-by: Sam James <sam@gentoo.org>
  4 files changed, 19 insertions(+), 4 deletions(-)
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index f814eebc3a0..cdb916bc1fc 100644
+index c8a0aa598b2..a7e1c356f17 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -725,8 +725,9 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
+@@ -715,8 +715,9 @@ output_sframe_funcdesc (symbolS *start_of_fre_section,
  				      sfde_func_start_fre_off));
      }
  
@@ -74,7 +72,7 @@ index f814eebc3a0..cdb916bc1fc 100644
  
    /* SFrame FDE function info.  */
    unsigned char func_info;
-@@ -2040,6 +2041,20 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
+@@ -2030,6 +2031,20 @@ sframe_do_fde (struct sframe_xlate_ctx *xlate_ctx,
  	= get_dw_fde_end_addrS (xlate_ctx->dw_fde);
      }
  

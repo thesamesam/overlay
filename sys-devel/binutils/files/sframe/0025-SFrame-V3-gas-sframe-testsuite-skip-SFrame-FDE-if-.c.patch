@@ -1,11 +1,25 @@
-From ba305b712e2eb390dd2a29852a2a4008004952d9 Mon Sep 17 00:00:00 2001
-Message-ID: <ba305b712e2eb390dd2a29852a2a4008004952d9.1767968092.git.sam@gentoo.org>
-In-Reply-To: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
-References: <e62b70cdd289cc9b71a0ba81685dcbf7c31e5eda.1767968092.git.sam@gentoo.org>
+From 1b365df906879fb1f70eef27fa23c95e6d28cf12 Mon Sep 17 00:00:00 2001
+Message-ID: <1b365df906879fb1f70eef27fa23c95e6d28cf12.1768383275.git.sam@gentoo.org>
+In-Reply-To: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
+References: <32ae0ed6abfeeb3f7ee75baa42bfa413028f3056.1768383274.git.sam@gentoo.org>
 From: Indu Bhagat <indu.bhagat@oracle.com>
 Date: Tue, 16 Dec 2025 12:50:04 -0800
-Subject: [PATCH 25/39] [SFrame-V3] gas: sframe: testsuite: reject
- .cfi_register REG_SP, REG
+Subject: [PATCH 25/40] [SFrame-V3] gas: sframe: testsuite: skip SFrame FDE if
+ .cfi_register SP, reg
+
+SFrame does not track the SP.  For recovery of the SP, SFrame relies on
+the architecture/ABI's CFA definition:
+
+  CFA = SP [+ offset   // on s390x]
+
+Which results in the following implicit CFA value offset rule for SP:
+
+  SP = CFA [- offset   // on s390x]
+
+Where offset is zero for most architectures/ABIs, except s390x.
+
+Therefore .cfi_register SP, reg directives must be rejected, as such
+semantics cannot be represented in SFrame yet.
 
 gas/
 	* gas/gen-sframe.c (s390_sframe_xlate_do_register): Check for
@@ -25,7 +39,9 @@ gas/testsuite/
 
 [No changes in V2]
 
-Signed-off-by: Sam James <sam@gentoo.org>
+[Changes in V3]
+  - Add short message to commit log on why this is necessary [Jens].
+[End of changes in v3]
 ---
  gas/gen-sframe.c                              | 20 +++++++++++++++----
  .../gas/cfi-sframe/cfi-sframe-s390x-err-4.d   | 15 ++++++++++++++
@@ -40,10 +56,10 @@ Signed-off-by: Sam James <sam@gentoo.org>
  create mode 100644 gas/testsuite/gas/cfi-sframe/cfi-sframe-x86_64-empty-5.s
 
 diff --git a/gas/gen-sframe.c b/gas/gen-sframe.c
-index 4582c9d89e8..69487ae62cd 100644
+index 472ce3dee7c..56e314964dd 100644
 --- a/gas/gen-sframe.c
 +++ b/gas/gen-sframe.c
-@@ -1482,6 +1482,13 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1483,6 +1483,13 @@ s390_sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
  	   && cfi_insn->u.rr.reg1 == SFRAME_CFA_RA_REG)
      sframe_fre_set_ra_track (cur_fre,
  			     SFRAME_V3_S390X_OFFSET_ENCODE_REGNUM (cfi_insn->u.rr.reg2));
@@ -57,7 +73,7 @@ index 4582c9d89e8..69487ae62cd 100644
  
    return SFRAME_XLATE_OK;
  }
-@@ -1520,6 +1527,7 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1521,6 +1528,7 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
  	  cur_fre->fp_deref_p = false;
  	  cur_fre->merge_candidate = false;
  	  xlate_ctx->flex_p = true;
@@ -65,7 +81,7 @@ index 4582c9d89e8..69487ae62cd 100644
  	}
        else if (cfi_insn->u.rr.reg1 == SFRAME_CFA_RA_REG)
  	{
-@@ -1529,12 +1537,16 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
+@@ -1530,12 +1538,16 @@ sframe_xlate_do_register (struct sframe_xlate_ctx *xlate_ctx,
  	  cur_fre->ra_deref_p = false;
  	  cur_fre->merge_candidate = false;
  	  xlate_ctx->flex_p = true;

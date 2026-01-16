@@ -134,17 +134,11 @@ src_prepare() {
 
 	if [[ -n ${PATCH_VER} ]] || [[ ${PV} == *9999 ]] ; then
 		if ! use vanilla; then
-			mv "${WORKDIR}/patch/0006-Revert-ELF-give-.note.GNU-stack-proper-section-type.patch" "${T}" || die
 			einfo "Applying binutils patchset ${patchsetname}"
 			eapply "${WORKDIR}/patch"
 			einfo "Done."
 
-			#eapply "${FILESDIR}/sframe"
-			git config user.email "you@example.com"
-			git config user.name "Your Name"
-			git am "${FILESDIR}/sframe/"*.patch || die
-
-			eapply "${T}"/0006-Revert-ELF-give-.note.GNU-stack-proper-section-type.patch
+			eapply "${FILESDIR}/sframe"
 
 			# This is applied conditionally for now just out of caution.
 			# It should be okay on non-prefix systems though. See bug #892549.

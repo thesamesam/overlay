@@ -1,10 +1,10 @@
-From eb80c772af52d49e8bd4a042d65e440cb6de1af1 Mon Sep 17 00:00:00 2001
-Message-ID: <eb80c772af52d49e8bd4a042d65e440cb6de1af1.1768401239.git.sam@gentoo.org>
-In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
-References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+From 32e6c53cca4a8e017f5bb27f8802d0b755e5426f Mon Sep 17 00:00:00 2001
+Message-ID: <32e6c53cca4a8e017f5bb27f8802d0b755e5426f.1768586181.git.sam@gentoo.org>
+In-Reply-To: <5a539353bd3d7080ad98504f908b12a017f41e80.1768586181.git.sam@gentoo.org>
+References: <5a539353bd3d7080ad98504f908b12a017f41e80.1768586181.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Fri, 15 Aug 2025 15:12:25 +0100
-Subject: [PATCH 39/40] gas: TODO wrt enable-default-sframe vs unsupported
+Subject: [PATCH 3/4] gas: TODO wrt enable-default-sframe vs unsupported
  targets
 
 TODO: Where's the best place to do this check? Or maybe we ought not

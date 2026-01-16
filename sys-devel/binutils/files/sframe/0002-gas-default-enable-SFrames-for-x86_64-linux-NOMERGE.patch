@@ -1,10 +1,10 @@
-From 12ebce0c180d82fc2d486214a424caaefbfe8eca Mon Sep 17 00:00:00 2001
-Message-ID: <12ebce0c180d82fc2d486214a424caaefbfe8eca.1768401239.git.sam@gentoo.org>
-In-Reply-To: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
-References: <3e8f6fd615a161679f767a724e0eaae4854b8f86.1768401239.git.sam@gentoo.org>
+From 47a09a98ac0bd10ba58d075900bfa977e7138225 Mon Sep 17 00:00:00 2001
+Message-ID: <47a09a98ac0bd10ba58d075900bfa977e7138225.1768586181.git.sam@gentoo.org>
+In-Reply-To: <5a539353bd3d7080ad98504f908b12a017f41e80.1768586181.git.sam@gentoo.org>
+References: <5a539353bd3d7080ad98504f908b12a017f41e80.1768586181.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Sat, 26 Jul 2025 00:09:57 +0100
-Subject: [PATCH 38/40] gas: default-enable SFrames for x86_64-*-linux-*
+Subject: [PATCH 2/4] gas: default-enable SFrames for x86_64-*-linux-*
  [NOMERGE]
 
 (I don't intend for this to be merged at this point, I've just included

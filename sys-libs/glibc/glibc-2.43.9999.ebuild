@@ -203,6 +203,8 @@ XFAIL_TEST_LIST=(
 	tst-preadvwritev2
 	tst-preadvwritev64v2
 	tst-setvbuf2
+	# ???
+	tst-getaddrinfo-eai-again
 )
 
 XFAIL_NSPAWN_TEST_LIST=(

@@ -1,8 +1,9 @@
 app-admin/emacs-updater
-app-emacs/autoconf-mode
 app-emacs/a68-mode
+app-emacs/autoconf-mode
 app-emacs/company-ebuild
 app-emacs/company-mode
+app-emacs/dape
 app-emacs/dwarf-mode
 app-emacs/ebuild-mode
 app-emacs/editorconfig-emacs
@@ -10,7 +11,6 @@ app-emacs/elfeed
 app-emacs/emacs-ccls
 app-emacs/emacs-daemon
 app-emacs/exec-path-from-shell
-app-emacs/dape
 app-emacs/flycheck-clang-tidy
 app-emacs/forge
 app-emacs/git-modes

@@ -10,6 +10,7 @@ app-emacs/editorconfig-emacs
 app-emacs/elfeed
 app-emacs/emacs-ccls
 app-emacs/emacs-daemon
+app-emacs/emacs-secil-mode
 app-emacs/exec-path-from-shell
 app-emacs/flycheck-clang-tidy
 app-emacs/forge

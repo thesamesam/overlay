@@ -7,6 +7,7 @@ app-emacs/dape
 app-emacs/dwarf-mode
 app-emacs/ebuild-mode
 app-emacs/editorconfig-emacs
+app-emacs/citre
 app-emacs/elfeed
 app-emacs/emacs-ccls
 app-emacs/emacs-daemon

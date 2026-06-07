@@ -1,0 +1,55 @@
+From 65bdc3ad62e30ee3166056d5d65e369f49e1ec4b Mon Sep 17 00:00:00 2001
+Message-ID: <65bdc3ad62e30ee3166056d5d65e369f49e1ec4b.1780852858.git.sam@gentoo.org>
+In-Reply-To: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
+References: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
+From: Sam James <sam@gentoo.org>
+Date: Sun, 7 Jun 2026 18:20:32 +0100
+Subject: [PATCH 5/5] ld: disable more SFrame tests [NOMERGE]
+
+These are hacks.
+---
+ ld/testsuite/ld-s390/sframe-command-line-2.d    |  2 +-
+ ld/testsuite/ld-sframe/no-ld-generated-sframe.d | 10 ----------
+ ld/testsuite/ld-x86-64/sframe-command-line-2.d  |  2 +-
+ 3 files changed, 2 insertions(+), 12 deletions(-)
+ delete mode 100644 ld/testsuite/ld-sframe/no-ld-generated-sframe.d
+
+diff --git a/ld/testsuite/ld-s390/sframe-command-line-2.d b/ld/testsuite/ld-s390/sframe-command-line-2.d
+index 941e845139d..c3cbd914bf5 100644
+--- a/ld/testsuite/ld-s390/sframe-command-line-2.d
++++ b/ld/testsuite/ld-s390/sframe-command-line-2.d
+@@ -1,4 +1,4 @@
+-#as:
++#as: --gsframe=no
+ #source: sframe-foo.s
+ #ld: --no-ld-generated-unwind-info -T no-sframe.ld -e foo
+ #objdump: -hw
+diff --git a/ld/testsuite/ld-sframe/no-ld-generated-sframe.d b/ld/testsuite/ld-sframe/no-ld-generated-sframe.d
+deleted file mode 100644
+index bc9396e6ff4..00000000000
+--- a/ld/testsuite/ld-sframe/no-ld-generated-sframe.d
++++ /dev/null
+@@ -1,10 +0,0 @@
+-#as:
+-#source: test.s
+-#ld: -T no-sframe.ld
+-#objdump: -hw
+-#name: No SFrame section in output with no --gsframe
+-
+-#failif
+-#...
+-  [0-9] .sframe .*
+-#...
+diff --git a/ld/testsuite/ld-x86-64/sframe-command-line-2.d b/ld/testsuite/ld-x86-64/sframe-command-line-2.d
+index 941e845139d..c3cbd914bf5 100644
+--- a/ld/testsuite/ld-x86-64/sframe-command-line-2.d
++++ b/ld/testsuite/ld-x86-64/sframe-command-line-2.d
+@@ -1,4 +1,4 @@
+-#as:
++#as: --gsframe=no
+ #source: sframe-foo.s
+ #ld: --no-ld-generated-unwind-info -T no-sframe.ld -e foo
+ #objdump: -hw
+-- 
+2.54.0
+

@@ -1,10 +1,10 @@
-From 32e6c53cca4a8e017f5bb27f8802d0b755e5426f Mon Sep 17 00:00:00 2001
-Message-ID: <32e6c53cca4a8e017f5bb27f8802d0b755e5426f.1768586181.git.sam@gentoo.org>
-In-Reply-To: <5a539353bd3d7080ad98504f908b12a017f41e80.1768586181.git.sam@gentoo.org>
-References: <5a539353bd3d7080ad98504f908b12a017f41e80.1768586181.git.sam@gentoo.org>
+From 14055302975858635aae9603aca19635a0c7bc32 Mon Sep 17 00:00:00 2001
+Message-ID: <14055302975858635aae9603aca19635a0c7bc32.1780852858.git.sam@gentoo.org>
+In-Reply-To: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
+References: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Fri, 15 Aug 2025 15:12:25 +0100
-Subject: [PATCH 3/4] gas: TODO wrt enable-default-sframe vs unsupported
+Subject: [PATCH 3/5] gas: TODO wrt enable-default-sframe vs unsupported
  targets
 
 TODO: Where's the best place to do this check? Or maybe we ought not
@@ -17,10 +17,10 @@ Signed-off-by: Sam James <sam@gentoo.org>
  1 file changed, 1 insertion(+)
 
 diff --git a/gas/configure.ac b/gas/configure.ac
-index 742067ca7ba..6685cbb86e6 100644
+index 0ba79d2c5f6..23e2178b955 100644
 --- a/gas/configure.ac
 +++ b/gas/configure.ac
-@@ -106,6 +106,7 @@ AC_ARG_ENABLE(elf_stt_common,
+@@ -115,6 +115,7 @@ AC_ARG_ENABLE(elf_stt_common,
    yes)  ac_default_elf_stt_common=1 ;;
  esac])dnl
  
@@ -29,5 +29,5 @@ index 742067ca7ba..6685cbb86e6 100644
  # Provide a configure time option to override our default.
  AC_ARG_ENABLE(default-sframe,
 -- 
-2.52.0
+2.54.0
 

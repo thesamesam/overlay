@@ -1,10 +1,10 @@
-From 47a09a98ac0bd10ba58d075900bfa977e7138225 Mon Sep 17 00:00:00 2001
-Message-ID: <47a09a98ac0bd10ba58d075900bfa977e7138225.1768586181.git.sam@gentoo.org>
-In-Reply-To: <5a539353bd3d7080ad98504f908b12a017f41e80.1768586181.git.sam@gentoo.org>
-References: <5a539353bd3d7080ad98504f908b12a017f41e80.1768586181.git.sam@gentoo.org>
+From 8e1321be442b68efb126d11fccac8380f708c247 Mon Sep 17 00:00:00 2001
+Message-ID: <8e1321be442b68efb126d11fccac8380f708c247.1780852858.git.sam@gentoo.org>
+In-Reply-To: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
+References: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Sat, 26 Jul 2025 00:09:57 +0100
-Subject: [PATCH 2/4] gas: default-enable SFrames for x86_64-*-linux-*
+Subject: [PATCH 2/5] gas: default-enable SFrames for x86_64-*-linux-*
  [NOMERGE]
 
 (I don't intend for this to be merged at this point, I've just included
@@ -23,10 +23,10 @@ Signed-off-by: Sam James <sam@gentoo.org>
  2 files changed, 14 insertions(+)
 
 diff --git a/gas/configure b/gas/configure
-index 2bcb85bb666..55ccf64cf95 100755
+index eeace90f375..cc10da99426 100755
 --- a/gas/configure
 +++ b/gas/configure
-@@ -12524,6 +12524,13 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
+@@ -12540,6 +12540,13 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
  	   && test ${ac_default_generate_x86_used_note} = unset; then
  	  ac_default_generate_x86_used_note=1
  	fi
@@ -41,10 +41,10 @@ index 2bcb85bb666..55ccf64cf95 100755
  
        microblaze*)
 diff --git a/gas/configure.ac b/gas/configure.ac
-index 613f85016c5..742067ca7ba 100644
+index 69547f5ffb9..0ba79d2c5f6 100644
 --- a/gas/configure.ac
 +++ b/gas/configure.ac
-@@ -263,6 +263,13 @@ for this_target in $target $canon_targets ; do
+@@ -272,6 +272,13 @@ for this_target in $target $canon_targets ; do
  	   && test ${ac_default_generate_x86_used_note} = unset; then
  	  ac_default_generate_x86_used_note=1
  	fi
@@ -59,5 +59,5 @@ index 613f85016c5..742067ca7ba 100644
  
        microblaze*)
 -- 
-2.52.0
+2.54.0
 

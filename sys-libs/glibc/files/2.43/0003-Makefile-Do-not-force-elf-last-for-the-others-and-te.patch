@@ -1,0 +1,105 @@
+From 17c5c540575a48d347a1978a248f1fab3282dcaf Mon Sep 17 00:00:00 2001
+Message-ID: <17c5c540575a48d347a1978a248f1fab3282dcaf.1781315607.git.sam@gentoo.org>
+In-Reply-To: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+References: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+From: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date: Fri, 12 Jun 2026 13:34:06 -0300
+Subject: [PATCH 3/5] Makefile: Do not force elf last for the others and tests
+ passes
+
+The requirement that the elf subdirectory comes last in the
+subdirectory ordering stems from its lib pass: the rtld link consumes
+$(common-objpfx)libc_pic.a, which aggregates every other
+subdirectory's objects.
+
+The others, tests, and xtests classes have no such dependency: everything
+they consume from other subdirectories is provided by the pass barriers
+(others after lib, tests after others).  Keep elf last only for the
+object-building classes and let its others and tests sub-makes run
+concurrently with the other subdirectories.
+
+With elf no longer forced last for those classes, the Depend edges
+pointing to elf (e.g. support/Depend) no longer create a cycle there,
+so honor them instead of dropping them.
+
+This improves the make check withr run-built-tests=no, specially on
+machine with many cores.  Results on a x86_64 machine [1] it improves
+from 190s to 181s, while on a aarch64 machine [2] it improves from
+298.726s to 243.098s.
+
+Build results remain bit-identical and the tests.sum failure sets are
+unchanged.
+
+[1] Ryzen 5900x, 12c/24t, gcc 16.1.1, binutils 2.26, and GNU make 4.3
+[2] N1, 80c, gcc 15.1.1, binutils 2.25, GNU make 4.3
+---
+ Makefile | 34 +++++++++++++++++++++++-----------
+ 1 file changed, 23 insertions(+), 11 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 4df7345d7a..f6cf87b6f6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -508,21 +508,28 @@ endef
+ #  * The edges requested by the Depend files (emitted by gen-sorted.awk
+ #    as subdir-deps-*) are preserved.
+ #
+-#  * elf stays last, as in the sorted list.  Its rtld build recurses into
+-#    the other subdirectories' object directories via elf/rtld-Rules.
++#  * elf stays last for the object-building classes, as in the sorted
++#    list: its rtld link consumes $(common-objpfx)libc_pic.a, which
++#    aggregates every other subdirectory's objects, and its rtld-Rules
++#    recursion compiles into the other subdirectories' object
++#    directories.  The others/tests/xtests classes have no such
++#    dependency (the pass barriers below provide everything they need),
++#    so elf is unordered there.
+ #
+ #  * Only target classes without cross-directory file conflicts use this
+ #    sparse ordering; everything else (install, clean, abi, stubs) keeps
+ #    the previous total order via a serial chain.
+ 
+-+parallel_subdir_targets := \
+-  subdir_lib \
+-  objects \
+++elf_last_subdir_targets := \
++  subdir_lib objects \
+   objs \
++  subdir_objs \
++  # +elf_last_subdir_targets
+++parallel_subdir_targets := \
++  $(+elf_last_subdir_targets) \
+   others \
+   tests \
+   xtests \
+-  subdir_objs \
+   # +parallel_subdir_targets
+ +serial_subdir_targets := $(filter-out $(+parallel_subdir_targets),\
+ 				       $(+subdir_targets))
+@@ -543,14 +550,19 @@ $(foreach t,$(+parallel_subdir_targets),$(eval \
+ $(foreach d,$(+subdir-pregen),$(foreach t,$(+parallel_subdir_targets),$(eval \
+   $(d)/$(t): $(addsuffix /$(t),$(+subdir-pregen-prev))))\
+   $(eval +subdir-pregen-prev := $(d)))
+-# Edges pointing to elf are dropped; the sorted list always forces elf
+-# last, overriding any Depend request, and the elf-last edges below would
+-# otherwise create a cycle.
+-$(foreach t,$(+parallel_subdir_targets),$(foreach d,$(+subdir-rest),$(eval \
++# For the classes where elf is forced last, edges pointing to elf are
++# dropped: the sorted list always overrides such Depend requests today
++# (e.g. support/Depend), and the elf-last edges below would otherwise
++# create a cycle.  The remaining classes honor them.
++$(foreach t,$(+elf_last_subdir_targets),$(foreach d,$(+subdir-rest),$(eval \
+   $(d)/$(t): $(addsuffix /$(t),\
+ 	      $(filter-out elf,$(filter $(subdirs),$(subdir-deps-$(d))))))))
++$(foreach t,$(filter-out $(+elf_last_subdir_targets),\
++		         $(+parallel_subdir_targets)),\
++  $(foreach d,$(+subdir-rest),$(eval \
++  $(d)/$(t): $(addsuffix /$(t),$(filter $(subdirs),$(subdir-deps-$(d)))))))
+ ifneq (,$(filter elf,$(subdirs)))
+-$(foreach t,$(+parallel_subdir_targets),$(eval \
++$(foreach t,$(+elf_last_subdir_targets),$(eval \
+   elf/$(t): $(addsuffix /$(t),$(filter-out elf,$(subdirs)))))
+ endif
+ 
+-- 
+2.54.0
+

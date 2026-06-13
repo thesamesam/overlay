@@ -1,0 +1,44 @@
+From 6aea7184245c16537d29a5ba4b2a67bb42acfd71 Mon Sep 17 00:00:00 2001
+Message-ID: <6aea7184245c16537d29a5ba4b2a67bb42acfd71.1781315607.git.sam@gentoo.org>
+In-Reply-To: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+References: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+From: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date: Fri, 12 Jun 2026 13:34:07 -0300
+Subject: [PATCH 4/5] Makefile: Do not install the container testroot if not
+ running tests
+
+Every subdirectory tests target depends on
+$(objpfx)testroot.pristine/install.stamp, whose recipe performs a full
+DESTDIR installation (about 12s and 154MB on x86_64).  The testroot is
+only consumed by the container tests, which do not run when
+run-built-tests is no, so skip it entirely in that case.
+
+This saves about 10s on x86_64 [1] and 30s on aarch64 [2].
+
+[1] Ryzen 5900x, 12c/24t, gcc 16.1.1, binutils 2.26, and GNU make 4.3
+[2] N1, 80c, gcc 15.1.1, binutils 2.25, GNU make 4.3
+---
+ Makefile | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index f6cf87b6f6..392c2e2f64 100644
+--- a/Makefile
++++ b/Makefile
+@@ -735,8 +735,13 @@ else
+ LINKS_DSO_PROGRAM = links-dso-program
+ endif
+ 
++# The testroot is only used by the container tests, which are not run
++# when run-built-tests is no; skip the installation entirely in that
++# case.
++ifeq ($(run-built-tests),yes)
+ $(tests-container) $(addsuffix /tests,$(subdirs)) : \
+ 		$(objpfx)testroot.pristine/install.stamp
++endif
+ $(objpfx)testroot.pristine/install.stamp :
+ 	test -d $(objpfx)testroot.pristine || \
+ 	  mkdir $(objpfx)testroot.pristine
+-- 
+2.54.0
+

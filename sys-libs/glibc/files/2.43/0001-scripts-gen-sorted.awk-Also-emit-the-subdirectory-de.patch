@@ -1,0 +1,53 @@
+From 48a860716be773998f2162addb31f2e8dcb04b2c Mon Sep 17 00:00:00 2001
+Message-ID: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+From: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date: Fri, 12 Jun 2026 13:34:04 -0300
+Subject: [PATCH 1/5] scripts/gen-sorted.awk: Also emit the subdirectory
+ dependency edges
+
+gen-sorted.awk collects the inter-subdirectory dependencies from the
+Depend files and the sysdeps Subdirs 'first' directives, but only uses
+them to compute the flattened sorted-subdirs list.
+
+This change also emit the raw edges as subdir-deps-<dir> make variables
+so the parent makefile can express the same ordering as explicit
+dependencies between the per-subdirectory recursion targets and run
+independent subdirectories in parallel.
+
+For instance, on x86_64-linux-gnu build the 'sysd-sorted' now shows:
+
+[...]
+  subdir-deps-assert += iconvdata
+  subdir-deps-assert += localedata
+  subdir-deps-catgets += intl
+  subdir-deps-debug += localedata
+  subdir-deps-iconvdata += iconv
+  subdir-deps-iconvdata += localedata
+  subdir-deps-intl += iconvdata
+  subdir-deps-intl += localedata
+  subdir-deps-libio += localedata
+  subdir-deps-localedata += locale
+  [...]
+---
+ scripts/gen-sorted.awk | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/scripts/gen-sorted.awk b/scripts/gen-sorted.awk
+index f207f9ace1..9b74a5e315 100755
+--- a/scripts/gen-sorted.awk
++++ b/scripts/gen-sorted.awk
+@@ -108,5 +108,11 @@ END {
+   }
+   printf "%s\n", saw_elf ? " elf" : "";
+ 
++  # Also emit the raw dependency edges so the parent makefile can
++  # parallelize the subdirectory recursion while preserving the
++  # relative ordering the Depend files request.
++  for (i = 0; i < dnt; ++i)
++    printf "subdir-deps-%s += %s\n", from[i], to[i];
++
+   print "sysd-sorted-done := t"
+ }
+-- 
+2.54.0
+

@@ -1042,6 +1042,8 @@ src_prepare() {
 		eapply "${WORKDIR}"/patches
 		einfo "Done."
 
+		[[ -d "${FILESDIR}"/${PV%.*} ]] && eapply "${FILESDIR}"/${PV%.*}
+
 		# Patches we should apply only for Hurd to be conservative
 		if is_hurd ; then
 			eapply "${FILESDIR}"/glibc-2.43-hurd-CLOCK_MONOTONIC.patch

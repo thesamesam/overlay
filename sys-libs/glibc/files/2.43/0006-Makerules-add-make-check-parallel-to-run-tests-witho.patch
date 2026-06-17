@@ -1,0 +1,149 @@
+From 0ba1e8a8b1f2878da01cc2bd9e501fa66dfea1d3 Mon Sep 17 00:00:00 2001
+Message-ID: <0ba1e8a8b1f2878da01cc2bd9e501fa66dfea1d3.1781662612.git.sam@gentoo.org>
+In-Reply-To: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
+References: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
+From: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date: Mon, 15 Jun 2026 16:32:42 -0300
+Subject: [PATCH 6/6] Makerules: add 'make check-parallel' to run tests without
+ serialization
+
+The default 'make check' serializes the timing-sensitive test runs: the
+threading (nptl, or htl on Hurd) and realtime (rt) subdirectories run
+with .NOTPARALLEL and are ordered after the rest of the test run, so they
+are not perturbed by competing machine load.
+
+Add a check-parallel (and xcheck-parallel) variant for when that is not
+wanted -- an idle machine, or a run where the extra throughput is worth
+the risk of flakiness in the timing-sensitive tests.
+
+A new serialize-tests flag (default yes, defined in Makeconfig) gates both
+the per-subdirectory .NOTPARALLEL and the top-level run-time ordering;
+check-parallel just runs the suite with serialize-tests=no, so every test
+program builds and runs at full concurrency in a single pass.
+
+'make check' and its default behavior are unchanged.
+---
+ Makeconfig    |  8 ++++++++
+ Makefile      |  3 +++
+ Makerules     | 13 +++++++++++++
+ htl/Makefile  |  5 +++--
+ nptl/Makefile |  5 +++--
+ rt/Makefile   |  5 +++--
+ 6 files changed, 33 insertions(+), 6 deletions(-)
+
+diff --git a/Makeconfig b/Makeconfig
+index 01d02180b9..73c8435dd7 100644
+--- a/Makeconfig
++++ b/Makeconfig
+@@ -778,6 +778,14 @@ run-built-tests = yes
+ endif
+ endif
+ 
++# Whether the timing-sensitive test runs are serialized: each is run with
++# .NOTPARALLEL and, at the top level, ordered after the rest of the test run.
++# This is the default; 'make check-parallel' clears it to run every test
++# concurrently.
++ifndef serialize-tests
++serialize-tests = yes
++endif
++
+ # Whether to build the static math tests
+ ifndef build-math-static-tests
+ build-math-static-tests = no
+diff --git a/Makefile b/Makefile
+index 3dfcdee933..6d863aebc6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -594,7 +594,9 @@ $(objpfx)testroot.pristine/install.stamp: | others
+ # 'make subdir/tests' is left alone.  And it only orders the test run
+ # (run-built-tests=yes); the "build the tests" pass (run-built-tests=no)
+ # is left fully parallel, so every test program still builds concurrently.
++# serialize-tests=no ('make check-parallel') drops the ordering entirely.
+ ifeq ($(run-built-tests),yes)
++ifeq (yes,$(serialize-tests))
+ ifneq (,$(filter tests xtests check xcheck,$(MAKECMDGOALS)))
+ +late-test-subdirs := $(filter nptl htl,$(subdirs)) $(filter rt,$(subdirs))
+ +test-run-prev := \
+@@ -604,6 +606,7 @@ $(foreach d,$(+late-test-subdirs),\
+   $(eval +test-run-prev += $(d)/tests))
+ endif
+ endif
++endif
+ 
+ ifeq (yes,$(build-shared))
+ # The top-level libc.so and linkobj/libc_pic.a rules list these
+diff --git a/Makerules b/Makerules
+index 9cd67e16a7..cbc68d3b0e 100644
+--- a/Makerules
++++ b/Makerules
+@@ -1213,6 +1213,19 @@ check: tests
+ xcheck: xtests
+ endif
+ 
++# 'make check-parallel' runs the whole suite with maximum concurrency:
++# serialize-tests=no drops the per-subdirectory .NOTPARALLEL and the run-time
++# ordering, so every test builds and runs in parallel.  A single pass suffices
++# (there is no .NOTPARALLEL to work around, so the test programs already build
++# concurrently).
++# This is faster on an idle machine, at the cost of possible flakiness in the
++# timing-sensitive tests under the heavier load.
++.PHONY: check-parallel xcheck-parallel
++check-parallel:
++	$(MAKE) serialize-tests=no tests
++xcheck-parallel:
++	$(MAKE) serialize-tests=no xtests
++
+ # Also handle test inputs in sysdeps.
+ vpath %.input $(sysdirs)
+ 
+diff --git a/htl/Makefile b/htl/Makefile
+index 0e5a8b8f68..1035b07564 100644
+--- a/htl/Makefile
++++ b/htl/Makefile
+@@ -258,8 +258,9 @@ else
+ $(addprefix $(objpfx),$(tests) $(test-srcs)): $(srcdir)/libpthread_syms.a $(objpfx)libpthread.a
+ endif
+ 
+-# The tests here better do not run in parallel.
+-ifeq ($(run-built-tests),yes)
++# The tests here better do not run in parallel, unless serialize-tests is
++# cleared (make check-parallel).
++ifeq (yes-yes,$(run-built-tests)-$(serialize-tests))
+ ifneq ($(filter %tests,$(MAKECMDGOALS)),)
+ .NOTPARALLEL:
+ endif
+diff --git a/nptl/Makefile b/nptl/Makefile
+index 08b8ba8a31..73ecb1dbb5 100644
+--- a/nptl/Makefile
++++ b/nptl/Makefile
+@@ -739,8 +739,9 @@ tst-pthread-proc-maps-ENV = \
+   GLIBC_TUNABLES=glibc.malloc.arena_max=8:glibc.malloc.mmap_threshold=1024
+ tst-pthread-proc-maps-ARGS = 8
+ 
+-# The tests here better do not run in parallel.
+-ifeq ($(run-built-tests),yes)
++# The tests here better do not run in parallel, unless serialize-tests is
++# cleared (make check-parallel).
++ifeq (yes-yes,$(run-built-tests)-$(serialize-tests))
+ ifneq ($(filter %tests,$(MAKECMDGOALS)),)
+ .NOTPARALLEL:
+ endif
+diff --git a/rt/Makefile b/rt/Makefile
+index 94cbb273c1..f24c6892fb 100644
+--- a/rt/Makefile
++++ b/rt/Makefile
+@@ -124,8 +124,9 @@ endif # !$(pthread-in-libc)
+ tst-mqueue7-ARGS = -- $(host-test-program-cmd)
+ 
+ # The timer and message-queue tests here are timing-sensitive and better
+-# do not run in parallel.
+-ifeq ($(run-built-tests),yes)
++# do not run in parallel, unless serialize-tests is cleared (make
++# check-parallel).
++ifeq (yes-yes,$(run-built-tests)-$(serialize-tests))
+ ifneq ($(filter %tests,$(MAKECMDGOALS)),)
+ .NOTPARALLEL:
+ endif
+-- 
+2.54.0
+

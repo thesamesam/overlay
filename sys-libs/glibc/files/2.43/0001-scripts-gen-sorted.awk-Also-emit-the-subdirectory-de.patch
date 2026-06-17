@@ -1,8 +1,8 @@
-From 48a860716be773998f2162addb31f2e8dcb04b2c Mon Sep 17 00:00:00 2001
-Message-ID: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+From 70d8957b93edfae1f58c41c184cd6053d13d3b75 Mon Sep 17 00:00:00 2001
+Message-ID: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
 From: Adhemerval Zanella <adhemerval.zanella@linaro.org>
-Date: Fri, 12 Jun 2026 13:34:04 -0300
-Subject: [PATCH 1/5] scripts/gen-sorted.awk: Also emit the subdirectory
+Date: Mon, 15 Jun 2026 16:32:37 -0300
+Subject: [PATCH 1/6] scripts/gen-sorted.awk: Also emit the subdirectory
  dependency edges
 
 gen-sorted.awk collects the inter-subdirectory dependencies from the

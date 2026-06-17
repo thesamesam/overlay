@@ -1,10 +1,10 @@
-From 43d059dda3c02798f5049f1cde5fcf08066cefb0 Mon Sep 17 00:00:00 2001
-Message-ID: <43d059dda3c02798f5049f1cde5fcf08066cefb0.1781315607.git.sam@gentoo.org>
-In-Reply-To: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
-References: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+From b6e0cb7b209d0e51cb40cc00b26ed86355cc1904 Mon Sep 17 00:00:00 2001
+Message-ID: <b6e0cb7b209d0e51cb40cc00b26ed86355cc1904.1781662612.git.sam@gentoo.org>
+In-Reply-To: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
+References: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
 From: Adhemerval Zanella <adhemerval.zanella@linaro.org>
-Date: Fri, 12 Jun 2026 13:34:08 -0300
-Subject: [PATCH 5/5] Run check-installed-headers concurrently for each header
+Date: Mon, 15 Jun 2026 16:32:41 -0300
+Subject: [PATCH 5/6] Run check-installed-headers concurrently for each header
 
 The check-installed-headers-c/-cxx tests ran one script invocation per
 subdirectory over all of its installed headers, performing about 80
@@ -30,10 +30,10 @@ to 182.405.
  2 files changed, 53 insertions(+), 22 deletions(-)
 
 diff --git a/Makefile b/Makefile
-index 392c2e2f64..9cdd7626b0 100644
+index 8bac760b15..3dfcdee933 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -655,26 +655,41 @@ $(objpfx)check-local-headers.out: scripts/check-local-headers.sh
+@@ -684,26 +684,41 @@ $(objpfx)check-local-headers.out: scripts/check-local-headers.sh
  	$(evaluate-test)
  
  ifneq "$(headers)" ""

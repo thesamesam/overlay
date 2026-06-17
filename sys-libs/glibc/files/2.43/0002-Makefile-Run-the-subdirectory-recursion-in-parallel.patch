@@ -1,10 +1,10 @@
-From 5994b613e4c158ce449389967f8ea582656973ff Mon Sep 17 00:00:00 2001
-Message-ID: <5994b613e4c158ce449389967f8ea582656973ff.1781315607.git.sam@gentoo.org>
-In-Reply-To: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
-References: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+From 213d209098f7652052326c47102f19c003dc5233 Mon Sep 17 00:00:00 2001
+Message-ID: <213d209098f7652052326c47102f19c003dc5233.1781662612.git.sam@gentoo.org>
+In-Reply-To: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
+References: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
 From: Adhemerval Zanella <adhemerval.zanella@linaro.org>
-Date: Fri, 12 Jun 2026 13:34:05 -0300
-Subject: [PATCH 2/5] Makefile: Run the subdirectory recursion in parallel
+Date: Mon, 15 Jun 2026 16:32:38 -0300
+Subject: [PATCH 2/6] Makefile: Run the subdirectory recursion in parallel
 
 The top-level makefile was marked .NOTPARALLEL and ran the
 per-subdirectory sub-makes strictly one at a time in the topological
@@ -31,6 +31,14 @@ on as explicit dependencies between the per-subdirectory targets:
     elf are dropped, as the sorted list already overrides them by
     forcing elf last.
 
+  * The tests and xtests classes only run the per-directory test
+    programs, which are mutually independent once the others pass has
+    built the tree.  They therefore carry only the others pass barrier
+    below and none of the csu-first or Depend edges (+ordered_parallel_-
+    subdir_targets excludes them); otherwise "make subdir/tests" would
+    also run the tests of every subdirectory reachable through those
+    edges, rather than just the requested one.
+
   * elf stays last: its rtld link consumes $(common-objpfx)libc_pic.a,
     which aggregates every other subdirectory's objects, and its
     rtld-Rules recursion compiles into the other subdirectories' object
@@ -40,6 +48,26 @@ on as explicit dependencies between the per-subdirectory targets:
     (a subdirectory others sub-make would otherwise race to link
     libc.so itself), tests/xtests after others, and the testroot
     install behind others.
+
+  * The threading (nptl, or htl on Hurd) and realtime (rt) tests are
+    timing-sensitive and were previously shielded from system load by
+    the global .NOTPARALLEL.  With the recursion now parallel, a full
+    test run ('make check'/'tests', run-built-tests=yes) orders them
+    after the rest of the test run and one group at a time -- the
+    threading subdirectory, then rt -- and each serializes its own run
+    via a .NOTPARALLEL in its Makefile.  A targeted 'make subdir/tests'
+    is not ordered.
+
+    The serialization (the per-subdirectory .NOTPARALLEL and the ordering
+    above) constrains only the test run, not the build of the test
+    programs; but building and running a subdirectory's tests are fused
+    in its sub-make, so under run-built-tests=yes the serialized
+    subdirectories would also build their test programs serially.  To
+    avoid that, the top-level 'make check' (in Makerules) now runs two
+    passes: it builds every test program with run-built-tests=no, where
+    the recursion is fully parallel and none of the serialization
+    applies, and then runs the tests with run-built-tests=yes.  'make
+    tests' and a subdirectory's own 'check' stay single pass.
 
   * The subdirectory-built files that the top-level libc.so and
     linkobj/libc_pic.a rules list as prerequisites (elf/ld.so,
@@ -57,6 +85,15 @@ on as explicit dependencies between the per-subdirectory targets:
     included generated makefiles at parse time, create the elf object
     directory before writing into it; the serial recursion no longer
     guarantees another rule created it first.
+
+  * catgets builds locale-specific message catalogs (and tst-catgets
+    reads one) by running gencat under de_DE.ISO-8859-1, hr_HR.ISO-8859-2
+    and ja_JP.SJIS, but never declared those locales as prerequisites: it
+    relied on localedata running before it in the serial order.  Under
+    the parallel recursion gencat could run before localedata generated
+    the locale, fall back to C, and fail.  catgets/Makefile now pulls the
+    locales in via gen-locales.mk, like the other subdirectories that use
+    locales in their tests.
 
 Results on a x86_64 machine [1] with default configuration [3]: a
 from-scratch build improves from 78.728s to 61s, and check with
@@ -77,12 +114,16 @@ repeated from-scratch builds.
 [3] --enable-stack-protector=all --enable-bind-now=yes --enable-profile=yes
     --enable-fortify-source=2 --enable-hardcoded-path-in-tests
 ---
- Makefile     | 109 +++++++++++++++++++++++++++++++++++++++++++++++++--
- elf/Makefile |   5 +++
- 2 files changed, 111 insertions(+), 3 deletions(-)
+ Makefile         | 138 +++++++++++++++++++++++++++++++++++++++++++++--
+ Makerules        |  31 +++++++++--
+ catgets/Makefile |  14 +++--
+ elf/Makefile     |   5 ++
+ htl/Makefile     |   7 +++
+ rt/Makefile      |   8 +++
+ 6 files changed, 193 insertions(+), 10 deletions(-)
 
 diff --git a/Makefile b/Makefile
-index f81572c20a..4df7345d7a 100644
+index f81572c20a..4da1bc8a89 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -54,9 +54,6 @@ configure: configure.ac aclocal.m4; $(autoconf-it)
@@ -109,7 +150,7 @@ index f81572c20a..4df7345d7a 100644
  endif # $(build-shared)
  
  # Used to build testrun.sh.
-@@ -490,6 +494,105 @@ subdir=$(@D)$(if $($(@D)-srcdir),\
+@@ -490,6 +494,134 @@ subdir=$(@D)$(if $($(@D)-srcdir),\
  endef
  
  .PHONY: $(+subdir_targets) $(all-subdirs-targets)
@@ -146,6 +187,15 @@ index f81572c20a..4df7345d7a 100644
 ++serial_subdir_targets := $(filter-out $(+parallel_subdir_targets),\
 +				       $(+subdir_targets))
 +
++# The tests and xtests classes run, rather than build, the per-directory
++# test programs; once the 'others' pass barrier below has built the tree
++# they are mutually independent and carry no cross-directory ordering.
++# Keeping them out of the generated-file and Depend edges below is what
++# lets 'make subdir/tests' run only that subdirectory's tests.
+++barrier_only_subdir_targets := tests xtests
+++ordered_parallel_subdir_targets := \
++  $(filter-out $(+barrier_only_subdir_targets),$(+parallel_subdir_targets))
++
 +# The subdirectories that generate shared files in $(common-objpfx)
 +# consumed by the rest of the build without explicit dependencies: csu
 +# provides the gen-as-const headers, and on Hurd the mach and hurd
@@ -156,20 +206,20 @@ index f81572c20a..4df7345d7a 100644
 ++subdir-pregen := $(filter mach hurd csu,$(subdirs))
 ++subdir-rest := $(filter-out $(+subdir-pregen),$(subdirs))
 +
-+$(foreach t,$(+parallel_subdir_targets),$(eval \
++$(foreach t,$(+ordered_parallel_subdir_targets),$(eval \
 +  $(addsuffix /$(t),$(+subdir-rest)): $(addsuffix /$(t),$(+subdir-pregen))))
 ++subdir-pregen-prev :=
-+$(foreach d,$(+subdir-pregen),$(foreach t,$(+parallel_subdir_targets),$(eval \
++$(foreach d,$(+subdir-pregen),$(foreach t,$(+ordered_parallel_subdir_targets),$(eval \
 +  $(d)/$(t): $(addsuffix /$(t),$(+subdir-pregen-prev))))\
 +  $(eval +subdir-pregen-prev := $(d)))
 +# Edges pointing to elf are dropped; the sorted list always forces elf
 +# last, overriding any Depend request, and the elf-last edges below would
 +# otherwise create a cycle.
-+$(foreach t,$(+parallel_subdir_targets),$(foreach d,$(+subdir-rest),$(eval \
++$(foreach t,$(+ordered_parallel_subdir_targets),$(foreach d,$(+subdir-rest),$(eval \
 +  $(d)/$(t): $(addsuffix /$(t),\
 +	      $(filter-out elf,$(filter $(subdirs),$(subdir-deps-$(d))))))))
 +ifneq (,$(filter elf,$(subdirs)))
-+$(foreach t,$(+parallel_subdir_targets),$(eval \
++$(foreach t,$(+ordered_parallel_subdir_targets),$(eval \
 +  elf/$(t): $(addsuffix /$(t),$(filter-out elf,$(subdirs)))))
 +endif
 +
@@ -182,6 +232,26 @@ index f81572c20a..4df7345d7a 100644
 +$(addsuffix /others,$(subdirs)): lib
 +$(addsuffix /tests,$(subdirs)) $(addsuffix /xtests,$(subdirs)): others
 +$(objpfx)testroot.pristine/install.stamp: | others
++
++# Timing-sensitive test runs: the threading tests (nptl/htl) and the realtime
++# tests (rt) are perturbed by the machine load, so run them after the rest of
++# the test run has finished and one group at a time.  Those subdirectories
++# also serialize their own tests (.NOTPARALLEL in their Makefiles).
++#
++# This only orders a full-suite run ('make check'/'tests'); a targeted
++# 'make subdir/tests' is left alone.  And it only orders the test run
++# (run-built-tests=yes); the "build the tests" pass (run-built-tests=no)
++# is left fully parallel, so every test program still builds concurrently.
++ifeq ($(run-built-tests),yes)
++ifneq (,$(filter tests xtests check xcheck,$(MAKECMDGOALS)))
+++late-test-subdirs := $(filter nptl htl,$(subdirs)) $(filter rt,$(subdirs))
+++test-run-prev := \
++  $(addsuffix /tests,$(filter-out $(+late-test-subdirs),$(subdirs)))
++$(foreach d,$(+late-test-subdirs),\
++  $(eval $(d)/tests: $(+test-run-prev))\
++  $(eval +test-run-prev += $(d)/tests))
++endif
++endif
 +
 +ifeq (yes,$(build-shared))
 +# The top-level libc.so and linkobj/libc_pic.a rules list these
@@ -215,6 +285,96 @@ index f81572c20a..4df7345d7a 100644
  
  # Targets to clean things up to various degrees.
  
+diff --git a/Makerules b/Makerules
+index 30c3559a28..9cd67e16a7 100644
+--- a/Makerules
++++ b/Makerules
+@@ -1183,12 +1183,35 @@ ALL_BUILD_CFLAGS = $(BUILD_CFLAGS) $(BUILD_CPPFLAGS) -D_GNU_SOURCE \
+ 		   -DIS_IN_build -include $(common-objpfx)config.h
+ 
+ # Support the GNU standard name for this target.
+-.PHONY: check
++# Special target xcheck runs tests which cannot be run unconditionally;
++# maintainers should use this target.
++.PHONY: check xcheck
++
++# Building and running a subdirectory's tests are fused in its sub-make,
++# and run-built-tests is fixed for a make instance, so the only way to
++# build every test program with the recursion fully parallel while the
++# run still honors the per-subdirectory .NOTPARALLEL (nptl/htl/rt) and the
++# run-time ordering is to use two passes.  At the top level, 'make check'
++# therefore builds the test programs (run-built-tests=no, recursion fully
++# parallel) and then runs them (run-built-tests=yes).  'make tests' and a
++# subdirectory's own 'check' stay single pass.
++check-twopass :=
++ifndef subdir
++ifeq (yes,$(run-built-tests))
++check-twopass := yes
++endif
++endif
++ifeq (yes,$(check-twopass))
++check:
++	$(MAKE) run-built-tests=no  tests
++	$(MAKE) run-built-tests=yes tests
++xcheck:
++	$(MAKE) run-built-tests=no  xtests
++	$(MAKE) run-built-tests=yes xtests
++else
+ check: tests
+-# Special target to run tests which cannot be run unconditionally.
+-# Maintainers should use this target.
+-.PHONY: xcheck
+ xcheck: xtests
++endif
+ 
+ # Also handle test inputs in sysdeps.
+ vpath %.input $(sysdirs)
+diff --git a/catgets/Makefile b/catgets/Makefile
+index fbc416731e..630273ac60 100644
+--- a/catgets/Makefile
++++ b/catgets/Makefile
+@@ -60,6 +60,14 @@ vpath %.c ../locale/programs
+ 
+ include ../Rules
+ 
++# The catalog-generation tests below run gencat under specific locales,
++# and tst-catgets reads the resulting catalog, so the build must wait for
++# those locales to be generated.  Without this dependency a parallel build
++# races catgets against localedata and gencat can run before the locale
++# exists (it then falls back to C and the test fails).
++LOCALES := de_DE.ISO-8859-1 hr_HR.ISO-8859-2 ja_JP.SJIS
++include ../gen-locales.mk
++
+ $(objpfx)gencat: $(gencat-modules:%=$(objpfx)%.o)
+ 
+ catgets-CPPFLAGS := -DNLSPATH='"$(localedir)/%L/%N:$(localedir)/%L/LC_MESSAGES/%N:$(localedir)/%l/%N:$(localedir)/%l/LC_MESSAGES/%N:"'
+@@ -95,7 +103,7 @@ tst-catgets-ENV = NLSPATH="$(objpfx)%l/%N.cat" LANG=de \
+ ifeq ($(run-built-tests),yes)
+ # This test just checks whether the program produces any error or not.
+ # The result is not tested.
+-$(objpfx)test1.cat: test1.msg $(objpfx)gencat
++$(objpfx)test1.cat: test1.msg $(objpfx)gencat $(gen-locales)
+ 	$(built-program-cmd-before-env) \
+ 	$(run-program-env) LC_ALL=hr_HR.ISO-8859-2 \
+ 	$(built-program-cmd-after-env) -H $(objpfx)test1.h $@ $<; \
+@@ -103,7 +111,7 @@ $(objpfx)test1.cat: test1.msg $(objpfx)gencat
+ $(objpfx)test2.cat: test2.msg $(objpfx)gencat
+ 	$(built-program-cmd) -H $(objpfx)test2.h $@ $<; \
+ 	$(evaluate-test)
+-$(objpfx)de/libc.cat: $(objpfx)de.msg $(objpfx)gencat
++$(objpfx)de/libc.cat: $(objpfx)de.msg $(objpfx)gencat $(gen-locales)
+ 	$(make-target-directory)
+ 	$(built-program-cmd-before-env) \
+ 	$(run-program-env) LC_ALL=de_DE.ISO-8859-1 \
+@@ -116,7 +124,7 @@ $(objpfx)de.msg: xopen-msg.awk $(..)po/de.po
+ 	LC_ALL=C $(AWK) -f $^ $< > $@
+ 
+ $(objpfx)test-gencat.out: test-gencat.sh $(objpfx)test-gencat \
+-			  $(objpfx)sample.SJIS.cat
++			  $(objpfx)sample.SJIS.cat $(gen-locales)
+ 	$(SHELL) $< $(common-objpfx) '$(test-program-cmd-before-env)' \
+ 		 '$(run-program-env)' '$(test-program-cmd-after-env)'; \
+ 	$(evaluate-test)
 diff --git a/elf/Makefile b/elf/Makefile
 index 11029be0ae..b39d5a94e1 100644
 --- a/elf/Makefile
@@ -251,6 +411,37 @@ index 11029be0ae..b39d5a94e1 100644
  	$(PYTHON) $< 4 > $@
  
  $(eval $(call include_dsosort_tests_objpfx,dso-sort-tests-all2.def))
+diff --git a/htl/Makefile b/htl/Makefile
+index 5bad0333a5..0e5a8b8f68 100644
+--- a/htl/Makefile
++++ b/htl/Makefile
+@@ -257,3 +257,10 @@ $(addprefix $(objpfx),$(tests-static) $(xtests-static)): $(srcdir)/libpthread_sy
+ else
+ $(addprefix $(objpfx),$(tests) $(test-srcs)): $(srcdir)/libpthread_syms.a $(objpfx)libpthread.a
+ endif
++
++# The tests here better do not run in parallel.
++ifeq ($(run-built-tests),yes)
++ifneq ($(filter %tests,$(MAKECMDGOALS)),)
++.NOTPARALLEL:
++endif
++endif
+diff --git a/rt/Makefile b/rt/Makefile
+index d8d5c5d48a..94cbb273c1 100644
+--- a/rt/Makefile
++++ b/rt/Makefile
+@@ -122,3 +122,11 @@ endif
+ endif # !$(pthread-in-libc)
+ 
+ tst-mqueue7-ARGS = -- $(host-test-program-cmd)
++
++# The timer and message-queue tests here are timing-sensitive and better
++# do not run in parallel.
++ifeq ($(run-built-tests),yes)
++ifneq ($(filter %tests,$(MAKECMDGOALS)),)
++.NOTPARALLEL:
++endif
++endif
 -- 
 2.54.0
 

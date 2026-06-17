@@ -1,10 +1,10 @@
-From 17c5c540575a48d347a1978a248f1fab3282dcaf Mon Sep 17 00:00:00 2001
-Message-ID: <17c5c540575a48d347a1978a248f1fab3282dcaf.1781315607.git.sam@gentoo.org>
-In-Reply-To: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
-References: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+From 1a2cffc791fe8bc15037087ff01e16a680045e0b Mon Sep 17 00:00:00 2001
+Message-ID: <1a2cffc791fe8bc15037087ff01e16a680045e0b.1781662612.git.sam@gentoo.org>
+In-Reply-To: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
+References: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
 From: Adhemerval Zanella <adhemerval.zanella@linaro.org>
-Date: Fri, 12 Jun 2026 13:34:06 -0300
-Subject: [PATCH 3/5] Makefile: Do not force elf last for the others and tests
+Date: Mon, 15 Jun 2026 16:32:39 -0300
+Subject: [PATCH 3/6] Makefile: Do not force elf last for the others and tests
  passes
 
 The requirement that the elf subdirectory comes last in the
@@ -37,7 +37,7 @@ unchanged.
  1 file changed, 23 insertions(+), 11 deletions(-)
 
 diff --git a/Makefile b/Makefile
-index 4df7345d7a..f6cf87b6f6 100644
+index 4da1bc8a89..055cd3f46e 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -508,21 +508,28 @@ endef
@@ -75,14 +75,14 @@ index 4df7345d7a..f6cf87b6f6 100644
    # +parallel_subdir_targets
  +serial_subdir_targets := $(filter-out $(+parallel_subdir_targets),\
  				       $(+subdir_targets))
-@@ -543,14 +550,19 @@ $(foreach t,$(+parallel_subdir_targets),$(eval \
- $(foreach d,$(+subdir-pregen),$(foreach t,$(+parallel_subdir_targets),$(eval \
+@@ -552,14 +559,19 @@ $(foreach t,$(+ordered_parallel_subdir_targets),$(eval \
+ $(foreach d,$(+subdir-pregen),$(foreach t,$(+ordered_parallel_subdir_targets),$(eval \
    $(d)/$(t): $(addsuffix /$(t),$(+subdir-pregen-prev))))\
    $(eval +subdir-pregen-prev := $(d)))
 -# Edges pointing to elf are dropped; the sorted list always forces elf
 -# last, overriding any Depend request, and the elf-last edges below would
 -# otherwise create a cycle.
--$(foreach t,$(+parallel_subdir_targets),$(foreach d,$(+subdir-rest),$(eval \
+-$(foreach t,$(+ordered_parallel_subdir_targets),$(foreach d,$(+subdir-rest),$(eval \
 +# For the classes where elf is forced last, edges pointing to elf are
 +# dropped: the sorted list always overrides such Depend requests today
 +# (e.g. support/Depend), and the elf-last edges below would otherwise
@@ -91,11 +91,11 @@ index 4df7345d7a..f6cf87b6f6 100644
    $(d)/$(t): $(addsuffix /$(t),\
  	      $(filter-out elf,$(filter $(subdirs),$(subdir-deps-$(d))))))))
 +$(foreach t,$(filter-out $(+elf_last_subdir_targets),\
-+		         $(+parallel_subdir_targets)),\
++		         $(+ordered_parallel_subdir_targets)),\
 +  $(foreach d,$(+subdir-rest),$(eval \
 +  $(d)/$(t): $(addsuffix /$(t),$(filter $(subdirs),$(subdir-deps-$(d)))))))
  ifneq (,$(filter elf,$(subdirs)))
--$(foreach t,$(+parallel_subdir_targets),$(eval \
+-$(foreach t,$(+ordered_parallel_subdir_targets),$(eval \
 +$(foreach t,$(+elf_last_subdir_targets),$(eval \
    elf/$(t): $(addsuffix /$(t),$(filter-out elf,$(subdirs)))))
  endif

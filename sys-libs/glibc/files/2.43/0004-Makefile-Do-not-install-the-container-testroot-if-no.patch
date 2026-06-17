@@ -1,10 +1,10 @@
-From 6aea7184245c16537d29a5ba4b2a67bb42acfd71 Mon Sep 17 00:00:00 2001
-Message-ID: <6aea7184245c16537d29a5ba4b2a67bb42acfd71.1781315607.git.sam@gentoo.org>
-In-Reply-To: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
-References: <48a860716be773998f2162addb31f2e8dcb04b2c.1781315607.git.sam@gentoo.org>
+From 67bda67620c46f7305acff1be67dd7a1c533d447 Mon Sep 17 00:00:00 2001
+Message-ID: <67bda67620c46f7305acff1be67dd7a1c533d447.1781662612.git.sam@gentoo.org>
+In-Reply-To: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
+References: <70d8957b93edfae1f58c41c184cd6053d13d3b75.1781662612.git.sam@gentoo.org>
 From: Adhemerval Zanella <adhemerval.zanella@linaro.org>
-Date: Fri, 12 Jun 2026 13:34:07 -0300
-Subject: [PATCH 4/5] Makefile: Do not install the container testroot if not
+Date: Mon, 15 Jun 2026 16:32:40 -0300
+Subject: [PATCH 4/6] Makefile: Do not install the container testroot if not
  running tests
 
 Every subdirectory tests target depends on
@@ -22,10 +22,10 @@ This saves about 10s on x86_64 [1] and 30s on aarch64 [2].
  1 file changed, 5 insertions(+)
 
 diff --git a/Makefile b/Makefile
-index f6cf87b6f6..392c2e2f64 100644
+index 055cd3f46e..8bac760b15 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -735,8 +735,13 @@ else
+@@ -764,8 +764,13 @@ else
  LINKS_DSO_PROGRAM = links-dso-program
  endif
  

@@ -1,7 +1,7 @@
-From b45822afb44b314e112c606492e5e1e978771e80 Mon Sep 17 00:00:00 2001
-Message-ID: <b45822afb44b314e112c606492e5e1e978771e80.1780852858.git.sam@gentoo.org>
-In-Reply-To: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
-References: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
+From 62e6f3f6613a3cd60c5665ca59974c5a6e024405 Mon Sep 17 00:00:00 2001
+Message-ID: <62e6f3f6613a3cd60c5665ca59974c5a6e024405.1782801019.git.sam@gentoo.org>
+In-Reply-To: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
+References: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 04:50:21 +0100
 Subject: [PATCH 4/5] gas: disable SFrame warnings if default-enabled
@@ -235,5 +235,5 @@ index 1a1f887d508..062deaa6e70 100644
     we interpret default-enabled as "opportunistic SFrames".  Users don't
     want to be bothered by something preventing emission of SFrames in
 -- 
-2.54.0
+2.55.0
 

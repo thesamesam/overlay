@@ -1,7 +1,7 @@
-From 14055302975858635aae9603aca19635a0c7bc32 Mon Sep 17 00:00:00 2001
-Message-ID: <14055302975858635aae9603aca19635a0c7bc32.1780852858.git.sam@gentoo.org>
-In-Reply-To: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
-References: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
+From c6bdf7661a2a2b355e098bc8b2772e389dbe07f3 Mon Sep 17 00:00:00 2001
+Message-ID: <c6bdf7661a2a2b355e098bc8b2772e389dbe07f3.1782801019.git.sam@gentoo.org>
+In-Reply-To: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
+References: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Fri, 15 Aug 2025 15:12:25 +0100
 Subject: [PATCH 3/5] gas: TODO wrt enable-default-sframe vs unsupported
@@ -29,5 +29,5 @@ index 0ba79d2c5f6..23e2178b955 100644
  # Provide a configure time option to override our default.
  AC_ARG_ENABLE(default-sframe,
 -- 
-2.54.0
+2.55.0
 

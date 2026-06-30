@@ -1,7 +1,7 @@
-From 65bdc3ad62e30ee3166056d5d65e369f49e1ec4b Mon Sep 17 00:00:00 2001
-Message-ID: <65bdc3ad62e30ee3166056d5d65e369f49e1ec4b.1780852858.git.sam@gentoo.org>
-In-Reply-To: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
-References: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
+From c6352c1cab52d98ab10ae076c55d477d230cb47c Mon Sep 17 00:00:00 2001
+Message-ID: <c6352c1cab52d98ab10ae076c55d477d230cb47c.1782801019.git.sam@gentoo.org>
+In-Reply-To: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
+References: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Sun, 7 Jun 2026 18:20:32 +0100
 Subject: [PATCH 5/5] ld: disable more SFrame tests [NOMERGE]
@@ -51,5 +51,5 @@ index 941e845139d..c3cbd914bf5 100644
  #ld: --no-ld-generated-unwind-info -T no-sframe.ld -e foo
  #objdump: -hw
 -- 
-2.54.0
+2.55.0
 

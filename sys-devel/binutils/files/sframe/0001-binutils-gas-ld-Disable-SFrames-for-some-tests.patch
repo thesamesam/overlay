@@ -1,5 +1,5 @@
-From 310abaa5e1e7a109493f67d725801a019f25f777 Mon Sep 17 00:00:00 2001
-Message-ID: <310abaa5e1e7a109493f67d725801a019f25f777.1780852858.git.sam@gentoo.org>
+From 01809c643e17db8e1466943d550fd6ae9d39d68f Mon Sep 17 00:00:00 2001
+Message-ID: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Thu, 3 Jul 2025 13:27:13 +0100
 Subject: [PATCH 1/5] binutils, gas, ld: Disable SFrames for some tests
@@ -255,17 +255,17 @@ index 3589b4feb15..df6a03e5066 100644
      run_list_test "scfi-cfi-sections-1" "--scfi=experimental --warn"
  
 diff --git a/ld/testsuite/ld-elf/eh5.d b/ld/testsuite/ld-elf/eh5.d
-index 48109d38310..1e5b5ab26b7 100644
+index 266e6f31621..ad427fcb286 100644
 --- a/ld/testsuite/ld-elf/eh5.d
 +++ b/ld/testsuite/ld-elf/eh5.d
-@@ -1,6 +1,7 @@
- #source: eh5.s
+@@ -2,6 +2,7 @@
  #source: eh5a.s
  #source: eh5b.s
+ #ld: [alpha_ld_flags]
 +#as: --gsframe=no
- #ld:
  #readelf: -wf
  #target: [check_as_cfi]
+ #xfail: alpha-*-*ecoff tile*-*-* visium-*-*
 diff --git a/ld/testsuite/ld-sframe/sframe-empty.d b/ld/testsuite/ld-sframe/sframe-empty.d
 index bad08c563d1..06044eb7a1f 100644
 --- a/ld/testsuite/ld-sframe/sframe-empty.d
@@ -369,5 +369,5 @@ index 130ef5514ac..0a8ed83b55e 100644
  #objdump: -dw
  
 -- 
-2.54.0
+2.55.0
 

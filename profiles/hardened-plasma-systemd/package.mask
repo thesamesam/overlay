@@ -1,2 +1,6 @@
 # AI crap
 >=app-admin/keepassxc-2.7.11
+
+# dlopen nonsense
+>=sys-apps/systemd-261
+>=sys-apps/systemd-utils-261

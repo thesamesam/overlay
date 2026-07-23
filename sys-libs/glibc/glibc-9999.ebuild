@@ -226,6 +226,8 @@ XFAIL_TEST_LIST=(
 	tst-getaddrinfo-eai-again
 	# ??? (https://gcc.gnu.org/PR123655)
 	tst-makecontext
+	# https://sourceware.org/PR34433
+	tst-dl-llp-stack
 )
 
 XFAIL_NSPAWN_TEST_LIST=(

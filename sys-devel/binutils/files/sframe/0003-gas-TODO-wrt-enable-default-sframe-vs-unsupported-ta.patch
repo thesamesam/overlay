@@ -1,7 +1,7 @@
-From c6bdf7661a2a2b355e098bc8b2772e389dbe07f3 Mon Sep 17 00:00:00 2001
-Message-ID: <c6bdf7661a2a2b355e098bc8b2772e389dbe07f3.1782801019.git.sam@gentoo.org>
-In-Reply-To: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
-References: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
+From 8a71a0dff7f0067aa50122886f14c166bef7d99e Mon Sep 17 00:00:00 2001
+Message-ID: <8a71a0dff7f0067aa50122886f14c166bef7d99e.1786945627.git.sam@gentoo.org>
+In-Reply-To: <d6f74791bb508de3cd29f85c926c587cb7d5b4d2.1786945627.git.sam@gentoo.org>
+References: <d6f74791bb508de3cd29f85c926c587cb7d5b4d2.1786945627.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Fri, 15 Aug 2025 15:12:25 +0100
 Subject: [PATCH 3/5] gas: TODO wrt enable-default-sframe vs unsupported
@@ -17,7 +17,7 @@ Signed-off-by: Sam James <sam@gentoo.org>
  1 file changed, 1 insertion(+)
 
 diff --git a/gas/configure.ac b/gas/configure.ac
-index 0ba79d2c5f6..23e2178b955 100644
+index 1a389820ed7..a3ceeb82f69 100644
 --- a/gas/configure.ac
 +++ b/gas/configure.ac
 @@ -115,6 +115,7 @@ AC_ARG_ENABLE(elf_stt_common,

@@ -1,7 +1,7 @@
-From c6352c1cab52d98ab10ae076c55d477d230cb47c Mon Sep 17 00:00:00 2001
-Message-ID: <c6352c1cab52d98ab10ae076c55d477d230cb47c.1782801019.git.sam@gentoo.org>
-In-Reply-To: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
-References: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
+From 19a14bab76a48ac31c3f5c9bbdaf527dfb38614a Mon Sep 17 00:00:00 2001
+Message-ID: <19a14bab76a48ac31c3f5c9bbdaf527dfb38614a.1786945627.git.sam@gentoo.org>
+In-Reply-To: <d6f74791bb508de3cd29f85c926c587cb7d5b4d2.1786945627.git.sam@gentoo.org>
+References: <d6f74791bb508de3cd29f85c926c587cb7d5b4d2.1786945627.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Sun, 7 Jun 2026 18:20:32 +0100
 Subject: [PATCH 5/5] ld: disable more SFrame tests [NOMERGE]

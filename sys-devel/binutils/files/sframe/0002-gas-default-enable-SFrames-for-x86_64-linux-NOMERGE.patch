@@ -1,7 +1,7 @@
-From cec1f93127e6e76d56a4894527eb13d0b6e1bf28 Mon Sep 17 00:00:00 2001
-Message-ID: <cec1f93127e6e76d56a4894527eb13d0b6e1bf28.1782801019.git.sam@gentoo.org>
-In-Reply-To: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
-References: <01809c643e17db8e1466943d550fd6ae9d39d68f.1782801019.git.sam@gentoo.org>
+From 47eeafde4d47f7d17b3c3ef5ce3488fc092bb2a6 Mon Sep 17 00:00:00 2001
+Message-ID: <47eeafde4d47f7d17b3c3ef5ce3488fc092bb2a6.1786945627.git.sam@gentoo.org>
+In-Reply-To: <d6f74791bb508de3cd29f85c926c587cb7d5b4d2.1786945627.git.sam@gentoo.org>
+References: <d6f74791bb508de3cd29f85c926c587cb7d5b4d2.1786945627.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Sat, 26 Jul 2025 00:09:57 +0100
 Subject: [PATCH 2/5] gas: default-enable SFrames for x86_64-*-linux-*
@@ -23,7 +23,7 @@ Signed-off-by: Sam James <sam@gentoo.org>
  2 files changed, 14 insertions(+)
 
 diff --git a/gas/configure b/gas/configure
-index eeace90f375..cc10da99426 100755
+index 8afaf2729ed..5b8e15c3d24 100755
 --- a/gas/configure
 +++ b/gas/configure
 @@ -12540,6 +12540,13 @@ $as_echo "#define STRICTCOFF 1" >>confdefs.h
@@ -41,7 +41,7 @@ index eeace90f375..cc10da99426 100755
  
        microblaze*)
 diff --git a/gas/configure.ac b/gas/configure.ac
-index 69547f5ffb9..0ba79d2c5f6 100644
+index 4dc7c019ce2..1a389820ed7 100644
 --- a/gas/configure.ac
 +++ b/gas/configure.ac
 @@ -272,6 +272,13 @@ for this_target in $target $canon_targets ; do

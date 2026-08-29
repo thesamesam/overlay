@@ -1415,9 +1415,6 @@ glibc_src_test() {
 		done
 	fi
 
-	# https://inbox.sourceware.org/libc-alpha/lhuikb5ibey.fsf@oldenburg.str.redhat.com/
-	local -x GAWK_GNU_MATCHERS=1
-
 	# sandbox does not understand unshare() and prevents
 	# writes to /proc/, which makes many tests fail
 

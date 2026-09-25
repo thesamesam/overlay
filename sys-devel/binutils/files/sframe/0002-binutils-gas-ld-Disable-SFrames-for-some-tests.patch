@@ -1,0 +1,312 @@
+From 0736c39292773b7ad08c69773eb5e03039202eb7 Mon Sep 17 00:00:00 2001
+Message-ID: <0736c39292773b7ad08c69773eb5e03039202eb7.1790321839.git.sam@gentoo.org>
+In-Reply-To: <eba940f0e0d02a11efaa4a2dc2f20f3c084a322c.1790321839.git.sam@gentoo.org>
+References: <eba940f0e0d02a11efaa4a2dc2f20f3c084a322c.1790321839.git.sam@gentoo.org>
+From: Sam James <sam@gentoo.org>
+Date: Thu, 3 Jul 2025 13:27:13 +0100
+Subject: [PATCH 2/4] binutils, gas, ld: Disable SFrames for some tests
+
+These break with a gas configured to emit SFrames by default.
+
+The failures are all harmless, mainly just an unexpected extra section.
+
+For the only non-trivial ones, Indu took a look at some of the PLT tests
+where we get a different address for .plt. She found lang_size_sections_1 ()
+-> bfd_set_section_vma () just gets called with a different offset which
+makes sense given different alignment requirements/sizes.
+
+binutils/
+	PR binutils/33317
+	PR gas/33126
+	* testsuite/binutils-all/x86-64/compressed-1b.d: Pass --gsframe=no.
+	* testsuite/binutils-all/x86-64/compressed-1c.d: Ditto.
+
+gas/
+	PR binutils/33317
+	PR gas/33126
+	* testsuite/gas/cfi/cfi.exp: Pass --gsframe=no if supported.
+	* testsuite/gas/i386/ehinterp.d: Ditto.
+	* testsuite/gas/scfi/x86_64/scfi-x86-64.exp: Ditto.
+	* testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d: Pass --gsframe=no.
+
+ld/
+	PR binutils/33317
+	PR gas/33126
+	PR ld/34671
+	* testsuite/ld-elf/eh5.d: Pass --gsframe=no.
+	* testsuite/ld-sframe/sframe-empty.d: Ditto.
+	* testsuite/ld-sframe/no-ld-generated-sframe.d: Ditto.
+	* testsuite/ld-s390/sframe-command-line-2.d: Ditto.
+	* testsuite/ld-x86-64/sframe-command-line-2.d: Ditto.
+	* testsuite/ld-x86-64/x86-64.exp: Pass --gsframe=no if supported.
+---
+ .../binutils-all/x86-64/compressed-1b.d       |  2 +-
+ .../binutils-all/x86-64/compressed-1c.d       |  2 +-
+ gas/testsuite/gas/cfi/cfi.exp                 | 26 +++++++++--------
+ gas/testsuite/gas/i386/ehinterp.d             |  1 +
+ .../gas/scfi/x86_64/scfi-cfi-label-1.d        |  3 +-
+ gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp |  6 +++-
+ ld/testsuite/ld-elf/eh5.d                     |  1 +
+ ld/testsuite/ld-s390/sframe-command-line-2.d  |  2 +-
+ .../ld-sframe/no-ld-generated-sframe.d        |  2 +-
+ ld/testsuite/ld-sframe/sframe-empty.d         |  2 +-
+ ld/testsuite/ld-x86-64/x86-64.exp             | 28 +++++++++++--------
+ 11 files changed, 45 insertions(+), 30 deletions(-)
+
+diff --git a/binutils/testsuite/binutils-all/x86-64/compressed-1b.d b/binutils/testsuite/binutils-all/x86-64/compressed-1b.d
+index 517c8145397..cc84e196973 100644
+--- a/binutils/testsuite/binutils-all/x86-64/compressed-1b.d
++++ b/binutils/testsuite/binutils-all/x86-64/compressed-1b.d
+@@ -1,6 +1,6 @@
+ #PROG: strip
+ #source: compressed-1.s
+-#as: --64 -mx86-used-note=no --gdwarf-3
++#as: --64 -mx86-used-note=no --gdwarf-3 --gsframe=no
+ #strip:
+ #readelf: -S --wide
+ #name: strip on uncompressed debug sections
+diff --git a/binutils/testsuite/binutils-all/x86-64/compressed-1c.d b/binutils/testsuite/binutils-all/x86-64/compressed-1c.d
+index ba692bdb857..6e3b3511223 100644
+--- a/binutils/testsuite/binutils-all/x86-64/compressed-1c.d
++++ b/binutils/testsuite/binutils-all/x86-64/compressed-1c.d
+@@ -1,6 +1,6 @@
+ #PROG: strip
+ #source: compressed-1.s
+-#as: --64 --compress-debug-sections -mx86-used-note=no --gdwarf-3
++#as: --64 --compress-debug-sections -mx86-used-note=no --gdwarf-3 --gsframe=no
+ #strip:
+ #readelf: -S --wide
+ #name: strip on compressed debug sections
+diff --git a/gas/testsuite/gas/cfi/cfi.exp b/gas/testsuite/gas/cfi/cfi.exp
+index de518446a13..ef3c5a70ecd 100644
+--- a/gas/testsuite/gas/cfi/cfi.exp
++++ b/gas/testsuite/gas/cfi/cfi.exp
+@@ -34,6 +34,10 @@ proc gas_x86_32_check { } {
+     return [regexp "targets:.*i386" [lindex $status 1]];
+ }
+ 
++if { [gas_sframe_check] } then {
++    set NO_SFRAME_ASFLAGS "--gsframe=no"
++}
++
+ if  { [istarget "i*86-*-*"] || [istarget "x86_64-*-*"] } then {
+ 
+     global ASFLAGS
+@@ -41,7 +45,7 @@ if  { [istarget "i*86-*-*"] || [istarget "x86_64-*-*"] } then {
+ 
+     if { [gas_x86_64_check] } then {
+ 	set ASFLAGS "$ASFLAGS --64"
+-	run_dump_test "cfi-x86_64"
++	run_dump_test "cfi-x86_64" "{as $NO_SFRAME_ASFLAGS}"
+ 	run_dump_test "cfi-x86_64-2"
+ 	set ASFLAGS "$old_ASFLAGS"
+     }
+@@ -54,7 +58,7 @@ if  { [istarget "i*86-*-*"] || [istarget "x86_64-*-*"] } then {
+     }
+ 
+     if { [is_elf_format] } then {
+-	run_dump_test "cfi-label"
++	run_dump_test "cfi-label" "{as $NO_SFRAME_ASFLAGS}"
+     }
+ 
+     if { [is_pecoff_format] } then {
+@@ -119,26 +123,26 @@ run_list_test "cfi-diag-1" ""
+ 
+ # ARC and HPPA use ';' as comment char rather than as statement separator.
+ if { ![istarget "arc*-*-*"] && ![istarget "hppa*-*"] } then {
+-    run_list_test "listing" "-aln --listing-cont-lines=1"
++    run_list_test "listing" "-aln --listing-cont-lines=1" "{as $NO_SFRAME_ASFLAGS}"
+ }
+ 
+ # HPPA64 uses 64-bit relocations, which results in all of the dump
+ # offset numbers not matching up.
+ if { ![istarget "hppa64*-*"] } then {
+-  run_dump_test "cfi-common-1"
+-  run_dump_test "cfi-common-2"
+-  run_dump_test "cfi-common-3"
+-  run_dump_test "cfi-common-4"
++  run_dump_test "cfi-common-1" "{as $NO_SFRAME_ASFLAGS}"
++  run_dump_test "cfi-common-2" "{as $NO_SFRAME_ASFLAGS}"
++  run_dump_test "cfi-common-3" "{as $NO_SFRAME_ASFLAGS}"
++  run_dump_test "cfi-common-4" "{as $NO_SFRAME_ASFLAGS}"
+   if { ![is_pecoff_format] } then {
+     # This test uses .subsection/.previous which are elf-specific.
+-    run_dump_test "cfi-common-5"
++    run_dump_test "cfi-common-5" "{as $NO_SFRAME_ASFLAGS}"
+   }
+   # Some targets don't support PC relative cfi directives
+   if { ![istarget "mips*-*"] } then {
+-    run_dump_test "cfi-common-6"
++    run_dump_test "cfi-common-6" "{as $NO_SFRAME_ASFLAGS}"
+   }
+-  run_dump_test "cfi-common-7"
+-  run_dump_test "cfi-common-8"
++  run_dump_test "cfi-common-7" "{as $NO_SFRAME_ASFLAGS}"
++  run_dump_test "cfi-common-8" "{as $NO_SFRAME_ASFLAGS}"
+   run_dump_test "cfi-common-9"
+   if { [is_elf64 tmpdir/cfi-common-9.o] } {
+       run_dump_test "cfi-common-10"
+diff --git a/gas/testsuite/gas/i386/ehinterp.d b/gas/testsuite/gas/i386/ehinterp.d
+index d4988261195..fd0ac9dfdef 100644
+--- a/gas/testsuite/gas/i386/ehinterp.d
++++ b/gas/testsuite/gas/i386/ehinterp.d
+@@ -1,3 +1,4 @@
++#as: --gsframe=no
+ #readelf: -wF
+ 
+ Contents of the \.eh_frame section:
+diff --git a/gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d b/gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d
+index 7a1d1715262..6f59e30306d 100644
+--- a/gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d
++++ b/gas/testsuite/gas/scfi/x86_64/scfi-cfi-label-1.d
+@@ -1,5 +1,4 @@
+-#as: --scfi=experimental -W
+-#as:
++#as: --scfi=experimental -W --gsframe=no
+ #objdump: -tWf
+ #name: SCFI no ignore .cfi_label
+ #...
+diff --git a/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp b/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp
+index 3589b4feb15..cf5886bc080 100644
+--- a/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp
++++ b/gas/testsuite/gas/scfi/x86_64/scfi-x86-64.exp
+@@ -34,6 +34,10 @@ if { ![is_elf_format] } then {
+     return
+ }
+ 
++if { [gas_sframe_check] } then {
++    set NO_SFRAME_ASFLAGS "--gsframe=no"
++}
++
+ # common tests
+ if  { ([istarget "x86_64-*-*"] && ![istarget "x86_64-*-linux*-gnux32"]) } then {
+ 
+@@ -48,7 +52,7 @@ if  { ([istarget "x86_64-*-*"] && ![istarget "x86_64-*-linux*-gnux32"]) } then {
+     run_list_test "ginsn-cofi-1" "--scfi=experimental -ali -W"
+ 
+     run_dump_test "scfi-cfi-label-1"
+-    run_list_test "scfi-cfi-label-1" "--scfi=experimental --warn"
++    run_list_test "scfi-cfi-label-1" "--scfi=experimental --warn $NO_SFRAME_ASFLAGS"
+     run_dump_test "scfi-cfi-sections-1"
+     run_list_test "scfi-cfi-sections-1" "--scfi=experimental --warn"
+ 
+diff --git a/ld/testsuite/ld-elf/eh5.d b/ld/testsuite/ld-elf/eh5.d
+index 266e6f31621..ad427fcb286 100644
+--- a/ld/testsuite/ld-elf/eh5.d
++++ b/ld/testsuite/ld-elf/eh5.d
+@@ -2,6 +2,7 @@
+ #source: eh5a.s
+ #source: eh5b.s
+ #ld: [alpha_ld_flags]
++#as: --gsframe=no
+ #readelf: -wf
+ #target: [check_as_cfi]
+ #xfail: alpha-*-*ecoff tile*-*-* visium-*-*
+diff --git a/ld/testsuite/ld-s390/sframe-command-line-2.d b/ld/testsuite/ld-s390/sframe-command-line-2.d
+index 941e845139d..c3cbd914bf5 100644
+--- a/ld/testsuite/ld-s390/sframe-command-line-2.d
++++ b/ld/testsuite/ld-s390/sframe-command-line-2.d
+@@ -1,4 +1,4 @@
+-#as:
++#as: --gsframe=no
+ #source: sframe-foo.s
+ #ld: --no-ld-generated-unwind-info -T no-sframe.ld -e foo
+ #objdump: -hw
+diff --git a/ld/testsuite/ld-sframe/no-ld-generated-sframe.d b/ld/testsuite/ld-sframe/no-ld-generated-sframe.d
+index bc9396e6ff4..3b26804b9e3 100644
+--- a/ld/testsuite/ld-sframe/no-ld-generated-sframe.d
++++ b/ld/testsuite/ld-sframe/no-ld-generated-sframe.d
+@@ -1,4 +1,4 @@
+-#as:
++#as: --gsframe=no
+ #source: test.s
+ #ld: -T no-sframe.ld
+ #objdump: -hw
+diff --git a/ld/testsuite/ld-sframe/sframe-empty.d b/ld/testsuite/ld-sframe/sframe-empty.d
+index bad08c563d1..06044eb7a1f 100644
+--- a/ld/testsuite/ld-sframe/sframe-empty.d
++++ b/ld/testsuite/ld-sframe/sframe-empty.d
+@@ -1,4 +1,4 @@
+-#as:
++#as: --gsframe=no
+ #source: sframe-empty.s
+ #objdump: -hw
+ #ld: -shared
+diff --git a/ld/testsuite/ld-x86-64/x86-64.exp b/ld/testsuite/ld-x86-64/x86-64.exp
+index 985d96dcfba..2bd75000f01 100644
+--- a/ld/testsuite/ld-x86-64/x86-64.exp
++++ b/ld/testsuite/ld-x86-64/x86-64.exp
+@@ -30,6 +30,10 @@ set emul "elf_x86_64"
+ set saved_ASFLAGS "$ASFLAGS"
+ set ASFLAGS "$ASFLAGS -mx86-used-note=no"
+ 
++if { [gas_sframe_check] } then {
++    set NO_SFRAME_ASFLAGS "--gsframe=no"
++}
++
+ # List contains test-items with 3 items followed by 2 lists:
+ # 0:name 1:ld early options 2:ld late options 3:assembler options
+ # 4:filenames of assembler files 5: action and options. 6: name of output file
+@@ -586,12 +590,14 @@ run_dump_test "tls-le-pic-3"
+ run_dump_test "tls-le-pic-3-x32"
+ 
+ if { ![skip_sframe_tests] } {
++    set NO_SFRAME_ASFLAGS "--gsframe=no"
++
+     run_dump_test "sframe-simple-1"
+     run_dump_test "sframe-link-1"
+     # Test --discard-sframe
+     run_dump_test "sframe-command-line-1"
+     # Test --no-ld-generated-unwind-info
+-    run_dump_test "sframe-command-line-2"
++    run_dump_test "sframe-command-line-2" "{as $NO_SFRAME_ASFLAGS}"
+     run_dump_test "sframe-reloc-1"
+     run_dump_test "sframe-gc-sections-1"
+     run_dump_test "sframe-gc-sections-2a"
+@@ -873,8 +879,8 @@ run_dump_test "pr22048"
+ run_dump_test "pr22929"
+ run_dump_test "pr26939"
+ run_dump_test "pr26939-x32"
+-run_dump_test "pr27016a"
+-run_dump_test "pr27016b"
++run_dump_test "pr27016a" "{as $NO_SFRAME_ASFLAGS}"
++run_dump_test "pr27016b" "{as $NO_SFRAME_ASFLAGS}"
+ run_dump_test "report-reloc-1"
+ run_dump_test "report-reloc-1-x32"
+ run_dump_test "pr29820"
+@@ -2405,24 +2411,24 @@ if { "x$LD_CLASS" == "64bit" } then {
+ }
+ run_dump_test "pltgot-1"
+ run_dump_test "pltgot-2"
+-run_dump_test "pr20830a"
++run_dump_test "pr20830a" "{as $NO_SFRAME_ASFLAGS}"
+ run_dump_test "pr20830b"
+-run_dump_test "pr20830a-now"
++run_dump_test "pr20830a-now" "{as $NO_SFRAME_ASFLAGS}"
+ run_dump_test "pr20830b-now"
+ run_dump_test "ibt-plt-1"
+ run_dump_test "ibt-plt-1-x32"
+-run_dump_test "ibt-plt-2a"
+-run_dump_test "ibt-plt-2b"
++run_dump_test "ibt-plt-2a" "{as $NO_SFRAME_ASFLAGS}"
++run_dump_test "ibt-plt-2b" "{as $NO_SFRAME_ASFLAGS}"
+ run_dump_test "ibt-plt-2c"
+-run_dump_test "ibt-plt-2d"
++run_dump_test "ibt-plt-2d" "{as $NO_SFRAME_ASFLAGS}"
+ run_dump_test "ibt-plt-2a-x32"
+ run_dump_test "ibt-plt-2b-x32"
+ run_dump_test "ibt-plt-2c-x32"
+ run_dump_test "ibt-plt-2d-x32"
+-run_dump_test "ibt-plt-3a"
+-run_dump_test "ibt-plt-3b"
++run_dump_test "ibt-plt-3a" "{as $NO_SFRAME_ASFLAGS}"
++run_dump_test "ibt-plt-3b" "{as $NO_SFRAME_ASFLAGS}"
+ run_dump_test "ibt-plt-3c"
+-run_dump_test "ibt-plt-3d"
++run_dump_test "ibt-plt-3d" "{as $NO_SFRAME_ASFLAGS}"
+ run_dump_test "ibt-plt-3a-x32"
+ run_dump_test "ibt-plt-3b-x32"
+ run_dump_test "ibt-plt-3c-x32"
+-- 
+2.55.0
+

@@ -1,10 +1,8 @@
-From 7267e1ccd169b7403a2356cbfc57d2e5297e10a7 Mon Sep 17 00:00:00 2001
-Message-ID: <7267e1ccd169b7403a2356cbfc57d2e5297e10a7.1786945627.git.sam@gentoo.org>
-In-Reply-To: <d6f74791bb508de3cd29f85c926c587cb7d5b4d2.1786945627.git.sam@gentoo.org>
-References: <d6f74791bb508de3cd29f85c926c587cb7d5b4d2.1786945627.git.sam@gentoo.org>
+From eba940f0e0d02a11efaa4a2dc2f20f3c084a322c Mon Sep 17 00:00:00 2001
+Message-ID: <eba940f0e0d02a11efaa4a2dc2f20f3c084a322c.1790321839.git.sam@gentoo.org>
 From: Sam James <sam@gentoo.org>
 Date: Tue, 15 Jul 2025 04:50:21 +0100
-Subject: [PATCH 4/5] gas: disable SFrame warnings if default-enabled
+Subject: [PATCH 1/4] gas: disable SFrame warnings if default-enabled
 
 When bootstrapping Binutils in packaging, I saw:
 ```
@@ -42,8 +40,6 @@ gas/
 	(sframe_do_cfi_insn): Ditto.
 	(sframe_do_fde): Ditto.
 	* gen-sframe.h (sframe_as_warn): New macro.
-
-Signed-off-by: Sam James <sam@gentoo.org>
 ---
  gas/gen-sframe.c | 36 ++++++++++++++++++------------------
  gas/gen-sframe.h |  8 ++++++++

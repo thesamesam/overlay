@@ -225,6 +225,8 @@ XFAIL_TEST_LIST=(
 	tst-makecontext
 	# https://sourceware.org/PR34433
 	tst-dl-llp-stack
+	# https://sourceware.org/PR34564
+	tst-rewinddir
 )
 
 XFAIL_NSPAWN_TEST_LIST=(

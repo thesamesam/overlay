@@ -203,6 +203,8 @@ XFAIL_TEST_LIST=(
 	tst-preadvwritev2
 	tst-preadvwritev64v2
 	tst-setvbuf2
+	# https://sourceware.org/PR34564
+	tst-rewinddir
 )
 
 XFAIL_NSPAWN_TEST_LIST=(
